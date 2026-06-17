@@ -62,8 +62,10 @@ export interface SalesOrder {
 }
 
 // ─── Dashboard / activity feed ───────────────────────────────────────────────────
+export type ActivityType = "move" | "receive" | "reserve" | "qc" | "scan";
+
 export interface ActivityEvent {
-  icon: string;
+  type: ActivityType;
   msg: string;
   worker: string;
   time: string;

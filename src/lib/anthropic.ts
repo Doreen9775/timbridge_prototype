@@ -51,11 +51,11 @@ export async function parseDeliverySlip(base64: string, mediaType: string, isPDF
       "anthropic-dangerous-direct-browser-access": "true",
     },
     body: JSON.stringify({
-      model: "claude-sonnet-4-20250514",
-      max_tokens: 1000,
+      model: "claude-sonnet-4-6",
+      max_tokens: 8192,
       system: SYSTEM_PROMPT,
       messages: [
-        { role: "user", content: [contentBlock, { type: "text", text: "Extract all lumber line items from this delivery slip." }] },
+        { role: "user", content: [contentBlock, { type: "text", text: "Extract all lumber line items from this delivery slip. Respond with ONLY the JSON array — start with [ and end with ], no other text." }] },
       ],
     }),
   });
@@ -65,9 +65,20 @@ export async function parseDeliverySlip(base64: string, mediaType: string, isPDF
   }
 
   const data = await resp.json();
-  const raw: string = (data.content ?? []).map((c: { text?: string }) => c.text ?? "").join("").trim();
-  const clean = raw.replace(/```json|```/g, "").trim();
-  let items = JSON.parse(clean);
-  if (!Array.isArray(items)) items = [];
-  return items as ParsedItem[];
+  const raw: string = (data.content ?? []).map((c: { text?: string }) => c.text ?? "").join("");
+
+  // Isolate the JSON array between the first "[" and last "]". This tolerates a stray
+  // prose preamble (e.g. "Looking at the slip...") or markdown code fences around the JSON.
+  const cleaned = raw.replace(/```json|```/gi, "");
+  const start = cleaned.indexOf("[");
+  const end = cleaned.lastIndexOf("]");
+  if (start === -1 || end === -1 || end <= start) {
+    throw new Error("The AI result was empty or cut off. Try a clearer scan, or use the sample delivery slip.");
+  }
+  try {
+    const items = JSON.parse(cleaned.slice(start, end + 1));
+    return Array.isArray(items) ? (items as ParsedItem[]) : [];
+  } catch {
+    throw new Error("Couldn't read the AI result (it may have been too long and got cut off). Try again, or split the slip into fewer pages.");
+  }
 }

@@ -66,9 +66,6 @@ export function Sidebar({ nav, setNav, floorView }: SidebarProps) {
                   {item.icon}
                   <span>{item.label}</span>
                   {active && <span className="w-1.5 h-1.5 rounded-full bg-lime absolute right-2" />}
-                  {item.key === "delivery" && (
-                    <span className="ml-auto bg-lime text-ink text-[9px] font-bold px-1.5 py-px rounded-lg">AI</span>
-                  )}
                 </div>
               );
             })}

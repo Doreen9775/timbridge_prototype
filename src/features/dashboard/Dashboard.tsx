@@ -1,9 +1,20 @@
+import { useState } from "react";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, PieChart, Pie,
 } from "recharts";
-import type { Tag, TagStatus, Species } from "@/lib/types";
+import { ArrowLeftRight, PackageCheck, BookmarkCheck, BadgeCheck, ScanLine, type LucideIcon } from "lucide-react";
+import type { Tag, TagStatus, Species, ActivityType } from "@/lib/types";
 import { recentActivity, floorTasks } from "@/lib/mock-data";
 import { Sparkline } from "@/components/shared/Sparkline";
+
+const ACTIVITY_META: Record<ActivityType, { label: string; Icon: LucideIcon }> = {
+  move: { label: "Moved", Icon: ArrowLeftRight },
+  receive: { label: "Received", Icon: PackageCheck },
+  reserve: { label: "Reserved", Icon: BookmarkCheck },
+  qc: { label: "QC", Icon: BadgeCheck },
+  scan: { label: "Scanned", Icon: ScanLine },
+};
+const ACTIVITY_FILTERS: (ActivityType | "all")[] = ["all", "move", "receive", "reserve", "qc", "scan"];
 
 // Brand colors for chart primitives (recharts needs values, not classes).
 const C = {
@@ -31,6 +42,9 @@ export function Dashboard({ tags, floorView }: DashboardProps) {
   const available = tags.filter((t) => t.status === "Available");
   const reserved = tags.filter((t) => t.status === "Reserved");
   const totalFBM = available.reduce((s, t) => s + t.fbm, 0);
+
+  const [activityFilter, setActivityFilter] = useState<ActivityType | "all">("all");
+  const filteredActivity = recentActivity.filter((a) => activityFilter === "all" || a.type === activityFilter);
 
   const speciesData = SPECIES.map((sp) => ({
     name: sp === "Western Red Cedar" ? "W.R. Cedar" : sp,
@@ -160,15 +174,43 @@ export function Dashboard({ tags, floorView }: DashboardProps) {
       </div>
 
       <div className="bg-white rounded-[10px] p-5 shadow-[0_1px_4px_rgba(0,0,0,0.07)]">
-        <div className="text-[13px] font-medium text-text mb-4">Recent Activity</div>
-        {recentActivity.map((a, i) => (
-          <div key={i} className={`flex items-center gap-3 py-2.5 ${i < 4 ? "border-b border-[#F3F4F6]" : ""}`}>
-            <span className="text-base">{a.icon}</span>
-            <span className="flex-1 text-[13px] text-text">{a.msg}</span>
-            <span className="text-xs text-text-sec font-medium">{a.worker}</span>
-            <span className="text-xs text-text-ter min-w-[60px] text-right">{a.time}</span>
+        <div className="flex items-center justify-between gap-3 flex-wrap mb-4">
+          <div className="text-[13px] font-medium text-text">Recent Activity</div>
+          <div className="flex gap-1.5 flex-wrap">
+            {ACTIVITY_FILTERS.map((f) => {
+              const active = activityFilter === f;
+              const label = f === "all" ? "All" : ACTIVITY_META[f].label;
+              return (
+                <button
+                  key={f}
+                  onClick={() => setActivityFilter(f)}
+                  className={[
+                    "px-2.5 py-1 rounded-full text-[11px] cursor-pointer border",
+                    active ? "border-ink bg-ink text-white" : "border-sage bg-transparent text-text-sec",
+                  ].join(" ")}
+                >
+                  {label}
+                </button>
+              );
+            })}
           </div>
-        ))}
+        </div>
+        {filteredActivity.map((a, i) => {
+          const { Icon } = ACTIVITY_META[a.type];
+          return (
+            <div key={i} className={`flex items-center gap-3 py-2.5 ${i < filteredActivity.length - 1 ? "border-b border-[#F3F4F6]" : ""}`}>
+              <span className="w-7 h-7 rounded-md bg-sage/30 flex items-center justify-center shrink-0">
+                <Icon size={15} className="text-ink" />
+              </span>
+              <span className="flex-1 text-[13px] text-text">{a.msg}</span>
+              <span className="text-xs text-text-sec font-medium">{a.worker}</span>
+              <span className="text-xs text-text-ter min-w-[60px] text-right">{a.time}</span>
+            </div>
+          );
+        })}
+        {filteredActivity.length === 0 && (
+          <div className="py-6 text-center text-xs text-text-ter">No activity in this category.</div>
+        )}
       </div>
     </div>
   );

@@ -68,6 +68,11 @@ export function StockLocator({ tags, floorView }: StockLocatorProps) {
 
   const selTag = selected ? tags.find((t) => t.id === selected) ?? null : null;
 
+  const filtersActive = search !== "" || statusF !== "All" || speciesF !== "All" || yardF !== "All" || lowQty;
+  const resetFilters = () => {
+    setSearch(""); setStatusF("All"); setSpeciesF("All"); setYardF("All"); setLowQty(false);
+  };
+
   if (floorView) {
     return (
       <div className="p-6 bg-cream min-h-full">
@@ -131,6 +136,14 @@ export function StockLocator({ tags, floorView }: StockLocatorProps) {
         >
           Low Qty
         </button>
+        {filtersActive && (
+          <button
+            onClick={resetFilters}
+            className="px-3.5 py-1.5 text-[13px] rounded-md cursor-pointer border border-sage bg-transparent text-text-sec flex items-center gap-1 hover:text-coral hover:border-coral"
+          >
+            <X size={13} />Reset filters
+          </button>
+        )}
         <span className="ml-auto text-xs text-text-ter self-center">Last synced 14:32</span>
       </div>
 

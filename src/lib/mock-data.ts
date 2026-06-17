@@ -33,11 +33,11 @@ export const salesOrders: SalesOrder[] = [
 ];
 
 export const recentActivity: ActivityEvent[] = [
-  { icon: "🪵", msg: "T-2026-0105 moved from A-4/R-01 to A-1/R-02", worker: "JS", time: "2 min ago" },
-  { icon: "📦", msg: "T-2026-0114 received and stocked at B-1/R-12", worker: "TL", time: "28 min ago" },
-  { icon: "🔖", msg: "T-2026-0118 reserved for Order #460", worker: "Admin", time: "1h ago" },
-  { icon: "✅", msg: "T-2026-0112 QC check passed at C-3/R-15", worker: "MK", time: "2h ago" },
-  { icon: "📷", msg: "T-2026-0108 scanned and location confirmed", worker: "JS", time: "3h ago" },
+  { type: "move", msg: "T-2026-0105 moved from A-4/R-01 to A-1/R-02", worker: "JS", time: "2 min ago" },
+  { type: "receive", msg: "T-2026-0114 received and stocked at B-1/R-12", worker: "TL", time: "28 min ago" },
+  { type: "reserve", msg: "T-2026-0118 reserved for Order #460", worker: "Admin", time: "1h ago" },
+  { type: "qc", msg: "T-2026-0112 QC check passed at C-3/R-15", worker: "MK", time: "2h ago" },
+  { type: "scan", msg: "T-2026-0108 scanned and location confirmed", worker: "JS", time: "3h ago" },
 ];
 
 export const floorTasks: FloorTask[] = [
