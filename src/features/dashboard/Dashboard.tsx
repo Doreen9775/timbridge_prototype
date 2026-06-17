@@ -1,0 +1,175 @@
+import {
+  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, PieChart, Pie,
+} from "recharts";
+import type { Tag, TagStatus, Species } from "@/lib/types";
+import { recentActivity, floorTasks } from "@/lib/mock-data";
+import { Sparkline } from "@/components/shared/Sparkline";
+
+// Brand colors for chart primitives (recharts needs values, not classes).
+const C = {
+  ink: "#1F1F1F", coral: "#F0542B", lime: "#AADB1E", sage: "#B7CDC2",
+  textSec: "#6B7280", textTer: "#9CA3AF",
+};
+
+const STATUS_FILL: Record<TagStatus, string> = {
+  Available: C.lime,
+  Reserved: C.coral,
+  Pending: C.sage,
+  Received: C.textSec,
+  Shipped: C.textTer,
+  Discrepancy: C.ink,
+};
+const STATUS_ORDER: TagStatus[] = ["Available", "Reserved", "Pending", "Received", "Shipped", "Discrepancy"];
+const SPECIES: Species[] = ["SPF", "Doug Fir", "Western Red Cedar", "Hem-Fir"];
+
+interface DashboardProps {
+  tags: Tag[];
+  floorView: boolean;
+}
+
+export function Dashboard({ tags, floorView }: DashboardProps) {
+  const available = tags.filter((t) => t.status === "Available");
+  const reserved = tags.filter((t) => t.status === "Reserved");
+  const totalFBM = available.reduce((s, t) => s + t.fbm, 0);
+
+  const speciesData = SPECIES.map((sp) => ({
+    name: sp === "Western Red Cedar" ? "W.R. Cedar" : sp,
+    fbm: tags.filter((t) => t.species === sp).reduce((s, t) => s + t.fbm, 0),
+  }));
+
+  const statusData = STATUS_ORDER.map((st) => ({
+    name: st,
+    value: tags.filter((t) => t.status === st).length,
+    fill: STATUS_FILL[st],
+  })).filter((d) => d.value > 0);
+
+  if (floorView) {
+    return (
+      <div className="p-6 bg-cream min-h-full">
+        <div className="grid grid-cols-2 gap-4">
+          <div className="bg-white rounded-xl p-6 border border-sage">
+            <div className="text-sm text-text-sec mb-2">My Tasks Today</div>
+            <div className="text-5xl font-bold text-ink mb-4">3</div>
+            {floorTasks.map((t, i) => (
+              <div key={i} className="px-4 py-3.5 bg-cream rounded-lg mb-2 cursor-pointer">
+                <div className="text-lg font-semibold text-text mb-1">{t.title}</div>
+                <div className="text-sm text-text-sec">{t.loc}</div>
+                {t.priority === "High" && (
+                  <span className="text-xs bg-coral/10 text-coral px-2 py-0.5 rounded-[10px] mt-1.5 inline-block">High Priority</span>
+                )}
+              </div>
+            ))}
+          </div>
+          <div className="bg-white rounded-xl p-6 border border-sage">
+            <div className="text-sm text-text-sec mb-2">Recent Scans</div>
+            <div className="text-5xl font-bold text-ink mb-4">5</div>
+            {recentActivity.map((a, i) => (
+              <div key={i} className={`py-3 ${i < 4 ? "border-b border-sage" : ""}`}>
+                <div className="text-base text-text font-medium">{a.msg.split(" ").slice(0, 3).join(" ")}…</div>
+                <div className="text-[13px] text-text-sec mt-0.5">{a.worker} · {a.time}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const kpis: { label: string; value: string | number; sub: string; spark?: number[]; alert?: boolean }[] = [
+    { label: "Total FBM Available", value: totalFBM.toLocaleString(), sub: "board feet", spark: [8200, 9100, 8700, 10200, 11400, 10800, totalFBM] },
+    { label: "Tags Available", value: available.length, sub: "+2 vs last week", spark: [9, 10, 11, 10, 12, 11, available.length] },
+    { label: "Tags Reserved", value: reserved.length, sub: "active holds", alert: reserved.length > 5 },
+    { label: "Low Stock Alerts", value: tags.filter((t) => t.qty < 50).length, sub: "qty < 50 units", alert: true },
+  ];
+
+  return (
+    <div className="p-6 bg-cream min-h-full">
+      <div className="flex items-center justify-between mb-5">
+        <div className="flex gap-2">
+          {["Today", "This Week", "This Month"].map((t) => {
+            const active = t === "This Week";
+            return (
+              <button
+                key={t}
+                className={[
+                  "px-3.5 py-[5px] rounded-2xl text-xs cursor-pointer border",
+                  active ? "border-ink bg-ink text-white" : "border-sage bg-transparent text-text-sec",
+                ].join(" ")}
+              >
+                {t}
+              </button>
+            );
+          })}
+        </div>
+        <span className="text-xs text-text-ter">Last updated 14:32</span>
+      </div>
+
+      <div className="grid grid-cols-4 gap-4 mb-6">
+        {kpis.map((c, i) => (
+          <div key={i} className="bg-white rounded-[10px] px-[18px] py-4 shadow-[0_1px_4px_rgba(0,0,0,0.07)]">
+            <div className="text-xs text-text-sec mb-2">{c.label}</div>
+            <div className="flex items-end justify-between">
+              <div>
+                <div className={`text-[28px] font-bold ${c.alert ? "text-coral" : "text-ink"}`}>{c.value}</div>
+                <div className="text-[11px] text-text-ter mt-0.5">{c.sub}</div>
+              </div>
+              {c.spark && <Sparkline data={c.spark} />}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="grid grid-cols-2 gap-5 mb-6">
+        <div className="bg-white rounded-[10px] pt-5 px-5 pb-3 shadow-[0_1px_4px_rgba(0,0,0,0.07)]">
+          <div className="text-[13px] font-medium text-text mb-4">FBM by Species</div>
+          <ResponsiveContainer width="100%" height={180}>
+            <BarChart data={speciesData} barCategoryGap="30%">
+              <XAxis dataKey="name" interval={0} tick={{ fontSize: 10, fill: C.textSec }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fontSize: 10, fill: C.textTer }} axisLine={false} tickLine={false} tickFormatter={(v) => (v >= 1000 ? `${(v / 1000).toFixed(1)}k` : v)} />
+              <Tooltip formatter={(v) => [`${Number(v).toLocaleString()} FBM`]} contentStyle={{ fontSize: 12, border: `1px solid ${C.sage}`, borderRadius: 6 }} />
+              <Bar dataKey="fbm" radius={[4, 4, 0, 0]}>
+                {speciesData.map((_, i) => <Cell key={i} fill={i % 2 === 0 ? C.ink : C.coral} />)}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+        <div className="bg-white rounded-[10px] pt-5 px-5 pb-4 shadow-[0_1px_4px_rgba(0,0,0,0.07)]">
+          <div className="text-[13px] font-medium text-text mb-4">Tag Status Distribution</div>
+          <div className="flex items-center gap-2">
+            <div className="w-1/2">
+              <ResponsiveContainer width="100%" height={150}>
+                <PieChart>
+                  <Pie data={statusData} cx="50%" cy="50%" innerRadius={42} outerRadius={68} dataKey="value" labelLine={false}>
+                    {statusData.map((e, i) => <Cell key={i} fill={e.fill} />)}
+                  </Pie>
+                  <Tooltip formatter={(v) => [`${v} tags`]} contentStyle={{ fontSize: 12, borderRadius: 6 }} />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+            <div className="flex-1 flex flex-col gap-1.5">
+              {statusData.map((d) => (
+                <div key={d.name} className="flex items-center gap-2 text-xs">
+                  <span className="w-2.5 h-2.5 rounded-[3px] shrink-0" style={{ background: d.fill }} />
+                  <span className="text-text flex-1">{d.name}</span>
+                  <span className="text-text-sec font-medium">{d.value}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="bg-white rounded-[10px] p-5 shadow-[0_1px_4px_rgba(0,0,0,0.07)]">
+        <div className="text-[13px] font-medium text-text mb-4">Recent Activity</div>
+        {recentActivity.map((a, i) => (
+          <div key={i} className={`flex items-center gap-3 py-2.5 ${i < 4 ? "border-b border-[#F3F4F6]" : ""}`}>
+            <span className="text-base">{a.icon}</span>
+            <span className="flex-1 text-[13px] text-text">{a.msg}</span>
+            <span className="text-xs text-text-sec font-medium">{a.worker}</span>
+            <span className="text-xs text-text-ter min-w-[60px] text-right">{a.time}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
