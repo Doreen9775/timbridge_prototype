@@ -2,6 +2,7 @@ import { useMemo, useState, type ReactNode } from "react";
 import { Search, Scan, ChevronDown, X } from "lucide-react";
 import type { Tag } from "@/lib/types";
 import { StatusBadge } from "@/components/shared/StatusBadge";
+import { calcBoardFeet, calcLineal } from "@/lib/fbm";
 
 const STATUS_OPTIONS = ["All", "Pending", "Received", "Available", "Reserved", "Shipped", "Discrepancy"];
 const SPECIES_OPTIONS = ["All", "SPF", "Doug Fir", "Western Red Cedar", "Hem-Fir"];
@@ -249,6 +250,22 @@ function DetailDrawer({ tag, onClose }: { tag: Tag; onClose: () => void }) {
               <div className="text-[13px] font-medium text-text">{v}</div>
             </div>
           ))}
+        </div>
+
+        <div className="text-xs text-text-sec mb-2">Units</div>
+        <div className="bg-[#F9FAFB] rounded-md px-4 py-3 mb-5 flex items-end justify-between">
+          <div>
+            <div className="text-2xl font-bold text-ink leading-none">{calcBoardFeet(tag.thick, tag.width, tag.length, tag.qty).toLocaleString()}</div>
+            <div className="text-[10px] text-text-ter mt-1">BF</div>
+          </div>
+          <div className="text-right">
+            <div className="text-base font-semibold text-text leading-none">{tag.qty.toLocaleString()}</div>
+            <div className="text-[10px] text-text-ter mt-1">pcs</div>
+          </div>
+          <div className="text-right">
+            <div className="text-base font-semibold text-text leading-none">{calcLineal(tag.length, tag.qty).toLocaleString()}</div>
+            <div className="text-[10px] text-text-ter mt-1">lf</div>
+          </div>
         </div>
 
         {tag.parentLog && (
