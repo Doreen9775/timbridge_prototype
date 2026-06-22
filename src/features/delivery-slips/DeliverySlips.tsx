@@ -104,7 +104,7 @@ export function DeliverySlips({ tags, setTags }: DeliverySlipsProps) {
       species: it.species, grade: it.grade, thick: it.thick, width: it.width, length: it.length,
       qty: it.qty, fbm: it.fbm, state: it.state, milling: it.milling,
       yard: "YD-A", section: "A-1", rack: "R-01", bin: "B1",
-      status: "Pending", updated: "just now", parentLog: null,
+      status: "Pending", updated: "just now", parentLog: null, supplier: it.supplier || undefined,
       history: [{ e: `Created from delivery slip${it.poNumber ? " PO " + it.poNumber : ""}`, t: "Jun 04 2026 14:32", w: "DW" }],
     }));
     setTags([...tags, ...newTags]);

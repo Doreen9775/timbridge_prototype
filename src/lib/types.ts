@@ -45,6 +45,7 @@ export interface Tag {
   status: TagStatus;
   updated: string; // relative display string, e.g. "2h ago"
   parentLog: string | null; // display-only traceability (out of scope this semester)
+  supplier?: string; // origin supplier (from a delivery slip; "In-house production" or absent otherwise)
   history: MovementEvent[];
 }
 

@@ -1,5 +1,5 @@
 import { useMemo, useState, type ReactNode } from "react";
-import { Search, Scan, ChevronDown, X } from "lucide-react";
+import { Search, Scan, ChevronDown, X, Download } from "lucide-react";
 import type { Tag } from "@/lib/types";
 import { StatusBadge } from "@/components/shared/StatusBadge";
 import { calcBoardFeet, calcLineal } from "@/lib/fbm";
@@ -21,6 +21,26 @@ function FilterSelect({ value, onChange, options }: { value: string; onChange: (
       <ChevronDown size={12} className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-text-sec" />
     </div>
   );
+}
+
+// ── CSV export (no library; built from the same filtered array as the table) ──
+const CSV_HEADERS = ["Tag ID", "Species", "Grade", "Thickness", "Width", "Length", "Pieces", "Total FBM", "Location", "Status", "Received Date", "Supplier"];
+
+const csvCell = (v: string | number): string => `"${String(v).replace(/"/g, '""')}"`;
+
+function buildStockCsv(tags: Tag[]): string {
+  const rows = tags.map((t) =>
+    [t.id, t.species, t.grade, t.thick, t.width, t.length, t.qty, t.fbm, `${t.yard} · ${t.section} · ${t.rack}`, t.status, t.history[0]?.t ?? "", t.supplier ?? ""]
+      .map(csvCell)
+      .join(","),
+  );
+  return [CSV_HEADERS.map(csvCell).join(","), ...rows].join("\r\n");
+}
+
+function csvFilename(): string {
+  const d = new Date();
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `timbridge_stock_${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}_${p(d.getHours())}-${p(d.getMinutes())}.csv`;
 }
 
 interface StockLocatorProps {
@@ -72,6 +92,19 @@ export function StockLocator({ tags, floorView }: StockLocatorProps) {
   const filtersActive = search !== "" || statusF !== "All" || speciesF !== "All" || yardF !== "All" || lowQty;
   const resetFilters = () => {
     setSearch(""); setStatusF("All"); setSpeciesF("All"); setYardF("All"); setLowQty(false);
+  };
+
+  const handleExport = () => {
+    if (filtered.length === 0) return;
+    const blob = new Blob([buildStockCsv(filtered)], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = csvFilename();
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
   };
 
   if (floorView) {
@@ -145,7 +178,22 @@ export function StockLocator({ tags, floorView }: StockLocatorProps) {
             <X size={13} />Reset filters
           </button>
         )}
-        <span className="ml-auto text-xs text-text-ter self-center">Last synced 14:32</span>
+        <div className="ml-auto flex items-center gap-3">
+          <button
+            onClick={handleExport}
+            disabled={filtered.length === 0}
+            title={filtered.length === 0 ? "No tags match current filter" : undefined}
+            className={[
+              "px-3.5 py-1.5 text-[13px] rounded-md border flex items-center gap-1.5",
+              filtered.length === 0
+                ? "border-sage bg-white text-text-ter opacity-60 cursor-not-allowed"
+                : "border-sage bg-white text-text cursor-pointer hover:border-coral hover:text-coral",
+            ].join(" ")}
+          >
+            <Download size={14} />Export CSV
+          </button>
+          <span className="text-xs text-text-ter self-center">Last synced 14:32</span>
+        </div>
       </div>
 
       <div className="grid grid-cols-4 gap-3 mb-5">
