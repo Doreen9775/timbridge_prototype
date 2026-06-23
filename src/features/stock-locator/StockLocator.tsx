@@ -185,11 +185,18 @@ export function StockLocator({ tags, floorView, openTagId, onTagOpened }: StockL
     );
   }
 
-  const summaryCards: [string, ReactNode, string][] = [
-    ["Total Tags", totals.total, "text-ink"],
-    ["Available", totals.available, "text-[#4E6B0E]"],
-    ["Total FBM", `${totals.fbm.toLocaleString()} fbm`, "text-ink"],
-    ["Reserved", totals.reserved, "text-coral"],
+  const summaryCards: [string, ReactNode][] = [
+    ["Total Tags", totals.total],
+    ["Available", totals.available],
+    ["Total FBM", `${totals.fbm.toLocaleString()} fbm`],
+    ["Reserved", totals.reserved],
+  ];
+  // Colored summary cards (reference layout, brand colors): white + sage + coral + lime.
+  const cardThemes = [
+    { card: "bg-white", label: "text-text-sec", value: "text-ink" },
+    { card: "bg-sage", label: "text-ink/70", value: "text-ink" },
+    { card: "bg-coral", label: "text-white/85", value: "text-white" },
+    { card: "bg-lime", label: "text-ink/70", value: "text-ink" },
   ];
 
   return (
@@ -244,12 +251,15 @@ export function StockLocator({ tags, floorView, openTagId, onTagOpened }: StockL
       </div>
 
       <div className="grid grid-cols-4 gap-3 mb-5">
-        {summaryCards.map(([label, value, color]) => (
-          <div key={label} className="bg-white rounded-lg px-4 py-3 shadow-[0_1px_3px_rgba(0,0,0,0.06)]">
-            <div className="text-[11px] text-text-sec mb-1">{label}</div>
-            <div className={`text-[22px] font-bold ${color}`}>{value}</div>
-          </div>
-        ))}
+        {summaryCards.map(([label, value], i) => {
+          const th = cardThemes[i % cardThemes.length];
+          return (
+            <div key={label} className={`${th.card} rounded-xl px-4 py-3 shadow-[0_1px_3px_rgba(0,0,0,0.06)]`}>
+              <div className={`text-[11px] mb-1 ${th.label}`}>{label}</div>
+              <div className={`text-[22px] font-bold ${th.value}`}>{value}</div>
+            </div>
+          );
+        })}
       </div>
 
       <div className="bg-white rounded-[10px] overflow-hidden shadow-[0_1px_4px_rgba(0,0,0,0.07)]">

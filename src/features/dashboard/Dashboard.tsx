@@ -96,6 +96,14 @@ export function Dashboard({ tags, floorView }: DashboardProps) {
     { label: "Low Stock Alerts", value: tags.filter((t) => t.qty < 50).length, sub: "qty < 50 units", alert: true },
   ];
 
+  // Colored KPI cards (reference layout, brand colors): neutral white + sage + coral + lime.
+  const kpiThemes = [
+    { card: "bg-white", label: "text-text-sec", value: "text-ink", sub: "text-text-ter" },
+    { card: "bg-sage", label: "text-ink/70", value: "text-ink", sub: "text-ink/60" },
+    { card: "bg-coral", label: "text-white/85", value: "text-white", sub: "text-white/75" },
+    { card: "bg-lime", label: "text-ink/70", value: "text-ink", sub: "text-ink/60" },
+  ];
+
   return (
     <div className="p-6 bg-cream min-h-full">
       <div className="flex items-center justify-between mb-5">
@@ -119,18 +127,21 @@ export function Dashboard({ tags, floorView }: DashboardProps) {
       </div>
 
       <div className="grid grid-cols-4 gap-4 mb-6">
-        {kpis.map((c, i) => (
-          <div key={i} className="bg-white rounded-[10px] px-[18px] py-4 shadow-[0_1px_4px_rgba(0,0,0,0.07)]">
-            <div className="text-xs text-text-sec mb-2">{c.label}</div>
-            <div className="flex items-end justify-between">
-              <div>
-                <div className={`text-[28px] font-bold ${c.alert ? "text-coral" : "text-ink"}`}>{c.value}</div>
-                <div className="text-[11px] text-text-ter mt-0.5">{c.sub}</div>
+        {kpis.map((c, i) => {
+          const th = kpiThemes[i % kpiThemes.length];
+          return (
+            <div key={i} className={`${th.card} rounded-2xl px-5 py-4 shadow-[0_1px_4px_rgba(0,0,0,0.06)]`}>
+              <div className={`text-xs mb-2 ${th.label}`}>{c.label}</div>
+              <div className="flex items-end justify-between">
+                <div>
+                  <div className={`text-[30px] font-bold leading-none ${th.value}`}>{c.value}</div>
+                  <div className={`text-[11px] mt-1.5 ${th.sub}`}>{c.sub}</div>
+                </div>
+                {c.spark && <Sparkline data={c.spark} />}
               </div>
-              {c.spark && <Sparkline data={c.spark} />}
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       <div className="grid grid-cols-2 gap-5 mb-6">

@@ -62,7 +62,7 @@ export function TopBar({ nav, floorView, setFloorView, onOpenRecord }: TopBarPro
           <span className="absolute -top-0.5 -right-0.5 w-[7px] h-[7px] rounded-full bg-coral" />
         </div>
         <RecentMenu onOpenRecord={onOpenRecord} />
-        <div className="w-[30px] h-[30px] rounded-full bg-ink flex items-center justify-center text-white text-[11px] font-semibold">DW</div>
+        <div className="w-[30px] h-[30px] rounded-full bg-coral flex items-center justify-center text-white text-[11px] font-semibold">DW</div>
       </div>
     </div>
   );

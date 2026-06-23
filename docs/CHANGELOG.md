@@ -164,6 +164,16 @@ A history of every commit (push) on `main`, in chronological order, with what wa
 
 ---
 
+### `2026-06-22` · Reference-style colored metric cards — 实色指标卡片改版
+
+**🇨🇳 中文** — 参考给定的 dashboard layout，把**指标卡做成实色背景**（品牌色与主/辅色划分**保持不变**）：Dashboard 4 张 KPI 卡 = 白 / sage / coral（白字）/ lime；Stock Locator 4 张汇总卡同样处理；顶栏头像改为 **coral**。圆角加大（rounded-2xl）、数字加粗。深色侧边栏、白色内容卡、coral 强调色等其余元素本就与参考一致。（说明：参考图顶部的搜索药丸暂未加——本应用还没有全局搜索功能，加一个假的会误导；需要的话可后续补装饰性/真实搜索。）
+
+**🇬🇧 English** — Restyled metric cards to solid brand-color backgrounds per the reference layout (palette + primary/secondary roles unchanged): Dashboard's 4 KPI cards = white / sage / coral (white text) / lime; Stock Locator's 4 summary cards likewise; TopBar avatar → coral. Larger rounding, bolder numbers. (Note: the reference's search pill wasn't added — there's no global search feature yet; a fake one would mislead.)
+
+**Files / 改动:** `Dashboard.tsx`, `StockLocator.tsx`, `TopBar.tsx`
+
+---
+
 ## Pending / 未来 (not yet built — 尚未开始)
 
 - **Available-to-Sell**（销售视图；`salesOrders` Mock 数据已就绪）
