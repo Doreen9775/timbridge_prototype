@@ -98,10 +98,10 @@ export function Dashboard({ tags, floorView }: DashboardProps) {
 
   // Colored KPI cards (reference layout, brand colors): neutral white + sage + coral + lime.
   const kpiThemes = [
-    { card: "bg-white", label: "text-text-sec", value: "text-ink", sub: "text-text-ter" },
-    { card: "bg-sage", label: "text-ink/70", value: "text-ink", sub: "text-ink/60" },
-    { card: "bg-coral", label: "text-white/85", value: "text-white", sub: "text-white/75" },
-    { card: "bg-lime", label: "text-ink/70", value: "text-ink", sub: "text-ink/60" },
+    { card: "bg-white", label: "text-text-sec", value: "text-ink", sub: "text-text-ter" }, // Total FBM
+    { card: "bg-sage", label: "text-ink/70", value: "text-ink", sub: "text-ink/60" }, // Tags Available
+    { card: "bg-lime", label: "text-ink/70", value: "text-ink", sub: "text-ink/60" }, // Tags Reserved
+    { card: "bg-coral", label: "text-white/85", value: "text-white", sub: "text-white/75" }, // Low Stock Alerts
   ];
 
   return (

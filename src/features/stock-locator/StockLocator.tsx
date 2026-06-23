@@ -193,10 +193,10 @@ export function StockLocator({ tags, floorView, openTagId, onTagOpened }: StockL
   ];
   // Colored summary cards (reference layout, brand colors): white + sage + coral + lime.
   const cardThemes = [
-    { card: "bg-white", label: "text-text-sec", value: "text-ink" },
-    { card: "bg-sage", label: "text-ink/70", value: "text-ink" },
-    { card: "bg-coral", label: "text-white/85", value: "text-white" },
-    { card: "bg-lime", label: "text-ink/70", value: "text-ink" },
+    { card: "bg-white", label: "text-text-sec", value: "text-ink" }, // Total Tags
+    { card: "bg-sage", label: "text-ink/70", value: "text-ink" }, // Available
+    { card: "bg-white", label: "text-text-sec", value: "text-ink" }, // Total FBM (same as Total Tags)
+    { card: "bg-lime", label: "text-ink/70", value: "text-ink" }, // Reserved
   ];
 
   return (

@@ -174,6 +174,16 @@ A history of every commit (push) on `main`, in chronological order, with what wa
 
 ---
 
+### `2026-06-22` · Tweak metric-card colors — 调整指标卡配色
+
+**🇨🇳 中文** — Dashboard：**Tags Reserved** 与 **Low Stock Alerts** 配色对调（Reserved → lime，Low Stock Alerts → coral 警示色，更贴语义）。Stock Locator：**Total FBM** 改为白色，与 **Total Tags** 一致。
+
+**🇬🇧 English** — Dashboard: swapped Tags Reserved (now lime) ↔ Low Stock Alerts (now coral, reads as a warning). Stock Locator: Total FBM → white, matching Total Tags.
+
+**Files / 改动:** `Dashboard.tsx`, `StockLocator.tsx`
+
+---
+
 ## Pending / 未来 (not yet built — 尚未开始)
 
 - **Available-to-Sell**（销售视图；`salesOrders` Mock 数据已就绪）
