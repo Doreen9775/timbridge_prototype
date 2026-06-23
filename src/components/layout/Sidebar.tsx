@@ -42,8 +42,7 @@ export function Sidebar({ nav, setNav, floorView }: SidebarProps) {
   return (
     <div className="w-[210px] min-w-[210px] bg-ink flex flex-col h-screen sticky top-0">
       <div className="px-4 pt-5 pb-4">
-        <TimbridgeLogo className="text-coral" />
-        <div className="text-white/45 text-[11px] mt-0.5">Lumber ERP</div>
+        <TimbridgeLogo />
       </div>
 
       <div className="flex-1 overflow-y-auto px-2">
