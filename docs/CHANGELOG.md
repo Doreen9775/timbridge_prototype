@@ -184,6 +184,16 @@ A history of every commit (push) on `main`, in chronological order, with what wa
 
 ---
 
+### `2026-06-22` · Align status pie colors — 状态饼图配色对齐
+
+**🇨🇳 中文** — Dashboard 的 **Tag Status Distribution** 饼图/图例改用统一色彩逻辑：**Available = sage**、**Reserved = lime**（与对应 KPI 卡一致），**Discrepancy = coral**（异常/警示），Pending / Received / Shipped 用中性灰 / ink。
+
+**🇬🇧 English** — The Tag Status Distribution pie/legend now follow the unified scheme: Available = sage, Reserved = lime (matching their KPI cards), Discrepancy = coral (alert), transitional states = neutrals.
+
+**Files / 改动:** `Dashboard.tsx`
+
+---
+
 ## Pending / 未来 (not yet built — 尚未开始)
 
 - **Available-to-Sell**（销售视图；`salesOrders` Mock 数据已就绪）

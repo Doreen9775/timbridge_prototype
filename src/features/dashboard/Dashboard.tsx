@@ -22,13 +22,15 @@ const C = {
   textSec: "#6B7280", textTer: "#9CA3AF",
 };
 
+// Status colors follow the overall scheme: Available = sage and Reserved = lime
+// (matching their KPI cards), Discrepancy = coral (alert), transitional states = neutrals.
 const STATUS_FILL: Record<TagStatus, string> = {
-  Available: C.lime,
-  Reserved: C.coral,
-  Pending: C.sage,
+  Available: C.sage,
+  Reserved: C.lime,
+  Pending: C.textTer,
   Received: C.textSec,
-  Shipped: C.textTer,
-  Discrepancy: C.ink,
+  Shipped: C.ink,
+  Discrepancy: C.coral,
 };
 const STATUS_ORDER: TagStatus[] = ["Available", "Reserved", "Pending", "Received", "Shipped", "Discrepancy"];
 const SPECIES: Species[] = ["SPF", "Doug Fir", "Western Red Cedar", "Hem-Fir"];
