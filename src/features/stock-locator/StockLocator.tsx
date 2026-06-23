@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Search, Scan, ChevronDown, X, Download } from "lucide-react";
 import type { Tag } from "@/lib/types";
 import { StatusBadge } from "@/components/shared/StatusBadge";
@@ -58,6 +58,7 @@ export function StockLocator({ tags, floorView, openTagId, onTagOpened }: StockL
   const [yardF, setYardF] = useState("All");
   const [lowQty, setLowQty] = useState(false);
   const [selected, setSelected] = useState<string | null>(null);
+  const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
   const { pushRecord } = useRecentRecords();
 
   // Open a tag's detail drawer and record it as recently accessed (push hook).
@@ -112,9 +113,37 @@ export function StockLocator({ tags, floorView, openTagId, onTagOpened }: StockL
     setSearch(""); setStatusF("All"); setSpeciesF("All"); setYardF("All"); setLowQty(false);
   };
 
+  // Row selection — export is gated on at least one checked tag, regardless of filters.
+  const toggleChecked = (id: string) =>
+    setCheckedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+
+  const allFilteredChecked = filtered.length > 0 && filtered.every((t) => checkedIds.has(t.id));
+  const someFilteredChecked = filtered.some((t) => checkedIds.has(t.id));
+  const toggleAllFiltered = () =>
+    setCheckedIds((prev) => {
+      const next = new Set(prev);
+      filtered.forEach((t) => {
+        if (allFilteredChecked) next.delete(t.id);
+        else next.add(t.id);
+      });
+      return next;
+    });
+
+  // Header "select all" reflects a partial selection with the indeterminate state.
+  const selectAllRef = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (selectAllRef.current) selectAllRef.current.indeterminate = someFilteredChecked && !allFilteredChecked;
+  }, [someFilteredChecked, allFilteredChecked]);
+
   const handleExport = () => {
-    if (filtered.length === 0) return;
-    const blob = new Blob([buildStockCsv(filtered)], { type: "text/csv;charset=utf-8;" });
+    if (checkedIds.size === 0) return;
+    const toExport = tags.filter((t) => checkedIds.has(t.id));
+    const blob = new Blob([buildStockCsv(toExport)], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
@@ -199,16 +228,16 @@ export function StockLocator({ tags, floorView, openTagId, onTagOpened }: StockL
         <div className="ml-auto flex items-center gap-3">
           <button
             onClick={handleExport}
-            disabled={filtered.length === 0}
-            title={filtered.length === 0 ? "No tags match current filter" : undefined}
+            disabled={checkedIds.size === 0}
+            title={checkedIds.size === 0 ? "Select one or more tags to export" : `Export ${checkedIds.size} selected tag${checkedIds.size === 1 ? "" : "s"}`}
             className={[
-              "px-3.5 py-1.5 text-[13px] rounded-md border flex items-center gap-1.5",
-              filtered.length === 0
+              "px-3.5 py-1.5 text-[13px] rounded-md border flex items-center gap-1.5 transition-colors",
+              checkedIds.size === 0
                 ? "border-sage bg-white text-text-ter opacity-60 cursor-not-allowed"
-                : "border-sage bg-white text-text cursor-pointer hover:border-coral hover:text-coral",
+                : "border-coral bg-coral text-white cursor-pointer hover:brightness-95",
             ].join(" ")}
           >
-            <Download size={14} />Export CSV
+            <Download size={14} />Export CSV{checkedIds.size > 0 ? ` (${checkedIds.size})` : ""}
           </button>
           <span className="text-xs text-text-ter self-center">Last synced 14:32</span>
         </div>
@@ -227,6 +256,16 @@ export function StockLocator({ tags, floorView, openTagId, onTagOpened }: StockL
         <table className="w-full border-collapse text-[13px]">
           <thead>
             <tr className="bg-[#F9FAFB] border-b border-sage">
+              <th className="pl-3.5 pr-1 py-2.5 w-9">
+                <input
+                  ref={selectAllRef}
+                  type="checkbox"
+                  checked={allFilteredChecked}
+                  onChange={toggleAllFiltered}
+                  aria-label="Select all"
+                  className="accent-coral w-4 h-4 cursor-pointer align-middle"
+                />
+              </th>
               {["Tag ID", "Species", "Grade", "Dimensions", "Qty", "FBM", "Location", "Status", "Updated"].map((h) => (
                 <th key={h} className="px-3.5 py-2.5 text-left text-text-sec font-medium whitespace-nowrap text-xs">{h}</th>
               ))}
@@ -244,6 +283,15 @@ export function StockLocator({ tags, floorView, openTagId, onTagOpened }: StockL
                     hl ? "bg-coral/[0.07]" : i % 2 === 0 ? "bg-transparent" : "bg-[#FAFAFA]",
                   ].join(" ")}
                 >
+                  <td className="pl-3.5 pr-1 py-[11px]" onClick={(e) => e.stopPropagation()}>
+                    <input
+                      type="checkbox"
+                      checked={checkedIds.has(t.id)}
+                      onChange={() => toggleChecked(t.id)}
+                      aria-label={`Select ${t.id}`}
+                      className="accent-coral w-4 h-4 cursor-pointer align-middle"
+                    />
+                  </td>
                   <td className="px-3.5 py-[11px] font-mono text-coral font-semibold whitespace-nowrap">{t.id}</td>
                   <td className="px-3.5 py-[11px]">{t.species}</td>
                   <td className="px-3.5 py-[11px]">{t.grade}</td>
@@ -259,7 +307,7 @@ export function StockLocator({ tags, floorView, openTagId, onTagOpened }: StockL
               );
             })}
             {filtered.length === 0 && (
-              <tr><td colSpan={9} className="p-10 text-center text-text-sec">No tags match your filters</td></tr>
+              <tr><td colSpan={10} className="p-10 text-center text-text-sec">No tags match your filters</td></tr>
             )}
           </tbody>
         </table>

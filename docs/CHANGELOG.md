@@ -154,6 +154,16 @@ A history of every commit (push) on `main`, in chronological order, with what wa
 
 ---
 
+### `2026-06-22` · Selection-based CSV export — 勾选式导出
+
+**🇨🇳 中文** — Stock Locator 表格每行前新增**复选框**（含表头**全选/半选**状态）。导出行为改为**只导出勾选的标签**：未勾选任何行时「Export CSV」按钮**置灰不可用**；勾选 ≥1 行后按钮变**实心 coral 可点**并显示**已选数量**（如 `Export CSV (3)`）。用颜色清晰区分可交互状态；点复选框**不会**打开详情抽屉（行点击仍正常打开）。与筛选无关——无论是否有筛选，都需先勾选才能导出。（此举改变了 Prompt 2「导出全部筛选结果」的旧行为。）
+
+**🇬🇧 English** — Added a **checkbox** to every Stock Locator row (plus a header **select-all / indeterminate**). Export now exports **only the checked tags**: the "Export CSV" button is **disabled/grey** with nothing selected, and becomes **solid coral** with a **count** (`Export CSV (3)`) once ≥1 is checked. Clear color states for enabled/disabled; checkbox clicks don't open the drawer (row click still does). Filter-independent — selection is always required. (Supersedes Prompt 2's "export all filtered" behavior.)
+
+**Files / 改动:** `StockLocator.tsx`
+
+---
+
 ## Pending / 未来 (not yet built — 尚未开始)
 
 - **Available-to-Sell**（销售视图；`salesOrders` Mock 数据已就绪）
