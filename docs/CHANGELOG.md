@@ -172,6 +172,16 @@ A history of every commit (push) on `main`, in chronological order, with what wa
 
 ---
 
+### `2026-06-22` · Add CLAUDE.md — 新增项目说明文件
+
+**🇨🇳 中文** — 新增 `CLAUDE.md`（项目架构、命令、约定说明），供 Claude Code 新会话快速上手。
+
+**🇬🇧 English** — Added `CLAUDE.md` (architecture, commands, conventions) so future Claude Code sessions ramp up fast.
+
+**Files / 改动:** `CLAUDE.md`
+
+---
+
 ## Pending / 未来 (not yet built — 尚未开始)
 
 - **Available-to-Sell**（销售视图；`salesOrders` Mock 数据已就绪）
