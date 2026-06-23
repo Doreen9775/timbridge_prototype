@@ -1,12 +1,12 @@
 import type { ReactNode } from "react";
 import {
-  Home, MapPin, Tag, Package, Truck, ShoppingCart, Factory,
+  Home, MapPin, Tag, Truck, ShoppingCart, Factory,
   FileText, BarChart2, TrendingUp, Settings,
 } from "lucide-react";
 import { TimbridgeLogo } from "@/components/shared/TimbridgeLogo";
 
 export type NavKey =
-  | "dashboard" | "locator" | "tagentry" | "alltags"
+  | "dashboard" | "locator" | "tagentry"
   | "delivery" | "po" | "prod" | "sales"
   | "reports" | "analytics" | "settings";
 
@@ -18,7 +18,6 @@ const sections: NavSection[] = [
   { label: "INVENTORY", items: [
     { key: "locator", icon: <MapPin size={16} />, label: "Stock Locator" },
     { key: "tagentry", icon: <Tag size={16} />, label: "Tag Entry" },
-    { key: "alltags", icon: <Package size={16} />, label: "All Tags" },
   ] },
   { label: "OPERATIONS", items: [
     { key: "delivery", icon: <Truck size={16} />, label: "Delivery Slips" },

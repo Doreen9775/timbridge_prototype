@@ -2,13 +2,13 @@ import { Search, Bell, ChevronRight } from "lucide-react";
 import type { NavKey } from "./Sidebar";
 
 const titles: Record<NavKey, string> = {
-  dashboard: "Dashboard", locator: "Stock Locator", tagentry: "Tag Entry", alltags: "All Tags",
+  dashboard: "Dashboard", locator: "Stock Locator", tagentry: "Tag Entry",
   delivery: "Delivery Slips", po: "Purchase Orders", prod: "Production", sales: "Sales",
   reports: "Reports", analytics: "Analytics", settings: "Settings",
 };
 
 const parents: Partial<Record<NavKey, string>> = {
-  locator: "Inventory", tagentry: "Inventory", alltags: "Inventory",
+  locator: "Inventory", tagentry: "Inventory",
   delivery: "Operations", po: "Operations", prod: "Operations", sales: "Operations",
   reports: "Insights", analytics: "Insights", settings: "Setup",
 };
