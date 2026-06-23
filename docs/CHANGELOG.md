@@ -154,43 +154,21 @@ A history of every commit (push) on `main`, in chronological order, with what wa
 
 ---
 
-### `2026-06-22` · Selection-based CSV export — 勾选式导出
+### `2026-06-22` · Reference-style color revamp + selection-based CSV export — 配色改版 + 勾选式导出
 
-**🇨🇳 中文** — Stock Locator 表格每行前新增**复选框**（含表头**全选/半选**状态）。导出行为改为**只导出勾选的标签**：未勾选任何行时「Export CSV」按钮**置灰不可用**；勾选 ≥1 行后按钮变**实心 coral 可点**并显示**已选数量**（如 `Export CSV (3)`）。用颜色清晰区分可交互状态；点复选框**不会**打开详情抽屉（行点击仍正常打开）。与筛选无关——无论是否有筛选，都需先勾选才能导出。（此举改变了 Prompt 2「导出全部筛选结果」的旧行为。）
+> 本条为一次 push 的汇总（含多次提交）。/ One push, several commits.
 
-**🇬🇧 English** — Added a **checkbox** to every Stock Locator row (plus a header **select-all / indeterminate**). Export now exports **only the checked tags**: the "Export CSV" button is **disabled/grey** with nothing selected, and becomes **solid coral** with a **count** (`Export CSV (3)`) once ≥1 is checked. Clear color states for enabled/disabled; checkbox clicks don't open the drawer (row click still does). Filter-independent — selection is always required. (Supersedes Prompt 2's "export all filtered" behavior.)
+**🇨🇳 中文**
+- **实色指标卡**：参考给定的 dashboard layout，把 Dashboard 4 张 KPI 卡与 Stock Locator 4 张汇总卡改为实色背景（品牌色 / 主辅色划分不变）。最终配色 → FBM=白、Available=sage、Reserved=lime、Low Stock Alerts=coral（警示）；Stock Locator：Total Tags / Total FBM=白、Available=sage、Reserved=lime。顶栏头像=coral，圆角加大、数字加粗。
+- **状态色全局统一**：Tag Status Distribution 饼图 **+** 表格/详情的状态徽章统一为 → Available=sage、Reserved=lime、Discrepancy=coral（警示）、Pending/Received/Shipped=中性灰。
+- **勾选式导出 CSV**：Stock Locator 每行加复选框（含表头全选/半选）；导出改为**只导出勾选的标签**，未勾选时按钮置灰不可用，勾选后变实心 coral + 显示数量；点复选框不打开抽屉。（取代了原「导出全部筛选结果」的行为。）
 
-**Files / 改动:** `StockLocator.tsx`
+**🇬🇧 English**
+- **Solid-color metric cards** (Dashboard KPIs + Stock Locator summary cards) per the reference layout; palette/roles unchanged. Final colors → FBM=white, Available=sage, Reserved=lime, Low Stock Alerts=coral; TopBar avatar=coral; larger radius/numbers.
+- **Unified status colors** across the pie **and** the table/drawer badges → Available=sage, Reserved=lime, Discrepancy=coral (alert), transitional=neutral grays.
+- **Selection-based CSV export**: per-row checkboxes (+ header select-all/indeterminate); exports only checked tags; button disabled until ≥1 selected, then solid coral with a count; checkbox clicks don't open the drawer. (Supersedes the earlier "export all filtered" behavior.)
 
----
-
-### `2026-06-22` · Reference-style colored metric cards — 实色指标卡片改版
-
-**🇨🇳 中文** — 参考给定的 dashboard layout，把**指标卡做成实色背景**（品牌色与主/辅色划分**保持不变**）：Dashboard 4 张 KPI 卡 = 白 / sage / coral（白字）/ lime；Stock Locator 4 张汇总卡同样处理；顶栏头像改为 **coral**。圆角加大（rounded-2xl）、数字加粗。深色侧边栏、白色内容卡、coral 强调色等其余元素本就与参考一致。（说明：参考图顶部的搜索药丸暂未加——本应用还没有全局搜索功能，加一个假的会误导；需要的话可后续补装饰性/真实搜索。）
-
-**🇬🇧 English** — Restyled metric cards to solid brand-color backgrounds per the reference layout (palette + primary/secondary roles unchanged): Dashboard's 4 KPI cards = white / sage / coral (white text) / lime; Stock Locator's 4 summary cards likewise; TopBar avatar → coral. Larger rounding, bolder numbers. (Note: the reference's search pill wasn't added — there's no global search feature yet; a fake one would mislead.)
-
-**Files / 改动:** `Dashboard.tsx`, `StockLocator.tsx`, `TopBar.tsx`
-
----
-
-### `2026-06-22` · Tweak metric-card colors — 调整指标卡配色
-
-**🇨🇳 中文** — Dashboard：**Tags Reserved** 与 **Low Stock Alerts** 配色对调（Reserved → lime，Low Stock Alerts → coral 警示色，更贴语义）。Stock Locator：**Total FBM** 改为白色，与 **Total Tags** 一致。
-
-**🇬🇧 English** — Dashboard: swapped Tags Reserved (now lime) ↔ Low Stock Alerts (now coral, reads as a warning). Stock Locator: Total FBM → white, matching Total Tags.
-
-**Files / 改动:** `Dashboard.tsx`, `StockLocator.tsx`
-
----
-
-### `2026-06-22` · Align status pie colors — 状态饼图配色对齐
-
-**🇨🇳 中文** — Dashboard 的 **Tag Status Distribution** 饼图/图例改用统一色彩逻辑：**Available = sage**、**Reserved = lime**（与对应 KPI 卡一致），**Discrepancy = coral**（异常/警示），Pending / Received / Shipped 用中性灰 / ink。
-
-**🇬🇧 English** — The Tag Status Distribution pie/legend now follow the unified scheme: Available = sage, Reserved = lime (matching their KPI cards), Discrepancy = coral (alert), transitional states = neutrals.
-
-**Files / 改动:** `Dashboard.tsx`
+**Files / 改动:** `Dashboard.tsx`, `StockLocator.tsx`, `TopBar.tsx`, `StatusBadge.tsx`
 
 ---
 

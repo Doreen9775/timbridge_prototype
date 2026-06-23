@@ -1,14 +1,14 @@
 import type { TagStatus } from "@/lib/types";
 
-// Color per lifecycle state (kickoff §4.5). Tints chosen to echo the dashboard
-// pie: Available = lime/green, Reserved = coral, Discrepancy = ink, rest neutral.
+// Color per lifecycle state — tints of the unified status scheme (matches the dashboard
+// pie): Available = sage, Reserved = lime, Discrepancy = coral (alert), rest neutral grays.
 const STYLES: Record<TagStatus, string> = {
-  Available: "bg-[#EAF5D0] text-[#4E6B0E]",
-  Received: "bg-[#E5E7EB] text-[#4B5563]",
-  Pending: "bg-[#E7EEEA] text-[#5C6B63]",
-  Reserved: "bg-[#FCE0D7] text-[#B23A1A]",
-  Shipped: "bg-[#EDEFF2] text-[#6B7280]",
-  Discrepancy: "bg-ink text-white",
+  Available: "bg-[#DCE7E1] text-[#33473C]", // sage
+  Reserved: "bg-[#EAF5D0] text-[#4E6B0E]", // lime
+  Discrepancy: "bg-[#FCE0D7] text-[#B23A1A]", // coral (alert)
+  Pending: "bg-[#EEF0F2] text-[#6B7280]", // light gray
+  Received: "bg-[#E2E5E9] text-[#4B5563]", // mid gray
+  Shipped: "bg-[#D9DDE3] text-[#3B4250]", // darker gray
 };
 
 const SIZES = {
