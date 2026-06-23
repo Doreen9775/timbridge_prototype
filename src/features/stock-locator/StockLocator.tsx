@@ -1,8 +1,9 @@
-import { useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { Search, Scan, ChevronDown, X, Download } from "lucide-react";
 import type { Tag } from "@/lib/types";
 import { StatusBadge } from "@/components/shared/StatusBadge";
 import { calcBoardFeet, calcLineal } from "@/lib/fbm";
+import { useRecentRecords } from "@/hooks/useRecentRecords";
 
 const STATUS_OPTIONS = ["All", "Pending", "Received", "Available", "Reserved", "Shipped", "Discrepancy"];
 const SPECIES_OPTIONS = ["All", "SPF", "Doug Fir", "Western Red Cedar", "Hem-Fir"];
@@ -46,15 +47,32 @@ function csvFilename(): string {
 interface StockLocatorProps {
   tags: Tag[];
   floorView: boolean;
+  openTagId?: string | null;
+  onTagOpened?: () => void;
 }
 
-export function StockLocator({ tags, floorView }: StockLocatorProps) {
+export function StockLocator({ tags, floorView, openTagId, onTagOpened }: StockLocatorProps) {
   const [search, setSearch] = useState("");
   const [statusF, setStatusF] = useState("All");
   const [speciesF, setSpeciesF] = useState("All");
   const [yardF, setYardF] = useState("All");
   const [lowQty, setLowQty] = useState(false);
   const [selected, setSelected] = useState<string | null>(null);
+  const { pushRecord } = useRecentRecords();
+
+  // Open a tag's detail drawer and record it as recently accessed (push hook).
+  const openTag = useCallback((id: string) => {
+    setSelected(id);
+    pushRecord({ type: "tag", id, label: id });
+  }, [pushRecord]);
+
+  // Entry point for the Recent dropdown: open the requested tag, then clear the request.
+  useEffect(() => {
+    if (openTagId) {
+      openTag(openTagId);
+      onTagOpened?.();
+    }
+  }, [openTagId, openTag, onTagOpened]);
 
   const filtered = useMemo(
     () =>
@@ -220,7 +238,7 @@ export function StockLocator({ tags, floorView }: StockLocatorProps) {
               return (
                 <tr
                   key={t.id}
-                  onClick={() => setSelected(t.id)}
+                  onClick={() => openTag(t.id)}
                   className={[
                     "border-b border-[#F3F4F6] cursor-pointer hover:bg-sage/20",
                     hl ? "bg-coral/[0.07]" : i % 2 === 0 ? "bg-transparent" : "bg-[#FAFAFA]",

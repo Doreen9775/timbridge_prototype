@@ -1,5 +1,7 @@
 import { Search, Bell, ChevronRight } from "lucide-react";
 import type { NavKey } from "./Sidebar";
+import type { RecentRecord } from "@/lib/types";
+import { RecentMenu } from "./RecentMenu";
 
 const titles: Record<NavKey, string> = {
   dashboard: "Dashboard", locator: "Stock Locator", tagentry: "Tag Entry",
@@ -17,9 +19,10 @@ interface TopBarProps {
   nav: NavKey;
   floorView: boolean;
   setFloorView: (floor: boolean) => void;
+  onOpenRecord: (r: RecentRecord) => void;
 }
 
-export function TopBar({ nav, floorView, setFloorView }: TopBarProps) {
+export function TopBar({ nav, floorView, setFloorView, onOpenRecord }: TopBarProps) {
   return (
     <div className="bg-white h-14 flex items-center px-6 border-b border-sage sticky top-0 z-10 gap-4">
       <div className="flex-1">
@@ -58,6 +61,7 @@ export function TopBar({ nav, floorView, setFloorView }: TopBarProps) {
           <Bell size={18} className="text-text-sec cursor-pointer" />
           <span className="absolute -top-0.5 -right-0.5 w-[7px] h-[7px] rounded-full bg-coral" />
         </div>
+        <RecentMenu onOpenRecord={onOpenRecord} />
         <div className="w-[30px] h-[30px] rounded-full bg-ink flex items-center justify-center text-white text-[11px] font-semibold">DW</div>
       </div>
     </div>

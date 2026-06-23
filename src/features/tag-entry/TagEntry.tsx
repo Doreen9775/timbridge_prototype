@@ -3,6 +3,7 @@ import { Scan, CheckCircle, Plus, ArrowRight } from "lucide-react";
 import type { Tag, Species, Grade, MoistureState, Milling } from "@/lib/types";
 import { parentLogs } from "@/lib/mock-data";
 import { calcFbm, calcLineal, fbmToM3 } from "@/lib/fbm";
+import { useRecentRecords } from "@/hooks/useRecentRecords";
 
 const SPECIES: Species[] = ["SPF", "Doug Fir", "Western Red Cedar", "Hem-Fir"];
 const GRADES: Grade[] = ["#1", "#2", "#3", "Select", "Clear", "MSR 1650"];
@@ -26,6 +27,7 @@ interface TagEntryProps {
 }
 
 export function TagEntry({ tags, setTags, floorView }: TagEntryProps) {
+  const { pushRecord } = useRecentRecords();
   const [step, setStep] = useState(1);
   const [toast, setToast] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
@@ -76,6 +78,7 @@ export function TagEntry({ tags, setTags, floorView }: TagEntryProps) {
       history: [{ e: "Tag created via Tag Entry", t: "Jun 04 2026 14:32", w: "DW" }],
     };
     setTags([...tags, newTag]);
+    pushRecord({ type: "tag", id: newId, label: newId });
     setDone(newId);
   };
 

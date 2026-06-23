@@ -77,3 +77,13 @@ export interface FloorTask {
   loc: string;
   priority: "High" | "Normal";
 }
+
+// ─── Recent records (top-nav "Recent" dropdown; persisted to localStorage) ────────
+export type RecentRecordType = "tag" | "slip";
+
+export interface RecentRecord {
+  type: RecentRecordType;
+  id: string;
+  label: string;
+  timestamp: number; // epoch ms of last access
+}
