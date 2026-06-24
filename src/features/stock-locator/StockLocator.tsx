@@ -1,26 +1,201 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { Search, Scan, ChevronDown, X, Download } from "lucide-react";
-import type { Tag } from "@/lib/types";
+import { Search, Scan, ChevronDown, ChevronLeft, ChevronRight, X, Download, Maximize2, Minimize2, Filter, RotateCcw, Pencil } from "lucide-react";
+import type { Tag, Species, Grade, MoistureState, Milling, TagStatus } from "@/lib/types";
 import { StatusBadge } from "@/components/shared/StatusBadge";
-import { calcBoardFeet, calcLineal } from "@/lib/fbm";
+import { calcBoardFeet, calcLineal, calcFbm } from "@/lib/fbm";
 import { useRecentRecords } from "@/hooks/useRecentRecords";
 
-const STATUS_OPTIONS = ["All", "Pending", "Received", "Available", "Reserved", "Shipped", "Discrepancy"];
-const SPECIES_OPTIONS = ["All", "SPF", "Doug Fir", "Western Red Cedar", "Hem-Fir"];
-const YARD_OPTIONS = ["All", "YD-A", "YD-B", "YD-C"];
+const STATUS_OPTIONS = ["Pending", "Received", "Available", "Reserved", "Shipped", "Discrepancy"];
+const SPECIES_OPTIONS = ["SPF", "Doug Fir", "Western Red Cedar", "Hem-Fir"];
+const YARD_OPTIONS = ["YD-A", "YD-B", "YD-C"];
+// Controlled vocabularies for the detail-panel edit form (mirror the unions in types.ts).
+const GRADE_OPTIONS = ["#1", "#2", "#3", "Select", "Clear", "MSR 1650"];
+const STATE_OPTIONS = ["GRN", "KD", "HT", "KD-HT"];
+const MILLING_OPTIONS = ["RGH", "STD", "S4S"];
 
-function FilterSelect({ value, onChange, options }: { value: string; onChange: (v: string) => void; options: string[] }) {
+// ── Date helpers (Entry Date column + calendar filter) ──
+const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+const MONTHS_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const WEEKDAYS = ["S", "M", "T", "W", "T", "F", "S"];
+
+// "2026-06-01" → "Jun 01, 2026"
+function formatEntryDate(iso: string): string {
+  const [y, m, d] = iso.split("-").map(Number);
+  return `${MONTHS_SHORT[m - 1]} ${String(d).padStart(2, "0")}, ${y}`;
+}
+
+const toISO = (y: number, m: number, d: number) => `${y}-${String(m + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+
+// "Jun 23 2026 14:32" — for movement-history events written on save.
+function nowStamp(): string {
+  const d = new Date();
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${MONTHS_SHORT[d.getMonth()]} ${p(d.getDate())} ${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+
+// Set-equality on string arrays — drives the "Apply Now" enabled state.
+function sameSet(a: string[], b: string[]): boolean {
+  if (a.length !== b.length) return false;
+  const s = new Set(a);
+  return b.every((v) => s.has(v));
+}
+
+// Shared dropdown shell: trigger (label + count badge + chevron) → click-outside popover → Apply Now footer.
+function FilterDropdown({
+  label,
+  appliedCount,
+  applyEnabled,
+  onApply,
+  width = "w-[300px]",
+  children,
+  note,
+}: {
+  label: string;
+  appliedCount: number;
+  applyEnabled: boolean;
+  onApply: () => void;
+  width?: string;
+  children: ReactNode;
+  note: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const apply = () => {
+    onApply();
+    setOpen(false);
+  };
   return (
     <div className="relative">
-      <select
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="appearance-none pl-2.5 pr-7 py-1.5 text-[13px] border border-sage rounded-md bg-white text-text outline-none cursor-pointer"
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className={[
+          "flex items-center gap-1.5 px-3.5 py-1.5 text-[13px] rounded-md cursor-pointer border bg-white",
+          appliedCount > 0 ? "border-coral text-coral" : "border-sage text-text-sec",
+        ].join(" ")}
       >
-        {options.map((o) => <option key={o}>{o}</option>)}
-      </select>
-      <ChevronDown size={12} className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-text-sec" />
+        <span>{label}</span>
+        {appliedCount > 0 && (
+          <span className="bg-coral text-white rounded-full text-[10px] leading-none px-1.5 py-0.5 font-semibold">{appliedCount}</span>
+        )}
+        <ChevronDown size={13} className={`transition-transform ${open ? "rotate-180" : ""}`} />
+      </button>
+
+      {open && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
+          <div className={`absolute left-0 top-[calc(100%+6px)] ${width} bg-white rounded-xl shadow-[0_8px_30px_rgba(0,0,0,0.12)] border border-sage z-50 overflow-hidden`}>
+            <div className="p-4">{children}</div>
+            <div className="px-4 pb-4 pt-1">
+              <div className="text-[11px] text-text-ter mb-3 border-t border-sage/60 pt-3">{note}</div>
+              <button
+                onClick={apply}
+                disabled={!applyEnabled}
+                className={[
+                  "w-full py-2 rounded-lg text-[13px] font-semibold transition-colors",
+                  applyEnabled ? "bg-coral text-white cursor-pointer hover:brightness-95" : "bg-sage/30 text-text-ter cursor-not-allowed",
+                ].join(" ")}
+              >
+                Apply Now
+              </button>
+            </div>
+          </div>
+        </>
+      )}
     </div>
+  );
+}
+
+// Multi-select pill list (Species / Status / Location).
+function PillFilter({ label, options, applied, onApply }: { label: string; options: string[]; applied: string[]; onApply: (v: string[]) => void }) {
+  const [draft, setDraft] = useState<string[]>(applied);
+  // Re-sync the draft to the applied set whenever it changes (e.g. global Reset Filter).
+  useEffect(() => setDraft(applied), [applied]);
+  const toggle = (o: string) => setDraft((d) => (d.includes(o) ? d.filter((x) => x !== o) : [...d, o]));
+  return (
+    <FilterDropdown
+      label={label}
+      appliedCount={applied.length}
+      applyEnabled={!sameSet(draft, applied)}
+      onApply={() => onApply(draft)}
+      note="*You can choose multiple"
+    >
+      <div className="text-sm font-semibold text-ink mb-3">Select {label}</div>
+      <div className="flex flex-wrap gap-2">
+        {options.map((o) => {
+          const on = draft.includes(o);
+          return (
+            <button
+              key={o}
+              onClick={() => toggle(o)}
+              className={[
+                "px-3.5 py-1.5 text-[13px] rounded-full border cursor-pointer transition-colors",
+                on ? "bg-coral text-white border-coral" : "bg-white text-text border-sage hover:border-coral",
+              ].join(" ")}
+            >
+              {o}
+            </button>
+          );
+        })}
+      </div>
+    </FilterDropdown>
+  );
+}
+
+// Multi-date calendar (Entry Date filter).
+function DateFilter({ applied, onApply }: { applied: string[]; onApply: (v: string[]) => void }) {
+  const [draft, setDraft] = useState<string[]>(applied);
+  useEffect(() => setDraft(applied), [applied]);
+  const today = new Date();
+  const [view, setView] = useState({ y: today.getFullYear(), m: today.getMonth() });
+
+  const toggle = (iso: string) => setDraft((d) => (d.includes(iso) ? d.filter((x) => x !== iso) : [...d, iso]));
+  const shift = (delta: number) => setView((v) => {
+    const m = v.m + delta;
+    return { y: v.y + Math.floor(m / 12), m: ((m % 12) + 12) % 12 };
+  });
+
+  const firstDow = new Date(view.y, view.m, 1).getDay();
+  const daysInMonth = new Date(view.y, view.m + 1, 0).getDate();
+  const cells: (number | null)[] = [...Array(firstDow).fill(null), ...Array.from({ length: daysInMonth }, (_, i) => i + 1)];
+  while (cells.length % 7 !== 0) cells.push(null);
+
+  return (
+    <FilterDropdown
+      label="Date"
+      appliedCount={applied.length}
+      applyEnabled={!sameSet(draft, applied)}
+      onApply={() => onApply(draft)}
+      width="w-[320px]"
+      note="*You can choose multiple dates"
+    >
+      <div className="flex items-center justify-between mb-3">
+        <div className="text-sm font-semibold text-ink">{MONTHS[view.m]} {view.y}</div>
+        <div className="flex gap-1">
+          <button onClick={() => shift(-1)} aria-label="Previous month" className="w-7 h-7 rounded-md bg-sage/20 hover:bg-sage/40 flex items-center justify-center cursor-pointer"><ChevronLeft size={15} /></button>
+          <button onClick={() => shift(1)} aria-label="Next month" className="w-7 h-7 rounded-md bg-sage/20 hover:bg-sage/40 flex items-center justify-center cursor-pointer"><ChevronRight size={15} /></button>
+        </div>
+      </div>
+      <div className="grid grid-cols-7 gap-y-1 text-center">
+        {WEEKDAYS.map((w, i) => <div key={i} className="text-[11px] text-text-ter font-medium py-1">{w}</div>)}
+        {cells.map((d, i) => {
+          if (d === null) return <div key={i} />;
+          const iso = toISO(view.y, view.m, d);
+          const on = draft.includes(iso);
+          return (
+            <div key={i} className="flex justify-center">
+              <button
+                onClick={() => toggle(iso)}
+                className={[
+                  "w-8 h-8 rounded-lg text-[13px] cursor-pointer transition-colors",
+                  on ? "bg-coral text-white font-semibold" : "text-text hover:bg-sage/30",
+                ].join(" ")}
+              >
+                {d}
+              </button>
+            </div>
+          );
+        })}
+      </div>
+    </FilterDropdown>
   );
 }
 
@@ -49,15 +224,18 @@ interface StockLocatorProps {
   floorView: boolean;
   openTagId?: string | null;
   onTagOpened?: () => void;
+  onUpdateTag?: (tag: Tag) => void;
 }
 
-export function StockLocator({ tags, floorView, openTagId, onTagOpened }: StockLocatorProps) {
+export function StockLocator({ tags, floorView, openTagId, onTagOpened, onUpdateTag }: StockLocatorProps) {
   const [search, setSearch] = useState("");
-  const [statusF, setStatusF] = useState("All");
-  const [speciesF, setSpeciesF] = useState("All");
-  const [yardF, setYardF] = useState("All");
+  const [dates, setDates] = useState<string[]>([]);
+  const [statusF, setStatusF] = useState<string[]>([]);
+  const [speciesF, setSpeciesF] = useState<string[]>([]);
+  const [yardF, setYardF] = useState<string[]>([]);
   const [lowQty, setLowQty] = useState(false);
   const [selected, setSelected] = useState<string | null>(null);
+  const [fullscreen, setFullscreen] = useState(false);
   const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
   const { pushRecord } = useRecentRecords();
 
@@ -66,6 +244,18 @@ export function StockLocator({ tags, floorView, openTagId, onTagOpened }: StockL
     setSelected(id);
     pushRecord({ type: "tag", id, label: id });
   }, [pushRecord]);
+
+  // Closing always returns to the compact (non-fullscreen) state.
+  const closeDrawer = useCallback(() => {
+    setSelected(null);
+    setFullscreen(false);
+  }, []);
+
+  // Row click toggles: clicking the already-open tag closes its detail; otherwise open it.
+  const handleRowClick = (id: string) => {
+    if (selected === id) closeDrawer();
+    else openTag(id);
+  };
 
   // Entry point for the Recent dropdown: open the requested tag, then clear the request.
   useEffect(() => {
@@ -87,13 +277,14 @@ export function StockLocator({ tags, floorView, openTagId, onTagOpened }: StockL
           t.yard.toLowerCase().includes(q);
         return (
           matchQ &&
-          (statusF === "All" || t.status === statusF) &&
-          (speciesF === "All" || t.species === speciesF) &&
-          (yardF === "All" || t.yard === yardF) &&
+          (dates.length === 0 || dates.includes(t.date)) &&
+          (statusF.length === 0 || statusF.includes(t.status)) &&
+          (speciesF.length === 0 || speciesF.includes(t.species)) &&
+          (yardF.length === 0 || yardF.includes(t.yard)) &&
           (!lowQty || t.qty < 50)
         );
       }),
-    [tags, search, statusF, speciesF, yardF, lowQty],
+    [tags, search, dates, statusF, speciesF, yardF, lowQty],
   );
 
   const totals = useMemo(
@@ -108,9 +299,9 @@ export function StockLocator({ tags, floorView, openTagId, onTagOpened }: StockL
 
   const selTag = selected ? tags.find((t) => t.id === selected) ?? null : null;
 
-  const filtersActive = search !== "" || statusF !== "All" || speciesF !== "All" || yardF !== "All" || lowQty;
+  const filtersActive = search !== "" || dates.length > 0 || statusF.length > 0 || speciesF.length > 0 || yardF.length > 0 || lowQty;
   const resetFilters = () => {
-    setSearch(""); setStatusF("All"); setSpeciesF("All"); setYardF("All"); setLowQty(false);
+    setSearch(""); setDates([]); setStatusF([]); setSpeciesF([]); setYardF([]); setLowQty(false);
   };
 
   // Row selection — export is gated on at least one checked tag, regardless of filters.
@@ -211,10 +402,14 @@ export function StockLocator({ tags, floorView, openTagId, onTagOpened }: StockL
         />
       </div>
 
-      <div className="flex gap-2.5 mb-4 flex-wrap">
-        <FilterSelect value={statusF} onChange={setStatusF} options={STATUS_OPTIONS} />
-        <FilterSelect value={speciesF} onChange={setSpeciesF} options={SPECIES_OPTIONS} />
-        <FilterSelect value={yardF} onChange={setYardF} options={YARD_OPTIONS} />
+      <div className="flex gap-2.5 mb-4 flex-wrap items-center">
+        <span className="flex items-center gap-1.5 text-[13px] text-text-sec font-medium pr-1">
+          <Filter size={15} />Filter By
+        </span>
+        <DateFilter applied={dates} onApply={setDates} />
+        <PillFilter label="Species" options={SPECIES_OPTIONS} applied={speciesF} onApply={setSpeciesF} />
+        <PillFilter label="Status" options={STATUS_OPTIONS} applied={statusF} onApply={setStatusF} />
+        <PillFilter label="Location" options={YARD_OPTIONS} applied={yardF} onApply={setYardF} />
         <button
           onClick={() => setLowQty(!lowQty)}
           className={[
@@ -229,7 +424,7 @@ export function StockLocator({ tags, floorView, openTagId, onTagOpened }: StockL
             onClick={resetFilters}
             className="px-3.5 py-1.5 text-[13px] rounded-md cursor-pointer border border-sage bg-transparent text-text-sec flex items-center gap-1 hover:text-coral hover:border-coral"
           >
-            <X size={13} />Reset filters
+            <RotateCcw size={13} />Reset Filter
           </button>
         )}
         <div className="ml-auto flex items-center gap-3">
@@ -256,7 +451,7 @@ export function StockLocator({ tags, floorView, openTagId, onTagOpened }: StockL
           return (
             <div key={label} className={`${th.card} rounded-xl px-4 py-3 shadow-[0_1px_3px_rgba(0,0,0,0.06)]`}>
               <div className={`text-[11px] mb-1 ${th.label}`}>{label}</div>
-              <div className={`text-[22px] font-bold ${th.value}`}>{value}</div>
+              <div className={`text-[22px] font-display font-bold ${th.value}`}>{value}</div>
             </div>
           );
         })}
@@ -276,7 +471,7 @@ export function StockLocator({ tags, floorView, openTagId, onTagOpened }: StockL
                   className="accent-coral w-4 h-4 cursor-pointer align-middle"
                 />
               </th>
-              {["Tag ID", "Species", "Grade", "Dimensions", "Qty", "FBM", "Location", "Status", "Updated"].map((h) => (
+              {["Tag ID", "Species", "Grade", "Dimensions", "Qty", "FBM", "Location", "Status", "Entry Date", "Updated"].map((h) => (
                 <th key={h} className="px-3.5 py-2.5 text-left text-text-sec font-medium whitespace-nowrap text-xs">{h}</th>
               ))}
             </tr>
@@ -287,7 +482,7 @@ export function StockLocator({ tags, floorView, openTagId, onTagOpened }: StockL
               return (
                 <tr
                   key={t.id}
-                  onClick={() => openTag(t.id)}
+                  onClick={() => handleRowClick(t.id)}
                   className={[
                     "border-b border-[#F3F4F6] cursor-pointer hover:bg-sage/20",
                     hl ? "bg-coral/[0.07]" : i % 2 === 0 ? "bg-transparent" : "bg-[#FAFAFA]",
@@ -312,23 +507,62 @@ export function StockLocator({ tags, floorView, openTagId, onTagOpened }: StockL
                     <span className="bg-sage/40 text-ink font-mono text-[11px] px-2 py-[3px] rounded-[5px]">{t.yard} · {t.section} · {t.rack}</span>
                   </td>
                   <td className="px-3.5 py-[11px]"><StatusBadge status={t.status} /></td>
+                  <td className="px-3.5 py-[11px] text-text-sec text-xs whitespace-nowrap">{formatEntryDate(t.date)}</td>
                   <td className="px-3.5 py-[11px] text-text-ter text-xs">{t.updated}</td>
                 </tr>
               );
             })}
             {filtered.length === 0 && (
-              <tr><td colSpan={10} className="p-10 text-center text-text-sec">No tags match your filters</td></tr>
+              <tr><td colSpan={11} className="p-10 text-center text-text-sec">No tags match your filters</td></tr>
             )}
           </tbody>
         </table>
       </div>
 
-      {selTag && <DetailDrawer tag={selTag} onClose={() => setSelected(null)} />}
+      {selTag && (
+        <DetailDrawer
+          key={selTag.id}
+          tag={selTag}
+          fullscreen={fullscreen}
+          onToggleFullscreen={() => setFullscreen((f) => !f)}
+          onClose={closeDrawer}
+          onSave={onUpdateTag}
+        />
+      )}
     </div>
   );
 }
 
-function DetailDrawer({ tag, onClose }: { tag: Tag; onClose: () => void }) {
+function DetailDrawer({
+  tag,
+  fullscreen,
+  onToggleFullscreen,
+  onClose,
+  onSave,
+}: {
+  tag: Tag;
+  fullscreen: boolean;
+  onToggleFullscreen: () => void;
+  onClose: () => void;
+  onSave?: (tag: Tag) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState<Tag>(tag);
+  const canEdit = !!onSave;
+
+  const startEdit = () => { setDraft(tag); setEditing(true); };
+  const saveEdit = () => {
+    const fbm = calcFbm(draft.thick, draft.width, draft.length, draft.qty);
+    const updated: Tag = {
+      ...draft,
+      fbm,
+      updated: "just now",
+      history: [...draft.history, { e: "Edited via Stock Locator", t: nowStamp(), w: "DW" }],
+    };
+    onSave?.(updated);
+    setEditing(false);
+  };
+
   const crumbs: string[] = ["Mill", "→", tag.yard, "→", tag.section, "→", tag.rack, "→", tag.bin];
   const specs: [string, string][] = [
     ["Species", tag.species], ["Grade", tag.grade],
@@ -336,16 +570,127 @@ function DetailDrawer({ tag, onClose }: { tag: Tag; onClose: () => void }) {
     ["Milling", tag.milling], ["FBM", tag.fbm.toLocaleString()],
     ["Qty", `${tag.qty} pcs`], ["Yard", tag.yard],
   ];
-  return (
-    <div className="fixed top-0 right-0 w-[380px] h-screen bg-white shadow-[-4px_0_20px_rgba(0,0,0,0.12)] z-[100] overflow-y-auto">
-      <div className="px-5 pt-5 pb-4 border-b border-sage flex items-center justify-between">
-        <div className="flex items-center gap-2.5">
-          <span className="font-mono text-base font-bold text-coral">{tag.id}</span>
-          <StatusBadge status={tag.status} />
-        </div>
-        <button onClick={onClose} className="bg-transparent border-0 cursor-pointer text-text-sec"><X size={18} /></button>
+
+  // Edit-form styling + a small label-wrapper helper (a plain function, not a component,
+  // so inputs keep focus across keystrokes).
+  const inputCls = "w-full border border-sage rounded-md px-2 py-1.5 text-[13px] bg-white text-text outline-none focus:border-coral";
+  const field = (label: string, node: ReactNode) => (
+    <label className="block">
+      <div className="text-[10px] text-text-ter mb-0.5">{label}</div>
+      {node}
+    </label>
+  );
+
+  const header = (
+    <div className="px-5 pt-5 pb-4 border-b border-sage flex items-center justify-between">
+      <div className="flex items-center gap-2.5">
+        <span className="font-mono text-base font-bold text-coral">{tag.id}</span>
+        <StatusBadge status={editing ? draft.status : tag.status} />
       </div>
-      <div className="p-5">
+      <div className="flex items-center gap-1.5">
+        {editing ? (
+          <>
+            <button onClick={() => setEditing(false)} className="px-3 py-1 text-[13px] rounded-md border border-sage text-text-sec hover:text-coral hover:border-coral cursor-pointer">Cancel</button>
+            <button onClick={saveEdit} className="px-3.5 py-1 text-[13px] rounded-md bg-coral text-white font-semibold hover:brightness-95 cursor-pointer">Save</button>
+          </>
+        ) : (
+          <>
+            {canEdit && (
+              <button onClick={startEdit} aria-label="Edit" title="Edit" className="flex items-center gap-1 px-2.5 py-1 text-[13px] rounded-md border border-sage text-text-sec hover:text-coral hover:border-coral cursor-pointer">
+                <Pencil size={13} />Edit
+              </button>
+            )}
+            <button
+              onClick={onToggleFullscreen}
+              title={fullscreen ? "Exit fullscreen" : "Fullscreen"}
+              aria-label={fullscreen ? "Exit fullscreen" : "Fullscreen"}
+              className="bg-transparent border-0 cursor-pointer text-text-sec p-1 hover:text-coral"
+            >
+              {fullscreen ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
+            </button>
+            <button onClick={onClose} aria-label="Close" className="bg-transparent border-0 cursor-pointer text-text-sec p-1 hover:text-coral"><X size={18} /></button>
+          </>
+        )}
+      </div>
+    </div>
+  );
+
+  const editBody = (
+    <div className="p-5 space-y-5">
+      <div>
+        <div className="text-xs text-text-sec mb-2">Status</div>
+        <select className={inputCls} value={draft.status} onChange={(e) => setDraft((d) => ({ ...d, status: e.target.value as TagStatus }))}>
+          {STATUS_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
+        </select>
+      </div>
+
+      <div>
+        <div className="text-xs text-text-sec mb-2">Location</div>
+        <div className={`grid gap-2 ${fullscreen ? "grid-cols-4" : "grid-cols-2"}`}>
+          {field("Yard", (
+            <select className={inputCls} value={draft.yard} onChange={(e) => setDraft((d) => ({ ...d, yard: e.target.value }))}>
+              {YARD_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
+            </select>
+          ))}
+          {field("Section", <input className={inputCls} value={draft.section} onChange={(e) => setDraft((d) => ({ ...d, section: e.target.value }))} />)}
+          {field("Rack", <input className={inputCls} value={draft.rack} onChange={(e) => setDraft((d) => ({ ...d, rack: e.target.value }))} />)}
+          {field("Bin", <input className={inputCls} value={draft.bin} onChange={(e) => setDraft((d) => ({ ...d, bin: e.target.value }))} />)}
+        </div>
+      </div>
+
+      <div>
+        <div className="text-xs text-text-sec mb-2">Product Specs</div>
+        <div className={`grid gap-2 ${fullscreen ? "grid-cols-4" : "grid-cols-2"}`}>
+          {field("Species", (
+            <select className={inputCls} value={draft.species} onChange={(e) => setDraft((d) => ({ ...d, species: e.target.value as Species }))}>
+              {SPECIES_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
+            </select>
+          ))}
+          {field("Grade", (
+            <select className={inputCls} value={draft.grade} onChange={(e) => setDraft((d) => ({ ...d, grade: e.target.value as Grade }))}>
+              {GRADE_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
+            </select>
+          ))}
+          {field("Thickness (in)", <input type="number" min="0" step="0.5" className={inputCls} value={draft.thick} onChange={(e) => setDraft((d) => ({ ...d, thick: Number(e.target.value) }))} />)}
+          {field("Width (in)", <input type="number" min="0" step="0.5" className={inputCls} value={draft.width} onChange={(e) => setDraft((d) => ({ ...d, width: Number(e.target.value) }))} />)}
+          {field("Length (ft)", <input type="number" min="0" className={inputCls} value={draft.length} onChange={(e) => setDraft((d) => ({ ...d, length: Number(e.target.value) }))} />)}
+          {field("Qty (pcs)", <input type="number" min="0" className={inputCls} value={draft.qty} onChange={(e) => setDraft((d) => ({ ...d, qty: Number(e.target.value) }))} />)}
+          {field("State", (
+            <select className={inputCls} value={draft.state} onChange={(e) => setDraft((d) => ({ ...d, state: e.target.value as MoistureState }))}>
+              {STATE_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
+            </select>
+          ))}
+          {field("Milling", (
+            <select className={inputCls} value={draft.milling} onChange={(e) => setDraft((d) => ({ ...d, milling: e.target.value as Milling }))}>
+              {MILLING_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
+            </select>
+          ))}
+        </div>
+      </div>
+
+      <div>
+        <div className="text-xs text-text-sec mb-2">Units (auto)</div>
+        <div className="bg-[#F9FAFB] rounded-md px-4 py-3 flex items-end justify-between">
+          <div>
+            <div className="text-2xl font-display font-bold text-ink leading-none">{calcBoardFeet(draft.thick, draft.width, draft.length, draft.qty).toLocaleString()}</div>
+            <div className="text-[10px] text-text-ter mt-1">BF</div>
+          </div>
+          <div className="text-right">
+            <div className="text-base font-semibold text-text leading-none">{draft.qty.toLocaleString()}</div>
+            <div className="text-[10px] text-text-ter mt-1">pcs</div>
+          </div>
+          <div className="text-right">
+            <div className="text-base font-semibold text-text leading-none">{calcLineal(draft.length, draft.qty).toLocaleString()}</div>
+            <div className="text-[10px] text-text-ter mt-1">lf</div>
+          </div>
+        </div>
+        <div className="text-[10px] text-text-ter mt-1.5">FBM updates to {calcFbm(draft.thick, draft.width, draft.length, draft.qty).toLocaleString()} on save. ID, traceability and movement history stay read-only.</div>
+      </div>
+    </div>
+  );
+
+  const viewBody = (
+    <div className="p-5">
         <div className="text-xs text-text-sec mb-2">Location</div>
         <div className="flex items-center gap-1.5 mb-5 flex-wrap">
           {crumbs.map((s, i) => {
@@ -367,7 +712,7 @@ function DetailDrawer({ tag, onClose }: { tag: Tag; onClose: () => void }) {
         </div>
 
         <div className="text-xs text-text-sec mb-2">Product Specs</div>
-        <div className="grid grid-cols-2 gap-2 mb-5">
+        <div className={`grid gap-2 mb-5 ${fullscreen ? "grid-cols-4" : "grid-cols-2"}`}>
           {specs.map(([k, v]) => (
             <div key={k} className="bg-[#F9FAFB] rounded-md px-3 py-2">
               <div className="text-[10px] text-text-ter mb-0.5">{k}</div>
@@ -379,7 +724,7 @@ function DetailDrawer({ tag, onClose }: { tag: Tag; onClose: () => void }) {
         <div className="text-xs text-text-sec mb-2">Units</div>
         <div className="bg-[#F9FAFB] rounded-md px-4 py-3 mb-5 flex items-end justify-between">
           <div>
-            <div className="text-2xl font-bold text-ink leading-none">{calcBoardFeet(tag.thick, tag.width, tag.length, tag.qty).toLocaleString()}</div>
+            <div className="text-2xl font-display font-bold text-ink leading-none">{calcBoardFeet(tag.thick, tag.width, tag.length, tag.qty).toLocaleString()}</div>
             <div className="text-[10px] text-text-ter mt-1">BF</div>
           </div>
           <div className="text-right">
@@ -417,6 +762,31 @@ function DetailDrawer({ tag, onClose }: { tag: Tag; onClose: () => void }) {
           </div>
         ))}
       </div>
+  );
+
+  const body = editing ? editBody : viewBody;
+
+  if (fullscreen) {
+    return (
+      <div
+        className="fixed inset-0 z-[100] bg-ink/40 flex items-center justify-center p-6"
+        onClick={editing ? undefined : onClose}
+      >
+        <div
+          className="bg-white w-full max-w-3xl max-h-[90vh] rounded-xl overflow-y-auto shadow-[0_10px_40px_rgba(0,0,0,0.25)]"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {header}
+          {body}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="fixed top-0 right-0 w-[380px] h-screen bg-white shadow-[-4px_0_20px_rgba(0,0,0,0.12)] z-[100] overflow-y-auto">
+      {header}
+      {body}
     </div>
   );
 }

@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import {
   Home, MapPin, Tag, Truck, ShoppingCart, Factory,
-  FileText, BarChart2, TrendingUp, Settings,
+  FileText, BarChart2, TrendingUp, Settings, LogOut,
 } from "lucide-react";
 import { TimbridgeLogo } from "@/components/shared/TimbridgeLogo";
 
@@ -36,9 +36,10 @@ interface SidebarProps {
   nav: NavKey;
   setNav: (key: NavKey) => void;
   floorView: boolean;
+  onLogout: () => void;
 }
 
-export function Sidebar({ nav, setNav, floorView }: SidebarProps) {
+export function Sidebar({ nav, setNav, floorView, onLogout }: SidebarProps) {
   return (
     <div className="w-[210px] min-w-[210px] bg-ink flex flex-col h-screen sticky top-0">
       <div className="px-4 pt-5 pb-4">
@@ -58,7 +59,7 @@ export function Sidebar({ nav, setNav, floorView }: SidebarProps) {
                   className={[
                     "relative flex items-center gap-2 py-2 px-2.5 rounded-md cursor-pointer mb-0.5",
                     floorView ? "text-base" : "text-[13px]",
-                    active ? "bg-coral/45 text-white" : "text-white/65",
+                    active ? "bg-coral/45 text-white" : "text-white/65 hover:bg-white/5 hover:text-white",
                   ].join(" ")}
                 >
                   {item.icon}
@@ -67,6 +68,18 @@ export function Sidebar({ nav, setNav, floorView }: SidebarProps) {
                 </div>
               );
             })}
+            {sec.label === "SETUP" && (
+              <div
+                onClick={onLogout}
+                className={[
+                  "flex items-center gap-2 py-2 px-2.5 rounded-md cursor-pointer mb-0.5 text-white/65 hover:bg-white/5 hover:text-white",
+                  floorView ? "text-base" : "text-[13px]",
+                ].join(" ")}
+              >
+                <LogOut size={16} />
+                <span>Logout</span>
+              </div>
+            )}
           </div>
         ))}
       </div>

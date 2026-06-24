@@ -43,6 +43,7 @@ export interface Tag {
   rack: string;
   bin: string;
   status: TagStatus;
+  date: string; // system entry date (ISO YYYY-MM-DD) — derived from the first history event
   updated: string; // relative display string, e.g. "2h ago"
   parentLog: string | null; // display-only traceability (out of scope this semester)
   supplier?: string; // origin supplier (from a delivery slip; "In-house production" or absent otherwise)

@@ -65,7 +65,7 @@ export function Dashboard({ tags, floorView }: DashboardProps) {
         <div className="grid grid-cols-2 gap-4">
           <div className="bg-white rounded-xl p-6 border border-sage">
             <div className="text-sm text-text-sec mb-2">My Tasks Today</div>
-            <div className="text-5xl font-bold text-ink mb-4">3</div>
+            <div className="text-5xl font-display font-bold text-ink mb-4">3</div>
             {floorTasks.map((t, i) => (
               <div key={i} className="px-4 py-3.5 bg-cream rounded-lg mb-2 cursor-pointer">
                 <div className="text-lg font-semibold text-text mb-1">{t.title}</div>
@@ -78,7 +78,7 @@ export function Dashboard({ tags, floorView }: DashboardProps) {
           </div>
           <div className="bg-white rounded-xl p-6 border border-sage">
             <div className="text-sm text-text-sec mb-2">Recent Scans</div>
-            <div className="text-5xl font-bold text-ink mb-4">5</div>
+            <div className="text-5xl font-display font-bold text-ink mb-4">5</div>
             {recentActivity.map((a, i) => (
               <div key={i} className={`py-3 ${i < 4 ? "border-b border-sage" : ""}`}>
                 <div className="text-base text-text font-medium">{a.msg.split(" ").slice(0, 3).join(" ")}…</div>
@@ -136,7 +136,7 @@ export function Dashboard({ tags, floorView }: DashboardProps) {
               <div className={`text-xs mb-2 ${th.label}`}>{c.label}</div>
               <div className="flex items-end justify-between">
                 <div>
-                  <div className={`text-[30px] font-bold leading-none ${th.value}`}>{c.value}</div>
+                  <div className={`text-[30px] font-display font-bold leading-none ${th.value}`}>{c.value}</div>
                   <div className={`text-[11px] mt-1.5 ${th.sub}`}>{c.sub}</div>
                 </div>
                 {c.spark && <Sparkline data={c.spark} />}
@@ -148,7 +148,7 @@ export function Dashboard({ tags, floorView }: DashboardProps) {
 
       <div className="grid grid-cols-2 gap-5 mb-6">
         <div className="bg-white rounded-[10px] pt-5 px-5 pb-3 shadow-[0_1px_4px_rgba(0,0,0,0.07)]">
-          <div className="text-[13px] font-medium text-text mb-4">FBM by Species</div>
+          <div className="text-[13px] font-display font-semibold text-text mb-4">FBM by Species</div>
           <ResponsiveContainer width="100%" height={180}>
             <BarChart data={speciesData} barCategoryGap="30%">
               <XAxis dataKey="name" interval={0} tick={{ fontSize: 10, fill: C.textSec }} axisLine={false} tickLine={false} />
@@ -161,7 +161,7 @@ export function Dashboard({ tags, floorView }: DashboardProps) {
           </ResponsiveContainer>
         </div>
         <div className="bg-white rounded-[10px] pt-5 px-5 pb-4 shadow-[0_1px_4px_rgba(0,0,0,0.07)]">
-          <div className="text-[13px] font-medium text-text mb-4">Tag Status Distribution</div>
+          <div className="text-[13px] font-display font-semibold text-text mb-4">Tag Status Distribution</div>
           <div className="flex items-center gap-2">
             <div className="w-1/2">
               <ResponsiveContainer width="100%" height={150}>
@@ -188,7 +188,7 @@ export function Dashboard({ tags, floorView }: DashboardProps) {
 
       <div className="bg-white rounded-[10px] p-5 shadow-[0_1px_4px_rgba(0,0,0,0.07)]">
         <div className="flex items-center justify-between gap-3 flex-wrap mb-4">
-          <div className="text-[13px] font-medium text-text">Recent Activity</div>
+          <div className="text-[13px] font-display font-semibold text-text">Recent Activity</div>
           <div className="flex gap-1.5 flex-wrap">
             {ACTIVITY_FILTERS.map((f) => {
               const active = activityFilter === f;

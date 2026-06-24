@@ -182,6 +182,30 @@ A history of every commit (push) on `main`, in chronological order, with what wa
 
 ---
 
+## 2026-06-23
+
+### `2026-06-23` · Login + auth gate · Stock Locator overhaul · brand typography — 登录鉴权 + 库存定位大改 + 品牌字体
+
+> 本条为一次 push 的汇总（含多项改动）。/ One push, several changes.
+
+**🇨🇳 中文**
+- **登录页 + 鉴权门（新）**：左表单 / 右图的分栏登录页；预填测试账号 `usertest@tbg.com` / `123456`，点 Sign In 进入主应用。右侧 3 张木材实拍图每 5 秒**交叉淡化**轮播（存于 `public/login/`，已压缩为 Web 尺寸 ~2000px）。登录→应用为淡出/淡入的柔和过渡。Sign In 按钮加 hover。
+- **侧边栏**：SETUP 下新增 **Logout**（点击回到登录页）；所有导航项加 hover，**仅选中项**为红色。
+- **Stock Locator · 详情面板**：支持**全屏**切换；非全屏下再点同一行可关闭详情；新增**编辑 / 保存**——Status、Location、Species、Grade、尺寸、Qty、State、Milling 全部可改，FBM 自动重算，保存时追加一条「Edited via Stock Locator」历史并把 Updated 置为 just now。
+- **Stock Locator · 筛选栏重做**：参照 wireframe 的 Filter By 栏——**Date（多选日历）/ Species / Status / Location** 四个多选下拉，Apply Now 未改动时置灰、改动后高亮；保留 Low Qty 快捷筛选与 Reset Filter。Tag 新增 `date`（录入日期）字段并回填，表格新增 **Entry Date** 列。
+- **全站字体**：display 标题用 **Montserrat**、正文用 **Nunito Sans**（替换 Geist）。
+
+**🇬🇧 English**
+- **Login page + auth gate (new)**: split login (form left, hero right); test creds prefilled (`usertest@tbg.com` / `123456`); Sign In enters the app. Three lumber photos **crossfade** every 5s (served from `public/login/`, optimized to ~2000px). Login→app is a soft fade-out/fade-in. Sign In button has a hover.
+- **Sidebar**: new **Logout** under SETUP (returns to login); all nav items now have hover, with red reserved for the **selected** item only.
+- **Stock Locator · detail panel**: **fullscreen** toggle; clicking the open row again closes it; new **edit / save** — Status, Location, Species, Grade, dimensions, Qty, State, Milling are editable, FBM auto-recomputes, and Save appends an "Edited via Stock Locator" history event + sets Updated to "just now".
+- **Stock Locator · filter bar redo**: wireframe-style Filter By bar — **Date (multi-date calendar) / Species / Status / Location** multi-select popovers with an Apply Now that's gray until changed; Low Qty quick filter and Reset Filter kept. Added a `date` (entry date) field to Tag (seeded) + an **Entry Date** column.
+- **App-wide fonts**: **Montserrat** for display titles, **Nunito Sans** for body (replacing Geist).
+
+**Files / 改动:** `features/auth/LoginPage.tsx` (new), `public/login/*` (new), `App.tsx`, `components/layout/Sidebar.tsx`, `features/stock-locator/StockLocator.tsx`, `lib/types.ts`, `lib/mock-data.ts`, `features/tag-entry/TagEntry.tsx`, `features/delivery-slips/DeliverySlips.tsx`, `features/dashboard/Dashboard.tsx`, `index.css`, `package.json`
+
+---
+
 ## Pending / 未来 (not yet built — 尚未开始)
 
 - **Available-to-Sell**（销售视图；`salesOrders` Mock 数据已就绪）

@@ -73,7 +73,7 @@ export function TagEntry({ tags, setTags, floorView }: TagEntryProps) {
     const newId = `T-2026-${String(tags.length + 100 + 1).padStart(4, "0")}`;
     const newTag: Tag = {
       id: newId, species, grade, thick, width, length, qty, fbm, state: state_, milling,
-      yard, section, rack, bin, status: "Available", updated: "just now",
+      yard, section, rack, bin, status: "Available", date: "2026-06-04", updated: "just now",
       parentLog: parentLog || null,
       history: [{ e: "Tag created via Tag Entry", t: "Jun 04 2026 14:32", w: "DW" }],
     };
@@ -124,7 +124,7 @@ export function TagEntry({ tags, setTags, floorView }: TagEntryProps) {
         ) : (
           <div className="text-center">
             <CheckCircle size={80} className="text-coral mb-5 mx-auto" />
-            <div className="text-[28px] font-bold text-ink mb-2">Tag Saved!</div>
+            <div className="text-[28px] font-display font-bold text-ink mb-2">Tag Saved!</div>
             <div className="font-mono text-[22px] text-text mb-6">{done}</div>
             <button onClick={reset} className="px-8 py-4 bg-coral text-white border-0 rounded-lg text-lg cursor-pointer">Add Another</button>
           </div>
@@ -139,7 +139,7 @@ export function TagEntry({ tags, setTags, floorView }: TagEntryProps) {
       <div className="p-10 bg-cream min-h-full flex flex-col items-center justify-center">
         <div className="bg-white rounded-2xl p-10 text-center shadow-[0_2px_16px_rgba(0,0,0,0.08)] max-w-[400px]">
           <CheckCircle size={56} className="text-coral mb-4 mx-auto" />
-          <div className="text-[22px] font-semibold text-ink mb-1.5">Tag Created</div>
+          <div className="text-[22px] font-display font-semibold text-ink mb-1.5">Tag Created</div>
           <div className="font-mono text-xl font-bold text-text mb-2">{done}</div>
           <div className="text-[13px] text-text-sec mb-6">Tag is now live in Stock Locator</div>
           <div className="flex gap-3 justify-center">
@@ -264,7 +264,7 @@ export function TagEntry({ tags, setTags, floorView }: TagEntryProps) {
             <div className="bg-coral/5 border border-coral/30 rounded-[10px] px-5 py-[18px] mb-5">
               <div className="text-[11px] text-text-sec mb-2">Live FBM Calculator</div>
               <div className="text-[13px] text-text-sec font-mono mb-2">{thick} × {width} × {length} × {qty} ÷ 12 =</div>
-              <div className="text-4xl font-bold text-ink mb-1">{fbm.toLocaleString()} FBM</div>
+              <div className="text-4xl font-display font-bold text-ink mb-1">{fbm.toLocaleString()} FBM</div>
               <div className="text-xs text-text-sec">Lineal feet: {lineal.toLocaleString()} · M³: {m3}</div>
             </div>
             <div className="grid grid-cols-2 gap-4 mb-5">

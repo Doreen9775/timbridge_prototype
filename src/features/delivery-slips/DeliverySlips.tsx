@@ -104,7 +104,7 @@ export function DeliverySlips({ tags, setTags }: DeliverySlipsProps) {
       species: it.species, grade: it.grade, thick: it.thick, width: it.width, length: it.length,
       qty: it.qty, fbm: it.fbm, state: it.state, milling: it.milling,
       yard: "YD-A", section: "A-1", rack: "R-01", bin: "B1",
-      status: "Pending", updated: "just now", parentLog: null, supplier: it.supplier || undefined,
+      status: "Pending", date: "2026-06-04", updated: "just now", parentLog: null, supplier: it.supplier || undefined,
       history: [{ e: `Created from delivery slip${it.poNumber ? " PO " + it.poNumber : ""}`, t: "Jun 04 2026 14:32", w: "DW" }],
     }));
     setTags([...tags, ...newTags]);
@@ -127,7 +127,7 @@ export function DeliverySlips({ tags, setTags }: DeliverySlipsProps) {
             <div className="w-16 h-16 rounded-full bg-coral/10 flex items-center justify-center mx-auto mb-4">
               <Truck size={28} className="text-coral" />
             </div>
-            <div className="text-xl font-semibold text-ink mb-2">Delivery Slip — AI Parser</div>
+            <div className="text-xl font-display font-semibold text-ink mb-2">Delivery Slip — AI Parser</div>
             <div className="text-[13px] text-text-sec mb-7 leading-relaxed">
               Upload a delivery slip (PDF or photo) and AI will extract all lumber line items.<br />
               Review the results, then create inventory tags in one click.
@@ -172,7 +172,7 @@ export function DeliverySlips({ tags, setTags }: DeliverySlipsProps) {
         <div className="max-w-[900px] mx-auto">
           <div className="flex items-center justify-between mb-5">
             <div>
-              <div className="text-lg font-semibold text-ink mb-0.5">Review Extracted Items</div>
+              <div className="text-lg font-display font-semibold text-ink mb-0.5">Review Extracted Items</div>
               <div className="text-[13px] text-text-sec">Source: {fileName || "sample delivery slip"} · {extracted.length} line items detected</div>
             </div>
             <div className="flex gap-2.5">
@@ -280,7 +280,7 @@ export function DeliverySlips({ tags, setTags }: DeliverySlipsProps) {
     <div className="p-10 bg-cream min-h-full flex items-center justify-center">
       <div className="bg-white rounded-2xl p-12 text-center shadow-[0_2px_16px_rgba(0,0,0,0.08)] max-w-[420px]">
         <CheckCircle size={60} className="text-coral mx-auto mb-4" />
-        <div className="text-2xl font-bold text-ink mb-2">Tags Created</div>
+        <div className="text-2xl font-display font-bold text-ink mb-2">Tags Created</div>
         <div className="text-[15px] text-text-sec mb-1.5"><strong>{createdCount}</strong> inventory tag{createdCount !== 1 ? "s" : ""} added successfully</div>
         <div className="text-[13px] text-text-ter mb-7">New tags start as <strong>Pending</strong> — confirm them on the floor to receive.</div>
         <div className="flex gap-3 justify-center">
