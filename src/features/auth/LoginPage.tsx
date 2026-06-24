@@ -42,7 +42,7 @@ export function LoginPage({ onSignIn }: { onSignIn: () => void }) {
     "w-full bg-[#F3F4F6] rounded-lg px-4 py-3 text-[15px] text-text placeholder:text-[#A6A6A6] placeholder:font-normal outline-none focus:ring-2 focus:ring-coral/40";
 
   return (
-    <div className={`flex h-screen w-screen bg-white overflow-hidden transition-opacity duration-500 ${exiting ? "opacity-0" : "opacity-100"}`}>
+    <div className={`flex h-screen w-screen bg-white overflow-hidden animate-fade-in transition-opacity duration-500 ${exiting ? "opacity-0" : "opacity-100"}`}>
       {/* Left — sign-in form */}
       <div className="w-full md:w-1/2 flex flex-col p-10 relative">
         <TimbridgeLogo className="w-[120px] h-auto" />

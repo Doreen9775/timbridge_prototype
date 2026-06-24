@@ -206,6 +206,22 @@ A history of every commit (push) on `main`, in chronological order, with what wa
 
 ---
 
+## 2026-06-24
+
+### `2026-06-24` · Auth transitions polish — 登录/登出过渡打磨
+
+**🇨🇳 中文**
+- **登出也有淡出过渡**：点 Logout 后主应用先淡出（500ms），再切回登录页并淡入，与 Sign In 进入时的过渡对称，不再生硬瞬切。（`.animate-fade-in` 去掉 `both`，让同一元素既能淡入又能随后淡出。）
+- **重新登录永远回到 Dashboard**：不管登出时停在哪个功能，每次 Sign In 统一落到 Dashboard。
+
+**🇬🇧 English**
+- **Logout fade-out**: the app now fades out (500ms) before returning to the login page, which fades back in — symmetric with the sign-in transition. (Dropped `both` from `.animate-fade-in` so the same element can fade in and later fade out.)
+- **Always land on Dashboard**: every sign-in resets the view to Dashboard, regardless of where the previous session left off.
+
+**Files / 改动:** `App.tsx`, `features/auth/LoginPage.tsx`, `index.css`
+
+---
+
 ## Pending / 未来 (not yet built — 尚未开始)
 
 - **Available-to-Sell**（销售视图；`salesOrders` Mock 数据已就绪）

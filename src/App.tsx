@@ -17,8 +17,24 @@ export default function App() {
   const [nav, setNav] = useState<NavKey>("dashboard");
   const [pendingTagId, setPendingTagId] = useState<string | null>(null);
   const [authed, setAuthed] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
   const { isFloor, setFloorView } = useRole();
   const { tags, setTags } = useTags();
+
+  // Every sign-in lands on the Dashboard, regardless of where the last session left off.
+  const handleSignIn = useCallback(() => {
+    setNav("dashboard");
+    setAuthed(true);
+  }, []);
+
+  // Fade the app out before returning to the login page (mirrors the sign-in transition).
+  const handleLogout = useCallback(() => {
+    setLoggingOut(true);
+    window.setTimeout(() => {
+      setAuthed(false);
+      setLoggingOut(false);
+    }, 500);
+  }, []);
 
   // Open a record from the Recent dropdown: tags open in Stock Locator's detail drawer.
   const handleOpenRecord = useCallback((r: RecentRecord) => {
@@ -34,12 +50,12 @@ export default function App() {
     setTags((prev) => prev.map((t) => (t.id === updated.id ? updated : t)));
   }, [setTags]);
 
-  if (!authed) return <LoginPage onSignIn={() => setAuthed(true)} />;
+  if (!authed) return <LoginPage onSignIn={handleSignIn} />;
 
   return (
     <RecentRecordsProvider>
-      <div className="flex h-screen bg-cream text-text overflow-hidden animate-fade-in">
-        <Sidebar nav={nav} setNav={setNav} floorView={isFloor} onLogout={() => setAuthed(false)} />
+      <div className={`flex h-screen bg-cream text-text overflow-hidden animate-fade-in transition-opacity duration-500 ${loggingOut ? "opacity-0" : "opacity-100"}`}>
+        <Sidebar nav={nav} setNav={setNav} floorView={isFloor} onLogout={handleLogout} />
         <div className="flex-1 flex flex-col overflow-hidden">
           <TopBar nav={nav} floorView={isFloor} setFloorView={setFloorView} onOpenRecord={handleOpenRecord} />
           {isFloor && <FloorBanner />}
