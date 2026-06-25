@@ -26,10 +26,11 @@ There are **no tests** — verify changes with `npx tsc -b --noEmit` plus a visu
 
 **State stores (React only, no backend):**
 - `useTags` (`src/hooks/useTags.ts`) — the Tag table; threaded down via props from `App`.
-- `useRole` (`src/hooks/useRole.ts`) — Manager/Floor (tablet) toggle. The Sales role and the full §4 permission matrix are **not built yet**; the sidebar currently shows all items in both views.
-- `useRecentRecords` (`src/hooks/useRecentRecords.tsx`) — Context provider at the App root; the **only** use of `localStorage` (key `timbridge_recent_records`). Everything else is in-memory and resets on reload.
+- `useRole` (`src/hooks/useRole.ts`) — Manager/Floor (tablet) toggle; the Sales role exists at the type level but has no UI entry point yet. The sidebar (`src/components/layout/Sidebar.tsx`) gates nav items by role per the Manager/Sales/Floor matrix.
+- `useRecentRecords` (`src/hooks/useRecentRecords.tsx`) — Context provider at the App root; persists to `localStorage` (key `timbridge_recent_records`).
+- `useLookups` (`src/hooks/useLookups.tsx`) — Context provider at the App root; merges hardcoded system defaults (`src/lib/lookups.ts`) with Manager-added custom values persisted to `localStorage` (key `timbridge_custom_lookups`) for the Species/Grade/State/Milling/Yard Location dropdowns in Tag Entry and Stock Locator. Everything else is in-memory and resets on reload.
 
-**Features** (`src/features/*`, each self-contained, fed via props): `dashboard`, `stock-locator`, `tag-entry`, `delivery-slips`. `reports` and `available-to-sell` are empty placeholders (Phase 2).
+**Features** (`src/features/*`, each self-contained, fed via props): `dashboard`, `stock-locator`, `tag-entry`, `delivery-slips`, `settings` (Custom Values, Manager-only). `reports` and `available-to-sell` are empty placeholders (Phase 2).
 
 **Delivery Slips AI parsing is the only external call, and the key is server-side:**
 - Browser → `POST /api/parse-slip` via `src/lib/anthropic.ts` (`parseDeliverySlip`). No key or Anthropic logic in the client bundle.

@@ -1,19 +1,26 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Search, Scan, ChevronDown, ChevronLeft, ChevronRight, X, Download, Maximize2, Minimize2, Filter, RotateCcw, Pencil } from "lucide-react";
-import type { Tag, Species, Grade, MoistureState, Milling, TagStatus, EntryFilter, Role, SalesOrderStatus } from "@/lib/types";
+import type { Tag, Species, Grade, MoistureState, Milling, TagStatus, EntryFilter, Role, SalesOrder, SalesOrderStatus } from "@/lib/types";
 import { StatusBadge } from "@/components/shared/StatusBadge";
 import { ConfirmationBanner } from "@/components/shared/ConfirmationBanner";
 import { calcBoardFeet, calcLineal, calcFbm } from "@/lib/fbm";
 import { useRecentRecords } from "@/hooks/useRecentRecords";
-import { salesOrders } from "@/lib/mock-data";
+import { useLookups } from "@/hooks/useLookups";
 
 const STATUS_OPTIONS = ["Pending", "Received", "Available", "Reserved", "Shipped", "Discrepancy"];
-const SPECIES_OPTIONS = ["SPF", "Doug Fir", "Western Red Cedar", "Hem-Fir"];
-const YARD_OPTIONS = ["YD-A", "YD-B", "YD-C"];
-// Controlled vocabularies for the detail-panel edit form (mirror the unions in types.ts).
-const GRADE_OPTIONS = ["#1", "#2", "#3", "Select", "Clear", "MSR 1650"];
-const STATE_OPTIONS = ["GRN", "KD", "HT", "KD-HT"];
-const MILLING_OPTIONS = ["RGH", "STD", "S4S"];
+
+// The 6-state lifecycle (kickoff §4.5) — valid forward transitions only, keyed by current status.
+// Available → Reserved additionally requires an eligible (Open) Sales Order to link to.
+const VALID_TRANSITIONS: Record<TagStatus, TagStatus[]> = {
+  Pending: ["Received", "Discrepancy"],
+  Received: ["Available", "Discrepancy"],
+  Available: ["Reserved", "Discrepancy"],
+  Reserved: ["Available", "Shipped"],
+  Discrepancy: ["Pending"],
+  Shipped: [],
+};
+// Species/Grade/State/Milling/Location option lists now come from useLookups() (system defaults
+// + Manager-added custom values, src/lib/lookups.ts) instead of hardcoded consts.
 
 // ── Date helpers (Entry Date column + calendar filter) ──
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
@@ -253,13 +260,18 @@ interface StockLocatorProps {
   onUpdateTag?: (tag: Tag) => void;
   entryFilter?: EntryFilter | null;
   onClearEntryFilter?: () => void;
+  salesOrders: SalesOrder[];
+  onLinkSalesOrder?: (soId: string, tagId: string, qty: number, unitPrice: number) => void;
 }
 
-export function StockLocator({ tags, floorView, role, openTagId, onTagOpened, onUpdateTag, entryFilter, onClearEntryFilter }: StockLocatorProps) {
+export function StockLocator({ tags, floorView, role, openTagId, onTagOpened, onUpdateTag, entryFilter, onClearEntryFilter, salesOrders, onLinkSalesOrder }: StockLocatorProps) {
   const [search, setSearch] = useState("");
   const [dates, setDates] = useState<string[]>([]);
   const [statusF, setStatusF] = useState<string[]>([]);
   const [speciesF, setSpeciesF] = useState<string[]>([]);
+  const [gradeF, setGradeF] = useState<string[]>([]);
+  const [stateF, setStateF] = useState<string[]>([]);
+  const [millingF, setMillingF] = useState<string[]>([]);
   const [yardF, setYardF] = useState<string[]>([]);
   const [lowQty, setLowQty] = useState(false);
   // Hard ID-set gate from entryFilter (composes with the bar filters; cleared by Reset Filter).
@@ -267,7 +279,9 @@ export function StockLocator({ tags, floorView, role, openTagId, onTagOpened, on
   const [selected, setSelected] = useState<string | null>(null);
   const [fullscreen, setFullscreen] = useState(false);
   const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
+  const [confirmTagId, setConfirmTagId] = useState<string | null>(null);
   const { pushRecord } = useRecentRecords();
+  const lookups = useLookups();
 
   // Open a tag's detail drawer and record it as recently accessed (push hook).
   const openTag = useCallback((id: string) => {
@@ -323,11 +337,14 @@ export function StockLocator({ tags, floorView, role, openTagId, onTagOpened, on
           (dates.length === 0 || dates.includes(t.date)) &&
           (statusF.length === 0 || statusF.includes(t.status)) &&
           (speciesF.length === 0 || speciesF.includes(t.species)) &&
+          (gradeF.length === 0 || gradeF.includes(t.grade)) &&
+          (stateF.length === 0 || stateF.includes(t.state)) &&
+          (millingF.length === 0 || millingF.includes(t.milling)) &&
           (yardF.length === 0 || yardF.includes(t.yard)) &&
           (!lowQty || t.qty < 50)
         );
       }),
-    [tags, search, dates, statusF, speciesF, yardF, lowQty, idSet],
+    [tags, search, dates, statusF, speciesF, gradeF, stateF, millingF, yardF, lowQty, idSet],
   );
 
   const totals = useMemo(
@@ -342,9 +359,9 @@ export function StockLocator({ tags, floorView, role, openTagId, onTagOpened, on
 
   const selTag = selected ? tags.find((t) => t.id === selected) ?? null : null;
 
-  const filtersActive = search !== "" || dates.length > 0 || statusF.length > 0 || speciesF.length > 0 || yardF.length > 0 || lowQty || idSet !== null;
+  const filtersActive = search !== "" || dates.length > 0 || statusF.length > 0 || speciesF.length > 0 || gradeF.length > 0 || stateF.length > 0 || millingF.length > 0 || yardF.length > 0 || lowQty || idSet !== null;
   const resetFilters = () => {
-    setSearch(""); setDates([]); setStatusF([]); setSpeciesF([]); setYardF([]); setLowQty(false);
+    setSearch(""); setDates([]); setStatusF([]); setSpeciesF([]); setGradeF([]); setStateF([]); setMillingF([]); setYardF([]); setLowQty(false);
     setIdSet(null);
     onClearEntryFilter?.();
   };
@@ -402,6 +419,7 @@ export function StockLocator({ tags, floorView, role, openTagId, onTagOpened, on
   ) : null;
 
   if (floorView) {
+    const confirmTag = confirmTagId ? tags.find((t) => t.id === confirmTagId) ?? null : null;
     return (
       <>
       {banner}
@@ -425,12 +443,31 @@ export function StockLocator({ tags, floorView, role, openTagId, onTagOpened, on
               </div>
               <div className="text-xl text-text mb-2">📍 {t.yard} · {t.section} · {t.rack}</div>
               <div className="text-base text-text-sec mb-4">{t.species} · {t.grade} · {t.thick}×{t.width} × {t.length}' · {t.qty} pcs</div>
-              <button className="w-full p-4 bg-coral text-white border-0 rounded-lg text-lg font-semibold cursor-pointer hover:brightness-95">Update Location</button>
+              {t.status === "Pending" ? (
+                <button
+                  onClick={() => setConfirmTagId(t.id)}
+                  className="w-full min-h-[44px] p-4 bg-lime text-ink border-0 rounded-lg text-lg font-semibold cursor-pointer hover:brightness-95"
+                >
+                  Confirm Receipt
+                </button>
+              ) : (
+                <button className="w-full min-h-[44px] p-4 bg-coral text-white border-0 rounded-lg text-lg font-semibold cursor-pointer hover:brightness-95">Update Location</button>
+              )}
             </div>
           ))}
           {filtered.length === 0 && <div className="text-center text-text-sec text-lg py-10">No tags found</div>}
         </div>
       </div>
+      {confirmTag && (
+        <FloorConfirmSheet
+          tag={confirmTag}
+          onClose={() => setConfirmTagId(null)}
+          onSave={(updated) => {
+            onUpdateTag?.(updated);
+            setConfirmTagId(null);
+          }}
+        />
+      )}
       </>
     );
   }
@@ -464,14 +501,17 @@ export function StockLocator({ tags, floorView, role, openTagId, onTagOpened, on
         />
       </div>
 
-      <div className="flex gap-2.5 mb-4 flex-wrap items-center">
+      <div className="flex gap-2.5 mb-3 flex-wrap items-center">
         <span className="flex items-center gap-1.5 text-[13px] text-text-sec font-medium pr-1">
           <Filter size={15} />Filter By
         </span>
         <DateFilter applied={dates} onApply={setDates} />
-        <PillFilter label="Species" options={SPECIES_OPTIONS} applied={speciesF} onApply={setSpeciesF} />
+        <PillFilter label="Species" options={lookups.species.map((v) => v.code)} applied={speciesF} onApply={setSpeciesF} />
+        <PillFilter label="Grade" options={lookups.grades.map((v) => v.code)} applied={gradeF} onApply={setGradeF} />
+        <PillFilter label="State" options={lookups.states.map((v) => v.code)} applied={stateF} onApply={setStateF} />
+        <PillFilter label="Milling" options={lookups.milling.map((v) => v.code)} applied={millingF} onApply={setMillingF} />
         <PillFilter label="Status" options={STATUS_OPTIONS} applied={statusF} onApply={setStatusF} />
-        <PillFilter label="Location" options={YARD_OPTIONS} applied={yardF} onApply={setYardF} />
+        <PillFilter label="Location" options={lookups.locations.map((v) => v.code)} applied={yardF} onApply={setYardF} />
         <button
           onClick={() => setLowQty(!lowQty)}
           className={[
@@ -489,22 +529,23 @@ export function StockLocator({ tags, floorView, role, openTagId, onTagOpened, on
             <RotateCcw size={13} />Reset Filter
           </button>
         )}
-        <div className="ml-auto flex items-center gap-3">
-          <button
-            onClick={handleExport}
-            disabled={checkedIds.size === 0}
-            title={checkedIds.size === 0 ? "Select one or more tags to export" : `Export ${checkedIds.size} selected tag${checkedIds.size === 1 ? "" : "s"}`}
-            className={[
-              "px-3.5 py-1.5 text-[13px] rounded-md border flex items-center gap-1.5 transition-colors",
-              checkedIds.size === 0
-                ? "border-sage bg-white text-text-ter opacity-60 cursor-not-allowed"
-                : "border-coral bg-coral text-white cursor-pointer hover:brightness-95",
-            ].join(" ")}
-          >
-            <Download size={14} />Export CSV{checkedIds.size > 0 ? ` (${checkedIds.size})` : ""}
-          </button>
-          <span className="text-xs text-text-ter self-center">Last synced 14:32</span>
-        </div>
+      </div>
+
+      <div className="flex items-center justify-end gap-3 mb-4">
+        <button
+          onClick={handleExport}
+          disabled={checkedIds.size === 0}
+          title={checkedIds.size === 0 ? "Select one or more tags to export" : `Export ${checkedIds.size} selected tag${checkedIds.size === 1 ? "" : "s"}`}
+          className={[
+            "px-3.5 py-1.5 text-[13px] rounded-md border flex items-center gap-1.5 transition-colors",
+            checkedIds.size === 0
+              ? "border-sage bg-white text-text-ter opacity-60 cursor-not-allowed"
+              : "border-coral bg-coral text-white cursor-pointer hover:brightness-95",
+          ].join(" ")}
+        >
+          <Download size={14} />Export CSV{checkedIds.size > 0 ? ` (${checkedIds.size})` : ""}
+        </button>
+        <span className="text-xs text-text-ter self-center">Last synced 14:32</span>
       </div>
 
       <div className="grid grid-cols-4 gap-3 mb-5">
@@ -593,10 +634,123 @@ export function StockLocator({ tags, floorView, role, openTagId, onTagOpened, on
           onToggleFullscreen={() => setFullscreen((f) => !f)}
           onClose={closeDrawer}
           onSave={onUpdateTag}
+          salesOrders={salesOrders}
+          onLinkSalesOrder={onLinkSalesOrder}
         />
       )}
     </div>
     </>
+  );
+}
+
+// Floor-only action sheet for a Pending tag — "Confirm Receipt" entry point from the floor card
+// list. Two outcomes: Confirm as Received (Pending → Received → Available, no QC step, location
+// editable) or Flag Discrepancy (→ Discrepancy, optional note).
+function FloorConfirmSheet({ tag, onClose, onSave }: { tag: Tag; onClose: () => void; onSave: (tag: Tag) => void }) {
+  const [step, setStep] = useState<"choose" | "receive" | "discrepancy">("choose");
+  const [yard, setYard] = useState(tag.yard);
+  const [section, setSection] = useState(tag.section);
+  const [rack, setRack] = useState(tag.rack);
+  const [bin, setBin] = useState(tag.bin);
+  const [note, setNote] = useState("");
+
+  const fieldCls = "w-full min-h-[44px] border border-sage rounded-lg px-3 text-base bg-white text-text outline-none focus:border-coral";
+  const field = (label: string, node: ReactNode) => (
+    <label className="block">
+      <div className="text-xs text-text-ter mb-1">{label}</div>
+      {node}
+    </label>
+  );
+
+  const confirmReceived = () => {
+    onSave({
+      ...tag,
+      yard, section, rack, bin,
+      status: "Available",
+      updated: "just now",
+      history: [
+        ...tag.history,
+        { e: `Confirmed received at ${yard}/${section}/${rack}/${bin}`, t: nowStamp(), w: "Floor" },
+        { e: "Released — available to sell", t: nowStamp(), w: "System" },
+      ],
+    });
+  };
+
+  const flagDiscrepancy = () => {
+    onSave({
+      ...tag,
+      status: "Discrepancy",
+      updated: "just now",
+      history: [...tag.history, { e: note.trim() ? `Flagged: ${note.trim()}` : "Flagged: discrepancy on arrival", t: nowStamp(), w: "Floor" }],
+    });
+  };
+
+  return (
+    <div className="fixed inset-0 z-[100] bg-ink/40 flex items-end justify-center" onClick={onClose}>
+      <div className="bg-white w-full max-w-md rounded-t-2xl max-h-[85vh] overflow-y-auto p-6" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-5">
+          <span className="font-mono text-xl font-bold text-coral">{tag.id}</span>
+          <button onClick={onClose} aria-label="Close" className="min-h-[44px] min-w-[44px] flex items-center justify-center text-text-sec hover:text-coral cursor-pointer bg-transparent border-0">
+            <X size={22} />
+          </button>
+        </div>
+
+        {step === "choose" && (
+          <>
+            <div className="text-base text-text-sec mb-6">
+              Expected: {tag.species} · {tag.grade} · {tag.qty} pcs
+            </div>
+            <div className="flex flex-col gap-3">
+              <button
+                onClick={() => setStep("receive")}
+                className="w-full min-h-[44px] py-3 bg-lime text-ink rounded-lg text-lg font-semibold cursor-pointer hover:brightness-95"
+              >
+                Confirm as Received
+              </button>
+              <button
+                onClick={() => setStep("discrepancy")}
+                className="w-full min-h-[44px] py-3 bg-white border-2 border-coral text-coral rounded-lg text-lg font-semibold cursor-pointer hover:bg-coral/5"
+              >
+                Flag Discrepancy
+              </button>
+            </div>
+          </>
+        )}
+
+        {step === "receive" && (
+          <>
+            <div className="text-base text-text-sec mb-3">Confirm yard location</div>
+            <div className="grid grid-cols-2 gap-3 mb-6">
+              {field("Yard", <input className={fieldCls} value={yard} onChange={(e) => setYard(e.target.value)} />)}
+              {field("Section", <input className={fieldCls} value={section} onChange={(e) => setSection(e.target.value)} />)}
+              {field("Rack", <input className={fieldCls} value={rack} onChange={(e) => setRack(e.target.value)} />)}
+              {field("Bin", <input className={fieldCls} value={bin} onChange={(e) => setBin(e.target.value)} />)}
+            </div>
+            <div className="flex gap-3">
+              <button onClick={() => setStep("choose")} className="flex-1 min-h-[44px] py-3 border border-sage rounded-lg text-base text-text-sec cursor-pointer hover:border-coral hover:text-coral">Back</button>
+              <button onClick={confirmReceived} className="flex-1 min-h-[44px] py-3 bg-coral text-white rounded-lg text-base font-semibold cursor-pointer hover:brightness-95">Save</button>
+            </div>
+          </>
+        )}
+
+        {step === "discrepancy" && (
+          <>
+            <div className="text-base text-text-sec mb-3">Note (optional)</div>
+            <textarea
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              rows={3}
+              placeholder="e.g. qty short 5 pcs"
+              className="w-full border border-sage rounded-lg p-3 text-base mb-6 outline-none focus:border-coral"
+            />
+            <div className="flex gap-3">
+              <button onClick={() => setStep("choose")} className="flex-1 min-h-[44px] py-3 border border-sage rounded-lg text-base text-text-sec cursor-pointer hover:border-coral hover:text-coral">Back</button>
+              <button onClick={flagDiscrepancy} className="flex-1 min-h-[44px] py-3 bg-coral text-white rounded-lg text-base font-semibold cursor-pointer hover:brightness-95">Save</button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -607,6 +761,8 @@ function DetailDrawer({
   onToggleFullscreen,
   onClose,
   onSave,
+  salesOrders,
+  onLinkSalesOrder,
 }: {
   tag: Tag;
   fullscreen: boolean;
@@ -614,27 +770,48 @@ function DetailDrawer({
   onToggleFullscreen: () => void;
   onClose: () => void;
   onSave?: (tag: Tag) => void;
+  salesOrders: SalesOrder[];
+  onLinkSalesOrder?: (soId: string, tagId: string, qty: number, unitPrice: number) => void;
 }) {
   const isManager = role === "manager";
   const showLinkedTransactions = role !== "floor";
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState<Tag>(tag);
   const canEdit = !!onSave;
+  const lookups = useLookups();
   const linkedSOs = useMemo(
     () => salesOrders.flatMap((so) => so.lineItems.filter((li) => li.tagId === tag.id).map((li) => ({ so, li }))),
-    [tag.id],
+    [salesOrders, tag.id],
   );
 
-  const startEdit = () => { setDraft(tag); setEditing(true); };
+  // Status dropdown (Manager only) — valid forward transitions from the in-progress draft status.
+  // Available → Reserved is gated on at least one Open Sales Order to link; confirming "Reserved"
+  // queues that link (created on Save, not immediately — so Cancel can't leave an orphaned link).
+  const eligibleSOs = useMemo(() => salesOrders.filter((so) => so.status === "Open"), [salesOrders]);
+  const statusOptions = VALID_TRANSITIONS[draft.status].filter((s) => s !== "Reserved" || eligibleSOs.length > 0);
+  const [statusConfirm, setStatusConfirm] = useState<{ next: TagStatus; soId: string } | null>(null);
+  const [pendingSOLink, setPendingSOLink] = useState<{ soId: string; qty: number; unitPrice: number } | null>(null);
+
+  const startEdit = () => { setDraft(tag); setPendingSOLink(null); setEditing(true); };
+  const cancelEdit = () => { setPendingSOLink(null); setEditing(false); };
   const saveEdit = () => {
     const fbm = calcFbm(draft.thick, draft.width, draft.length, draft.qty);
     const updated: Tag = {
       ...draft,
       fbm,
       updated: "just now",
-      history: [...draft.history, { e: "Edited via Stock Locator", t: nowStamp(), w: "DW" }],
+      history: [
+        ...draft.history,
+        draft.status !== tag.status
+          ? { e: `Status changed to ${draft.status} via Stock Locator`, t: nowStamp(), w: "DW" }
+          : { e: "Edited via Stock Locator", t: nowStamp(), w: "DW" },
+      ],
     };
     onSave?.(updated);
+    if (pendingSOLink) {
+      onLinkSalesOrder?.(pendingSOLink.soId, tag.id, pendingSOLink.qty, pendingSOLink.unitPrice);
+      setPendingSOLink(null);
+    }
     setEditing(false);
   };
 
@@ -665,8 +842,16 @@ function DetailDrawer({
       <div className="flex items-center gap-1.5">
         {editing ? (
           <>
-            <button onClick={() => setEditing(false)} className="px-3 py-1 text-[13px] rounded-md border border-sage text-text-sec hover:text-coral hover:border-coral cursor-pointer">Cancel</button>
+            <button onClick={cancelEdit} className="px-3 py-1 text-[13px] rounded-md border border-sage text-text-sec hover:text-coral hover:border-coral cursor-pointer">Cancel</button>
             <button onClick={saveEdit} className="px-3.5 py-1 text-[13px] rounded-md bg-coral text-white font-semibold hover:brightness-95 cursor-pointer">Save</button>
+            <button
+              onClick={onToggleFullscreen}
+              title={fullscreen ? "Exit fullscreen" : "Fullscreen"}
+              aria-label={fullscreen ? "Exit fullscreen" : "Fullscreen"}
+              className="bg-transparent border-0 cursor-pointer text-text-sec p-1 hover:text-coral"
+            >
+              {fullscreen ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
+            </button>
           </>
         ) : (
           <>
@@ -692,19 +877,34 @@ function DetailDrawer({
 
   const editBody = (
     <div className="p-5 space-y-5">
-      <div>
-        <div className="text-xs text-text-sec mb-2">Status</div>
-        <select className={inputCls} value={draft.status} onChange={(e) => setDraft((d) => ({ ...d, status: e.target.value as TagStatus }))}>
-          {STATUS_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
-        </select>
-      </div>
+      {isManager && (
+        <div>
+          <div className="text-xs text-text-sec mb-2">Status</div>
+          <select
+            className={inputCls}
+            value={draft.status}
+            disabled={statusOptions.length === 0}
+            onChange={(e) => {
+              const next = e.target.value as TagStatus;
+              if (next === draft.status) return;
+              setStatusConfirm({ next, soId: eligibleSOs[0]?.id ?? "" });
+            }}
+          >
+            <option value={draft.status}>{draft.status}</option>
+            {statusOptions.map((o) => <option key={o} value={o}>{o}</option>)}
+          </select>
+          {statusOptions.length === 0 && (
+            <div className="text-[10px] text-text-ter mt-1">Shipped is a final state — no further transitions.</div>
+          )}
+        </div>
+      )}
 
       <div>
         <div className="text-xs text-text-sec mb-2">Location</div>
         <div className={`grid gap-2 ${fullscreen ? "grid-cols-4" : "grid-cols-2"}`}>
           {field("Yard", (
             <select className={inputCls} value={draft.yard} onChange={(e) => setDraft((d) => ({ ...d, yard: e.target.value }))}>
-              {YARD_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
+              {lookups.locations.map((o) => <option key={o.code} value={o.code}>{o.code}</option>)}
             </select>
           ))}
           {field("Section", <input className={inputCls} value={draft.section} onChange={(e) => setDraft((d) => ({ ...d, section: e.target.value }))} />)}
@@ -718,12 +918,12 @@ function DetailDrawer({
         <div className={`grid gap-2 ${fullscreen ? "grid-cols-4" : "grid-cols-2"}`}>
           {field("Species", (
             <select className={inputCls} value={draft.species} onChange={(e) => setDraft((d) => ({ ...d, species: e.target.value as Species }))}>
-              {SPECIES_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
+              {lookups.species.map((o) => <option key={o.code} value={o.code}>{o.code}</option>)}
             </select>
           ))}
           {field("Grade", (
             <select className={inputCls} value={draft.grade} onChange={(e) => setDraft((d) => ({ ...d, grade: e.target.value as Grade }))}>
-              {GRADE_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
+              {lookups.grades.map((o) => <option key={o.code} value={o.code}>{o.code}</option>)}
             </select>
           ))}
           {field("Thickness (in)", <input type="number" min="0" step="0.5" className={inputCls} value={draft.thick} onChange={(e) => setDraft((d) => ({ ...d, thick: Number(e.target.value) }))} />)}
@@ -732,12 +932,12 @@ function DetailDrawer({
           {field("Qty (pcs)", <input type="number" min="0" className={inputCls} value={draft.qty} onChange={(e) => setDraft((d) => ({ ...d, qty: Number(e.target.value) }))} />)}
           {field("State", (
             <select className={inputCls} value={draft.state} onChange={(e) => setDraft((d) => ({ ...d, state: e.target.value as MoistureState }))}>
-              {STATE_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
+              {lookups.states.map((o) => <option key={o.code} value={o.code}>{o.code}</option>)}
             </select>
           ))}
           {field("Milling", (
             <select className={inputCls} value={draft.milling} onChange={(e) => setDraft((d) => ({ ...d, milling: e.target.value as Milling }))}>
-              {MILLING_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
+              {lookups.milling.map((o) => <option key={o.code} value={o.code}>{o.code}</option>)}
             </select>
           ))}
         </div>
@@ -921,6 +1121,46 @@ function DetailDrawer({
 
   const body = editing ? editBody : viewBody;
 
+  // Small confirmation dialog before a status change is committed to the draft (overlays
+  // whichever drawer layout is active — fullscreen or side panel — so it's defined once).
+  const statusConfirmDialog = statusConfirm && (
+    <div className="fixed inset-0 z-[110] bg-ink/40 flex items-center justify-center p-6" onClick={() => setStatusConfirm(null)}>
+      <div className="bg-white w-full max-w-sm rounded-xl p-5 shadow-[0_10px_40px_rgba(0,0,0,0.25)]" onClick={(e) => e.stopPropagation()}>
+        <div className="text-sm font-semibold text-ink mb-1">Change status?</div>
+        <div className="text-[13px] text-text-sec mb-4">
+          {draft.status} → <span className="font-semibold text-text">{statusConfirm.next}</span>
+        </div>
+        {statusConfirm.next === "Reserved" && (
+          <div className="mb-4">
+            <div className="text-xs text-text-sec mb-1.5">Link to Sales Order</div>
+            <select
+              className={inputCls}
+              value={statusConfirm.soId}
+              onChange={(e) => setStatusConfirm((c) => (c ? { ...c, soId: e.target.value } : c))}
+            >
+              {eligibleSOs.map((so) => <option key={so.id} value={so.id}>{so.id} — {so.customer}</option>)}
+            </select>
+          </div>
+        )}
+        <div className="flex gap-2 justify-end">
+          <button onClick={() => setStatusConfirm(null)} className="px-3 py-1.5 text-[13px] rounded-md border border-sage text-text-sec hover:text-coral hover:border-coral cursor-pointer">Cancel</button>
+          <button
+            onClick={() => {
+              setDraft((d) => ({ ...d, status: statusConfirm.next }));
+              if (statusConfirm.next === "Reserved" && statusConfirm.soId) {
+                setPendingSOLink({ soId: statusConfirm.soId, qty: tag.qty, unitPrice: tag.marketValue ?? 0 });
+              }
+              setStatusConfirm(null);
+            }}
+            className="px-3.5 py-1.5 text-[13px] rounded-md bg-coral text-white font-semibold hover:brightness-95 cursor-pointer"
+          >
+            Confirm
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
   if (fullscreen) {
     return (
       <div
@@ -934,6 +1174,7 @@ function DetailDrawer({
           {header}
           {body}
         </div>
+        {statusConfirmDialog}
       </div>
     );
   }
@@ -942,6 +1183,7 @@ function DetailDrawer({
     <div className="fixed top-0 right-0 w-[380px] h-screen bg-white shadow-[-4px_0_20px_rgba(0,0,0,0.12)] z-[100] overflow-y-auto">
       {header}
       {body}
+      {statusConfirmDialog}
     </div>
   );
 }

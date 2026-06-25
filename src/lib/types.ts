@@ -2,10 +2,14 @@
 // See kickoff §4 (architecture) and §5 (terminology).
 
 // ─── Controlled vocabularies (kickoff §5) ───────────────────────────────────────
-export type Species = "SPF" | "Doug Fir" | "Western Red Cedar" | "Hem-Fir";
-export type Grade = "#1" | "#2" | "#3" | "Select" | "Clear" | "MSR 1650";
-export type MoistureState = "GRN" | "KD" | "HT" | "KD-HT";
-export type Milling = "RGH" | "STD" | "S4S";
+// Widened from literal unions to plain string so Manager-added custom lookup values
+// (Settings → Custom Values, src/lib/lookups.ts) can flow into these fields. The
+// hardcoded literal sets used to live here as the unions; they now live as
+// SYSTEM_DEFAULTS in src/lib/lookups.ts instead.
+export type Species = string;
+export type Grade = string;
+export type MoistureState = string;
+export type Milling = string;
 
 // ─── Tag lifecycle (kickoff §4.5 — the 6-state machine) ──────────────────────────
 export type TagStatus =

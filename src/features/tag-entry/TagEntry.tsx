@@ -4,15 +4,11 @@ import type { Tag, Species, Grade, MoistureState, Milling, EntryFilter } from "@
 import { parentLogs } from "@/lib/mock-data";
 import { calcFbm, calcLineal, fbmToM3 } from "@/lib/fbm";
 import { useRecentRecords } from "@/hooks/useRecentRecords";
+import { useLookups } from "@/hooks/useLookups";
 
-const SPECIES: Species[] = ["SPF", "Doug Fir", "Western Red Cedar", "Hem-Fir"];
-const GRADES: Grade[] = ["#1", "#2", "#3", "Select", "Clear", "MSR 1650"];
 const THICKS = [1, 2, 4];
 const WIDTHS = [4, 6, 8, 10];
 const LENGTHS = [8, 10, 12, 14, 16, 18, 20];
-const STATES: MoistureState[] = ["GRN", "KD", "HT", "KD-HT"];
-const MILLINGS: Milling[] = ["RGH", "STD", "S4S"];
-const YARDS = ["YD-A", "YD-B", "YD-C"];
 const SECTIONS = ["A-1", "A-2", "A-3", "A-4", "B-1", "B-2", "B-3", "C-1", "C-2", "C-3"];
 const RACKS = ["R-01", "R-02", "R-03", "R-04", "R-05", "R-06", "R-07", "R-08", "R-09", "R-10", "R-11", "R-12", "R-13", "R-14", "R-15"];
 const BINS = ["B1", "B2", "B3", "B4", "B5"];
@@ -29,6 +25,7 @@ interface TagEntryProps {
 
 export function TagEntry({ tags, setTags, floorView, onViewInInventory }: TagEntryProps) {
   const { pushRecord } = useRecentRecords();
+  const { species: SPECIES, grades: GRADES, states: STATES, milling: MILLINGS, locations: YARDS } = useLookups();
   const [step, setStep] = useState(1);
   const [toast, setToast] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
@@ -104,7 +101,7 @@ export function TagEntry({ tags, setTags, floorView, onViewInInventory }: TagEnt
               <div className="bg-white rounded-xl p-5 mb-4">
                 <div className="text-base text-text-sec mb-1">Species</div>
                 <select value={species} onChange={(e) => setSpecies(e.target.value as Species)} className={`${inputCls} text-lg p-3`}>
-                  {SPECIES.map((s) => <option key={s}>{s}</option>)}
+                  {SPECIES.map((s) => <option key={s.code} value={s.code}>{s.code}</option>)}
                 </select>
               </div>
               <div className="grid grid-cols-2 gap-3 mb-4">
@@ -115,7 +112,7 @@ export function TagEntry({ tags, setTags, floorView, onViewInInventory }: TagEnt
                 <div className="bg-white rounded-xl p-4">
                   <div className="text-sm text-text-sec mb-1">Location</div>
                   <select value={yard} onChange={(e) => setYard(e.target.value)} className={`${inputCls} text-base`}>
-                    {YARDS.map((y) => <option key={y}>{y}</option>)}
+                    {YARDS.map((y) => <option key={y.code} value={y.code}>{y.code}</option>)}
                   </select>
                 </div>
               </div>
@@ -199,13 +196,13 @@ export function TagEntry({ tags, setTags, floorView, onViewInInventory }: TagEnt
               <div>
                 <label className={labelCls}>Species</label>
                 <select value={species} onChange={(e) => { setSpecies(e.target.value as Species); setSmartShown(true); }} className={inputCls}>
-                  {SPECIES.map((s) => <option key={s}>{s}</option>)}
+                  {SPECIES.map((s) => <option key={s.code} value={s.code}>{s.code}</option>)}
                 </select>
               </div>
               <div>
                 <label className={labelCls}>Grade</label>
                 <select value={grade} onChange={(e) => { setGrade(e.target.value as Grade); setSmartShown(true); }} className={inputCls}>
-                  {GRADES.map((g) => <option key={g}>{g}</option>)}
+                  {GRADES.map((g) => <option key={g.code} value={g.code}>{g.code}</option>)}
                 </select>
               </div>
             </div>
@@ -230,7 +227,7 @@ export function TagEntry({ tags, setTags, floorView, onViewInInventory }: TagEnt
               <div>
                 <label className={labelCls}>State</label>
                 <select value={state_} onChange={(e) => setState_(e.target.value as MoistureState)} className={inputCls}>
-                  {STATES.map((v) => <option key={v}>{v}</option>)}
+                  {STATES.map((v) => <option key={v.code} value={v.code}>{v.code}</option>)}
                 </select>
               </div>
             </div>
@@ -238,7 +235,7 @@ export function TagEntry({ tags, setTags, floorView, onViewInInventory }: TagEnt
               <div>
                 <label className={labelCls}>Milling</label>
                 <select value={milling} onChange={(e) => setMilling(e.target.value as Milling)} className={inputCls}>
-                  {MILLINGS.map((v) => <option key={v}>{v}</option>)}
+                  {MILLINGS.map((v) => <option key={v.code} value={v.code}>{v.code}</option>)}
                 </select>
               </div>
               <div>
@@ -277,7 +274,7 @@ export function TagEntry({ tags, setTags, floorView, onViewInInventory }: TagEnt
               <div>
                 <label className={labelCls}>Yard</label>
                 <select value={yard} onChange={(e) => setYard(e.target.value)} className={inputCls}>
-                  {YARDS.map((y) => <option key={y}>{y}</option>)}
+                  {YARDS.map((y) => <option key={y.code} value={y.code}>{y.code}</option>)}
                 </select>
               </div>
               <div>

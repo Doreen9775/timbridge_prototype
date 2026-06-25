@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Sidebar, type NavKey } from "@/components/layout/Sidebar";
 import { TopBar } from "@/components/layout/TopBar";
 import { FloorBanner } from "@/components/layout/FloorBanner";
@@ -8,10 +8,13 @@ import { StockLocator } from "@/features/stock-locator/StockLocator";
 import { TagEntry } from "@/features/tag-entry/TagEntry";
 import { DeliverySlips } from "@/features/delivery-slips/DeliverySlips";
 import { LoginPage } from "@/features/auth/LoginPage";
+import { CustomValuesSettings } from "@/features/settings/CustomValuesSettings";
 import { RecentRecordsProvider } from "@/hooks/useRecentRecords";
+import { LookupsProvider } from "@/hooks/useLookups";
 import type { EntryFilter, RecentRecord, Tag } from "@/lib/types";
 import { useRole } from "@/hooks/useRole";
 import { useTags } from "@/hooks/useTags";
+import { useSalesOrders } from "@/hooks/useSalesOrders";
 
 export default function App() {
   const [nav, setNav] = useState<NavKey>("dashboard");
@@ -21,6 +24,13 @@ export default function App() {
   const [loggingOut, setLoggingOut] = useState(false);
   const { role, isFloor, setFloorView } = useRole();
   const { tags, setTags } = useTags();
+  const { salesOrders, setSalesOrders } = useSalesOrders();
+
+  // Settings (Custom Values) is Manager-only — redirect away if role changes while on it
+  // (e.g. switching to Floor View) or if it's somehow reached otherwise.
+  useEffect(() => {
+    if (nav === "settings" && role !== "manager") setNav("dashboard");
+  }, [nav, role]);
 
   // Every sign-in lands on the Dashboard, regardless of where the last session left off.
   const handleSignIn = useCallback(() => {
@@ -51,6 +61,14 @@ export default function App() {
     setTags((prev) => prev.map((t) => (t.id === updated.id ? updated : t)));
   }, [setTags]);
 
+  // Available → Reserved is a side-effect of linking a tag to a Sales Order (Manager status
+  // dropdown), not a direct manual status edit — this appends the real lineItem.
+  const handleLinkSalesOrder = useCallback((soId: string, tagId: string, qty: number, unitPrice: number) => {
+    setSalesOrders((prev) =>
+      prev.map((so) => (so.id === soId ? { ...so, lineItems: [...so.lineItems, { tagId, qty, unitPrice }] } : so)),
+    );
+  }, [setSalesOrders]);
+
   // Deep-link into Stock Locator pre-filtered (Tag Entry / Delivery Slips "View in Inventory").
   const handleViewInInventory = useCallback((filter: EntryFilter) => {
     setNav("locator");
@@ -73,20 +91,23 @@ export default function App() {
 
   return (
     <RecentRecordsProvider>
-      <div className={`flex h-screen bg-cream text-text overflow-hidden animate-fade-in transition-opacity duration-500 ${loggingOut ? "opacity-0" : "opacity-100"}`}>
-        <Sidebar nav={nav} setNav={setNav} floorView={isFloor} onLogout={handleLogout} />
-        <div className="flex-1 flex flex-col overflow-hidden">
-          <TopBar nav={nav} floorView={isFloor} setFloorView={setFloorView} onOpenRecord={handleOpenRecord} />
-          {isFloor && <FloorBanner />}
-          <div className="flex-1 overflow-y-auto">
-            {nav === "dashboard" && <Dashboard tags={tags} floorView={isFloor} onNavigateToLocator={handleNavigateToLocator} onOpenTag={handleOpenTagFromDashboard} />}
-            {nav === "locator" && <StockLocator tags={tags} floorView={isFloor} role={role} openTagId={pendingTagId} onTagOpened={handleTagOpened} onUpdateTag={handleUpdateTag} entryFilter={entryFilter} onClearEntryFilter={() => setEntryFilter(null)} />}
-            {nav === "tagentry" && <TagEntry tags={tags} setTags={setTags} floorView={isFloor} onViewInInventory={handleViewInInventory} />}
-            {nav === "delivery" && <DeliverySlips tags={tags} setTags={setTags} onViewInInventory={handleViewInInventory} />}
-            {!["dashboard", "locator", "tagentry", "delivery"].includes(nav) && <ComingSoon name={nav} />}
+      <LookupsProvider>
+        <div className={`flex h-screen bg-cream text-text overflow-hidden animate-fade-in transition-opacity duration-500 ${loggingOut ? "opacity-0" : "opacity-100"}`}>
+          <Sidebar nav={nav} setNav={setNav} floorView={isFloor} role={role} onLogout={handleLogout} />
+          <div className="flex-1 flex flex-col overflow-hidden">
+            <TopBar nav={nav} floorView={isFloor} setFloorView={setFloorView} onOpenRecord={handleOpenRecord} />
+            {isFloor && <FloorBanner />}
+            <div className="flex-1 overflow-y-auto">
+              {nav === "dashboard" && <Dashboard tags={tags} floorView={isFloor} onNavigateToLocator={handleNavigateToLocator} onOpenTag={handleOpenTagFromDashboard} />}
+              {nav === "locator" && <StockLocator tags={tags} floorView={isFloor} role={role} openTagId={pendingTagId} onTagOpened={handleTagOpened} onUpdateTag={handleUpdateTag} entryFilter={entryFilter} onClearEntryFilter={() => setEntryFilter(null)} salesOrders={salesOrders} onLinkSalesOrder={handleLinkSalesOrder} />}
+              {nav === "tagentry" && <TagEntry tags={tags} setTags={setTags} floorView={isFloor} onViewInInventory={handleViewInInventory} />}
+              {nav === "delivery" && <DeliverySlips tags={tags} setTags={setTags} onViewInInventory={handleViewInInventory} />}
+              {nav === "settings" && role === "manager" && <CustomValuesSettings />}
+              {!["dashboard", "locator", "tagentry", "delivery", "settings"].includes(nav) && <ComingSoon name={nav} />}
+            </div>
           </div>
         </div>
-      </div>
+      </LookupsProvider>
     </RecentRecordsProvider>
   );
 }
