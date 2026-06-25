@@ -175,7 +175,7 @@ export function TagEntry({ tags, setTags, floorView, onViewInInventory }: TagEnt
       {toast && (
         <div className="fixed top-5 right-6 bg-ink text-white px-5 py-3 rounded-lg text-[13px] z-[200] shadow-[0_4px_12px_rgba(0,0,0,0.15)]">{toast}</div>
       )}
-      <div className="max-w-[640px] mx-auto">
+      <div className="max-w-[640px] lg:max-w-[760px] xl:max-w-[860px] 2xl:max-w-[1000px] mx-auto">
         <div className="flex items-center mb-7">
           {steps.map((s, i) => (
             <div key={s} className="flex items-center">

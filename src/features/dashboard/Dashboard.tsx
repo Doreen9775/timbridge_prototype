@@ -136,7 +136,7 @@ export function Dashboard({ tags, floorView, onNavigateToLocator, onOpenTag }: D
         <span className="text-xs text-text-ter">Last updated 14:32</span>
       </div>
 
-      <div className="grid grid-cols-2 2xl:grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-4 gap-4 mb-6">
         {kpis.map((c, i) => {
           const th = kpiThemes[i % kpiThemes.length];
           return (

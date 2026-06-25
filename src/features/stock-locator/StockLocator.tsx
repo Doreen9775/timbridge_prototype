@@ -507,7 +507,7 @@ export function StockLocator({ tags, floorView, role, openTagId, onTagOpened, on
         </div>
       </div>
 
-      <div className="grid grid-cols-2 2xl:grid-cols-4 gap-3 mb-5">
+      <div className="grid grid-cols-4 gap-3 mb-5">
         {summaryCards.map(([label, value], i) => {
           const th = cardThemes[i % cardThemes.length];
           return (
