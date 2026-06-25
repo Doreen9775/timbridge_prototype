@@ -270,6 +270,24 @@ A history of every commit (push) on `main`, in chronological order, with what wa
 
 ---
 
+## 2026-06-24 (4)
+
+### `afd78d9` · Desktop resolution adaptation — 桌面分辨率适配
+
+**🇨🇳 中文**
+- **超宽屏不再拉满**：Dashboard 与 Stock Locator 的内容区加上 `max-w-[1600px] mx-auto` 居中限宽，2560px+ 大屏下内容居中显示、两侧留白，不再被拉伸到边缘显得稀疏。
+- **KPI / 汇总卡随宽度变列数**：两处的 4 张卡片网格从写死的 `grid-cols-4` 改为 `grid-cols-2 2xl:grid-cols-4` —— 1280–1366px 笔记本上变成 2×2 排布更宽松，≥1536px 宽屏自动恢复 4 列一排。
+- **Stock Locator 表格防挤压**：表格外层加 `overflow-x-auto`，窄屏 + 详情抽屉同时打开导致列数吃紧时改为横向滚动，而不是把内容挤变形。详情抽屉本身按设计保持固定 380px 不随宽度变化。
+
+**🇬🇧 English**
+- **No more edge-to-edge stretching on ultra-wide monitors**: capped Dashboard's and Stock Locator's content at `max-w-[1600px] mx-auto`, so content stays centered with breathing room on 2560px+ screens instead of stretching thin.
+- **KPI/summary cards now respond to width**: both 4-card grids changed from a hardcoded `grid-cols-4` to `grid-cols-2 2xl:grid-cols-4` — 2×2 on 1280–1366px laptops (less cramped), back to a single row of 4 at ≥1536px.
+- **Stock Locator table no longer gets crushed**: added `overflow-x-auto` around the table so it scrolls horizontally instead of squeezing columns when the viewport is narrow and the detail drawer is open simultaneously. The drawer itself stays a fixed 380px by design, unaffected by viewport width.
+
+**Files / 改动:** `features/dashboard/Dashboard.tsx`, `features/stock-locator/StockLocator.tsx`
+
+---
+
 ## Pending / 未来 (not yet built — 尚未开始)
 
 - **Available-to-Sell**（销售视图；`salesOrders` Mock 数据已就绪）
