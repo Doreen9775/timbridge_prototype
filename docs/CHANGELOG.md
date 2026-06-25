@@ -304,10 +304,33 @@ A history of every commit (push) on `main`, in chronological order, with what wa
 
 ---
 
+## 2026-06-25
+
+### `88dfb17` · Role-based sidebar nav · Tag status state machine · Custom lookup values — 按角色侧边栏 + 标签状态机 + 自定义查找值
+
+> 本条为一次 push 的汇总（含多项改动）。/ One push, several changes.
+
+**🇨🇳 中文**
+- **侧边栏按角色显隐（新）**：Manager / Sales / Floor 三种角色现在按权限矩阵显示不同导航项（例如 Floor 只看到 Stock Locator、Tag Entry、Settings + Logout，看不到 Dashboard、Delivery Slips、Operations、Insights）；被隐藏的项**真正从 DOM 移除**，不是简单的 CSS 隐藏。新增 Available to Sell / Client Profile / Approvals 三个占位导航项（暂无页面，落到现有 ComingSoon）。`TopBar` 的 breadcrumb 映射同步更新。
+- **Stock Locator 详情面板修复**：编辑模式下全屏切换按钮之前会被整个移除——现在编辑时也能切全屏。「Export CSV」与「Last synced」从筛选栏挤在一起的那一行移到了单独一行、右对齐。
+- **标签状态机正式接入 UI（新）**：6 状态生命周期不再是纯展示字段。Floor 在卡片列表对 Pending 标签新增绿色「Confirm Receipt」按钮，弹出确认面板可选「Confirm as Received」（可编辑库位，Pending→Received→Available 一次完成，不经过 QC 步骤）或「Flag Discrepancy」（可选备注，→ Discrepancy）。Manager 在详情面板获得受限的 Status 下拉（只展示该状态的合法正向流转，含二次确认弹窗，Shipped 为终态不可再流转）；Available→Reserved 必须关联一个真实的 Open 销售单（新增 `useSalesOrders` 状态，确认后才会落盘，取消编辑不会留下孤立关联）。
+- **Settings → Custom Values（新页面，Manager 专属）**：`Species / Grade / State / Milling / Yard Location` 五张查找表，可在系统默认值之外新增/删除自定义值（系统默认显示灰色「System」徽章且不可删除；编码非空、表内大小写不敏感唯一、单表最多 50 条自定义值，超限/重复均有内联报错）。新增值通过 Context（`useLookups`，落 `localStorage`）实时同步进 Tag Entry 的 5 个下拉框和 Stock Locator 新增的 5 个筛选 pill，无需刷新页面。`Species/Grade/State/Milling` 的类型从字面量联合类型放宽为 `string` 以承载自定义编码。
+- 非角色切换时若 Manager 离开 Settings 页（例如切到 Floor View），会自动跳回 Dashboard。
+
+**🇬🇧 English**
+- **Role-gated sidebar nav (new)**: Manager/Sales/Floor now each see a different nav subset per the permission matrix (e.g. Floor sees only Stock Locator, Tag Entry, Settings + Logout — no Dashboard, Delivery Slips, Operations, or Insights). Excluded items are removed from the DOM entirely, not just hidden. Added Available to Sell / Client Profile / Approvals as new placeholder nav items (no page yet, fall through to the existing ComingSoon); `TopBar`'s breadcrumb maps stay in sync.
+- **Stock Locator detail panel fix**: the fullscreen toggle no longer disappears while editing a tag. "Export CSV" and "Last synced" moved off the crowded filter-pill row onto their own right-aligned row.
+- **Tag status state machine wired to real UI (new)**: the 6-state lifecycle is no longer just a display field. Floor gets a green "Confirm Receipt" button on Pending cards → a sheet with "Confirm as Received" (editable yard location, Pending→Received→Available in one step, no QC) or "Flag Discrepancy" (optional note → Discrepancy). Manager gets a constrained Status dropdown on the detail panel (valid forward transitions only, with a confirmation dialog; Shipped is final). Available→Reserved now requires linking to a real Open Sales Order (new `useSalesOrders` state) — the link is only written on Save, so Cancel can't leave an orphaned link.
+- **Settings → Custom Values (new page, Manager-only)**: five lookup tables (Species/Grade/State/Milling/Yard Location) where Managers can add/delete custom values alongside hardcoded system defaults (grey "System" badge, non-deletable; new entries validated for non-empty + case-insensitive uniqueness + a 50-per-table cap, with inline errors). Custom values sync live (via a `useLookups` context + localStorage) into Tag Entry's 5 dropdowns and 5 new/rewired Stock Locator filter pills, no reload needed. `Species/Grade/State/Milling` widened from literal-union types to `string` to carry custom codes.
+- Settings auto-redirects to Dashboard if a Manager switches away from the Manager role (e.g. to Floor View) while on the page.
+
+**Files / 改动:** `components/layout/Sidebar.tsx`, `components/layout/TopBar.tsx`, `App.tsx`, `features/stock-locator/StockLocator.tsx`, `features/tag-entry/TagEntry.tsx`, `features/settings/CustomValuesSettings.tsx` (new), `hooks/useLookups.tsx` (new), `hooks/useSalesOrders.ts` (new), `lib/lookups.ts` (new), `lib/types.ts`, `lib/mock-data.ts`, `CLAUDE.md`
+
+---
+
 ## Pending / 未来 (not yet built — 尚未开始)
 
-- **Available-to-Sell**（销售视图；`salesOrders` Mock 数据已就绪）
+- **Available-to-Sell**（销售视图；`salesOrders` 已是真实状态，落地视图待建）
 - **Reports & Saved Views**（报表与保存视图）
-- **Role-based permission matrix**（按角色启用权限矩阵，含 Sales 角色 + Floor 只显示 Tag Entry/Stock Locator）
-- **Tag lifecycle wiring**（生命周期状态流转：Floor 确认 Pending→Received→Available；销售单关联 Available→Reserved 等）
+- **Sales role UI entry point**（`Role` 类型已含 sales，但仍无角色切换入口；权限矩阵已按角色生效）
 - **Delivery Slip detail view**（送货单详情页 — 之后 Recent 下拉即可追踪 `slip` 记录）
