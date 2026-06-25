@@ -501,7 +501,7 @@ export function StockLocator({ tags, floorView, role, openTagId, onTagOpened, on
         />
       </div>
 
-      <div className="flex gap-2.5 mb-3 flex-wrap items-center">
+      <div className="flex gap-2.5 mb-4 flex-wrap items-center">
         <span className="flex items-center gap-1.5 text-[13px] text-text-sec font-medium pr-1">
           <Filter size={15} />Filter By
         </span>
@@ -529,23 +529,22 @@ export function StockLocator({ tags, floorView, role, openTagId, onTagOpened, on
             <RotateCcw size={13} />Reset Filter
           </button>
         )}
-      </div>
-
-      <div className="flex items-center justify-end gap-3 mb-4">
-        <button
-          onClick={handleExport}
-          disabled={checkedIds.size === 0}
-          title={checkedIds.size === 0 ? "Select one or more tags to export" : `Export ${checkedIds.size} selected tag${checkedIds.size === 1 ? "" : "s"}`}
-          className={[
-            "px-3.5 py-1.5 text-[13px] rounded-md border flex items-center gap-1.5 transition-colors",
-            checkedIds.size === 0
-              ? "border-sage bg-white text-text-ter opacity-60 cursor-not-allowed"
-              : "border-coral bg-coral text-white cursor-pointer hover:brightness-95",
-          ].join(" ")}
-        >
-          <Download size={14} />Export CSV{checkedIds.size > 0 ? ` (${checkedIds.size})` : ""}
-        </button>
-        <span className="text-xs text-text-ter self-center">Last synced 14:32</span>
+        <div className="ml-auto flex items-center gap-3">
+          <button
+            onClick={handleExport}
+            disabled={checkedIds.size === 0}
+            title={checkedIds.size === 0 ? "Select one or more tags to export" : `Export ${checkedIds.size} selected tag${checkedIds.size === 1 ? "" : "s"}`}
+            className={[
+              "px-3.5 py-1.5 text-[13px] rounded-md border flex items-center gap-1.5 transition-colors",
+              checkedIds.size === 0
+                ? "border-sage bg-white text-text-ter opacity-60 cursor-not-allowed"
+                : "border-coral bg-coral text-white cursor-pointer hover:brightness-95",
+            ].join(" ")}
+          >
+            <Download size={14} />Export CSV{checkedIds.size > 0 ? ` (${checkedIds.size})` : ""}
+          </button>
+          <span className="text-xs text-text-ter self-center">Last synced 14:32</span>
+        </div>
       </div>
 
       <div className="grid grid-cols-4 gap-3 mb-5">
