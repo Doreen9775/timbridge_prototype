@@ -288,6 +288,22 @@ A history of every commit (push) on `main`, in chronological order, with what wa
 
 ---
 
+## 2026-06-24 (5)
+
+### `4c3cef4` · Resolution adaptation follow-up — 分辨率适配反馈调整
+
+**🇨🇳 中文**
+- **KPI / 汇总卡恢复 4 列一排**：根据反馈撤回上一条改动里的 2×2 折行，Dashboard 与 Stock Locator 的 4 张卡片网格在所有桌面宽度下都保持一排 4 列。
+- **Tag Entry 向导卡片随宽度放大（新）**：之前 Tag Entry 是唯一一处完全没有适配的容器，固定 640px 不随屏幕变化；现在改为 `640px → 760px（lg) → 860px（xl) → 1000px（2xl)`，宽屏下会明显放大而不是停留在原尺寸。
+
+**🇬🇧 English**
+- **KPI/summary cards back to a single row of 4**: reverted the 2×2 collapse from the previous push per feedback — both Dashboard's and Stock Locator's 4-card grids now stay one row of 4 at every desktop width.
+- **Tag Entry wizard card now scales with width (new)**: previously the one container that didn't adapt at all (fixed 640px regardless of screen size); now grows `640px → 760px (lg) → 860px (xl) → 1000px (2xl)` so it visibly enlarges on wide screens instead of staying pinned to its original size.
+
+**Files / 改动:** `features/dashboard/Dashboard.tsx`, `features/stock-locator/StockLocator.tsx`, `features/tag-entry/TagEntry.tsx`
+
+---
+
 ## Pending / 未来 (not yet built — 尚未开始)
 
 - **Available-to-Sell**（销售视图；`salesOrders` Mock 数据已就绪）
