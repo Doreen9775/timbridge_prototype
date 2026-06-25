@@ -340,6 +340,32 @@ A history of every commit (push) on `main`, in chronological order, with what wa
 
 ---
 
+## 2026-06-25 (3)
+
+### `c7362fb` · Interactive Mapbox Yard Map on the Dashboard — Dashboard 引入 Mapbox 货场地图
+
+> 本条为一次 push 的汇总（含多次迭代）。/ One push, several iterations.
+
+**🇨🇳 中文**
+- **Dashboard 新增「Yard Map」卡片（新）**：与「Yard Activity」并排一行（仅桌面/Manager+Sales，Floor 不渲染），使用**真实 Mapbox 数据**（`mapbox-gl`）——可缩放、可拖动平移，默认是聚焦在 Langley（兰里）一处货场的街道级细节视图。
+- **三个 A/B/C 标记**对应 YD-A/B/C（品牌珊瑚红圆形 + 白色字母）：**悬停**显示该货场的标签数与 FBM 总量（品牌绿 lime 信息框）；**点击**跳进 Stock Locator 并只显示该货场的标签（新增 `EntryFilter.yard` 字段，复用已有的 Location 筛选，未改动现有筛选逻辑）。
+- **地图刷新按钮**：作为自定义控件叠在 +/− 缩放按钮下方，点击后以动画飞回初始中心点与缩放级别（并清掉旋转/倾斜）。
+- **视觉对齐**：把「Yard Activity」的筛选按钮挪到标题下方独立一行，使其与地图的上边框顶部对齐，两张卡片结构统一（标题→内容），任意宽度下都对齐。
+- **Token 处理**：地图密钥从 `VITE_MAPBOX_TOKEN`（**公开** pk. 令牌，可安全进前端，区别于服务端的 `ANTHROPIC_API_KEY`）读取；缺失时显示友好占位提示；新增 `src/vite-env.d.ts` 做类型声明。`.env.local` 仍被 git 忽略，令牌不会上传。线上需在 Vercel 配置同名变量。
+- 过程中先把上一版做在 Stock Locator 里的 SVG 货场地图整体撤回，改到 Dashboard。
+
+**🇬🇧 English**
+- **New Dashboard "Yard Map" card**: in a row beside "Yard Activity" (desktop / Manager+Sales only, never on Floor), backed by **real Mapbox tiles** (`mapbox-gl`) — zoom, drag-pan, default street-level detail view over a clustered Langley, BC mill site.
+- **Three A/B/C markers** for YD-A/B/C (brand-coral circles, white letters): **hover** shows that yard's tag count + total FBM (lime popup); **click** deep-links into Stock Locator filtered to that yard via a new `EntryFilter.yard` field feeding the existing Location filter (no existing filter logic changed).
+- **Reset-view control** stacked below the +/− zoom buttons flies the map back to its initial center/zoom (and clears rotate/tilt).
+- **Alignment**: moved Yard Activity's filter buttons to their own row under the title so the filter row and the map's top edge line up; both cards now share a `[title] → [content]` structure that aligns at any width.
+- **Token handling**: map key read from `VITE_MAPBOX_TOKEN` (a **public** pk. token, safe to ship client-side — unlike the server-side `ANTHROPIC_API_KEY`), with a graceful placeholder when absent; typed via new `src/vite-env.d.ts`. `.env.local` stays git-ignored so the token isn't committed; set the same var in Vercel for prod.
+- Along the way, the prior SVG yard map (built into Stock Locator) was fully reverted and rebuilt on the Dashboard.
+
+**Files / 改动:** `features/dashboard/YardMap.tsx` (new), `features/dashboard/Dashboard.tsx`, `features/stock-locator/StockLocator.tsx`, `lib/types.ts`, `index.css`, `vite-env.d.ts` (new), `package.json` (+`mapbox-gl`)
+
+---
+
 ## Pending / 未来 (not yet built — 尚未开始)
 
 - **Available-to-Sell**（销售视图；`salesOrders` 已是真实状态，落地视图待建）
