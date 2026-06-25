@@ -57,7 +57,7 @@ export function Sidebar({ nav, setNav, floorView, role, onLogout }: SidebarProps
         <TimbridgeLogo />
       </div>
 
-      <div className="flex-1 overflow-y-auto px-2">
+      <div className="flex-1 overflow-y-auto px-2 sidebar-scroll">
         {sections.map((sec) => {
           const visibleItems = sec.items.filter((item) => !item.allowedRoles || item.allowedRoles.includes(role));
           return (
