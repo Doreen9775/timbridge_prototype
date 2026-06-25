@@ -366,6 +366,18 @@ A history of every commit (push) on `main`, in chronological order, with what wa
 
 ---
 
+## 2026-06-25 (4)
+
+### `ef95884` · Thin custom sidebar scrollbar — 侧边栏滚动条改细
+
+**🇨🇳 中文** — 屏幕较短、侧边栏导航被压缩需要滚动时，浏览器默认滚动条偏宽，且在某些平台两端会带方形的上下箭头按钮。改为细窄的圆角滚动条（半透明白色滑块，轨道透明），并隐藏了两端的箭头按钮方块。只在导航列表真正溢出时才会出现。
+
+**🇬🇧 English** — When the viewport is short and the sidebar nav overflows, the browser's default scrollbar rendered wide with arrow-button boxes at each end on some platforms. Replaced with a slim, rounded, semi-transparent thumb on a transparent track, with the arrow-button boxes explicitly hidden. Only appears when the nav list actually overflows.
+
+**Files / 改动:** `components/layout/Sidebar.tsx`, `index.css`
+
+---
+
 ## Pending / 未来 (not yet built — 尚未开始)
 
 - **Available-to-Sell**（销售视图；`salesOrders` 已是真实状态，落地视图待建）
