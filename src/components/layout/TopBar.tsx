@@ -46,7 +46,7 @@ export function TopBar({ nav, floorView, setFloorView, onOpenRecord }: TopBarPro
               onClick={() => setFloorView(v === "Floor View")}
               className={[
                 "px-3.5 py-[5px] rounded-2xl border-0 cursor-pointer text-xs font-medium",
-                active ? "bg-ink text-white" : "bg-transparent text-text-sec",
+                active ? "bg-ink text-white" : "bg-transparent text-text-sec hover:text-text",
               ].join(" ")}
             >
               {v}
@@ -56,9 +56,9 @@ export function TopBar({ nav, floorView, setFloorView, onOpenRecord }: TopBarPro
       </div>
 
       <div className="flex items-center gap-3">
-        <Search size={18} className="text-text-sec cursor-pointer" />
+        <Search size={18} className="text-text-sec cursor-pointer hover:text-ink" />
         <div className="relative">
-          <Bell size={18} className="text-text-sec cursor-pointer" />
+          <Bell size={18} className="text-text-sec cursor-pointer hover:text-ink" />
           <span className="absolute -top-0.5 -right-0.5 w-[7px] h-[7px] rounded-full bg-coral" />
         </div>
         <RecentMenu onOpenRecord={onOpenRecord} />

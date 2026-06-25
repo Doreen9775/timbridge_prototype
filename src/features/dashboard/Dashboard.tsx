@@ -67,7 +67,7 @@ export function Dashboard({ tags, floorView }: DashboardProps) {
             <div className="text-sm text-text-sec mb-2">My Tasks Today</div>
             <div className="text-5xl font-display font-bold text-ink mb-4">3</div>
             {floorTasks.map((t, i) => (
-              <div key={i} className="px-4 py-3.5 bg-cream rounded-lg mb-2 cursor-pointer">
+              <div key={i} className="px-4 py-3.5 bg-cream rounded-lg mb-2 cursor-pointer hover:bg-sage/20">
                 <div className="text-lg font-semibold text-text mb-1">{t.title}</div>
                 <div className="text-sm text-text-sec">{t.loc}</div>
                 {t.priority === "High" && (
@@ -117,7 +117,7 @@ export function Dashboard({ tags, floorView }: DashboardProps) {
                 key={t}
                 className={[
                   "px-3.5 py-[5px] rounded-2xl text-xs cursor-pointer border",
-                  active ? "border-ink bg-ink text-white" : "border-sage bg-transparent text-text-sec",
+                  active ? "border-ink bg-ink text-white" : "border-sage bg-transparent text-text-sec hover:bg-sage/20 hover:text-text",
                 ].join(" ")}
               >
                 {t}
@@ -188,7 +188,7 @@ export function Dashboard({ tags, floorView }: DashboardProps) {
 
       <div className="bg-white rounded-[10px] p-5 shadow-[0_1px_4px_rgba(0,0,0,0.07)]">
         <div className="flex items-center justify-between gap-3 flex-wrap mb-4">
-          <div className="text-[13px] font-display font-semibold text-text">Recent Activity</div>
+          <div className="text-[13px] font-display font-semibold text-text">Yard Activity</div>
           <div className="flex gap-1.5 flex-wrap">
             {ACTIVITY_FILTERS.map((f) => {
               const active = activityFilter === f;
@@ -199,7 +199,7 @@ export function Dashboard({ tags, floorView }: DashboardProps) {
                   onClick={() => setActivityFilter(f)}
                   className={[
                     "px-2.5 py-1 rounded-full text-[11px] cursor-pointer border",
-                    active ? "border-ink bg-ink text-white" : "border-sage bg-transparent text-text-sec",
+                    active ? "border-ink bg-ink text-white" : "border-sage bg-transparent text-text-sec hover:bg-sage/20 hover:text-text",
                   ].join(" ")}
                 >
                   {label}

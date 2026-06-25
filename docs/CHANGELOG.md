@@ -222,6 +222,32 @@ A history of every commit (push) on `main`, in chronological order, with what wa
 
 ---
 
+## 2026-06-24 (2)
+
+### `2026-06-24` · Inventory deep-link + confirmation banner · global hover pass — 库存深链 + 确认横幅 + 全局 hover
+
+> 本条为一次 push 的汇总（含多项改动）。/ One push, several changes.
+
+**🇨🇳 中文**
+- **Stock Locator 深链筛选（新）**：新增 `entryFilter` 机制（与 `openTagId` 同构的一次性传参），可从外部带着 `tagIds` / `status` / `species` / `lowQty` 跳进 Stock Locator 并自动套用到现有筛选栏（一次性应用，不会在重新进入时复现）。
+- **新增 ConfirmationBanner 组件**：可复用的成功提示横幅（sage 绿、勾选图标、消息 + 「View all stock」+ X 关闭，触控目标 ≥44px）。吸顶于 Stock Locator 内容区顶部、筛选栏上方。
+- **Tag Entry / Delivery Slips → Stock Locator 打通**：两处成功页的「View in Inventory」现在真正跳转到 Stock Locator 并只显示新建的标签（Tag Entry 1 条 / Delivery Slips N 条），同时显示「N tag(s) created · View all stock」横幅。点「View all stock」、点 X、或用筛选栏的 Reset Filter 都会清空筛选并隐藏横幅；离开页面再回来横幅不会重新出现（一次性）。Tag Entry 的 Floor 成功页也补上了这个入口。
+- **统一「View in Inventory」**：Delivery Slips 原来文案缺「in」、颜色是深色 ink，现在文案与配色都和 Tag Entry 一致（红色 coral）。
+- **全局 hover**：检查了全站所有可交互按钮/卡片，统一补上 hover 反馈（实色按钮变亮、描边按钮变红边红字、中性卡片浅绿底）。
+- **正文字体 → Inter**（替换 Nunito Sans，字重层级不变）；Dashboard 的「Recent Activity」改名为「Yard Activity」。
+
+**🇬🇧 English**
+- **Stock Locator deep-link filter (new)**: an `entryFilter` mechanism (mirrors the `openTagId` one-shot pattern) lets an outside flow jump into Stock Locator with `tagIds` / `status` / `species` / `lowQty` pre-applied to the existing filter bar — applied once, not replayed on re-entry.
+- **New `ConfirmationBanner` component**: reusable success banner (sage green, check icon, message + "View all stock" + X dismiss, ≥44px touch targets), sticky above the filter bar in Stock Locator.
+- **Tag Entry / Delivery Slips → Stock Locator wired up**: both success screens' "View in Inventory" now navigate into Stock Locator filtered to just the newly created tag(s) (1 for Tag Entry, N for Delivery Slips), showing a "N tag(s) created · View all stock" banner. Clicking the action, the X, or the existing Reset Filter all clear it; navigating away and back does not bring it back (one-shot). Added the same CTA to Tag Entry's Floor success screen.
+- **Standardized "View in Inventory"**: Delivery Slips' button (previously "View Inventory", dark ink) now matches Tag Entry's exact label and coral color.
+- **Global hover pass**: audited every interactive button/card app-wide and added a hover state where missing (solid buttons brighten, outline buttons flip to coral, neutral cards get a light sage tint).
+- **Body font → Inter** (replacing Nunito Sans, weight hierarchy unchanged); Dashboard's "Recent Activity" renamed to "Yard Activity".
+
+**Files / 改动:** `components/shared/ConfirmationBanner.tsx` (new), `App.tsx`, `lib/types.ts`, `features/stock-locator/StockLocator.tsx`, `features/tag-entry/TagEntry.tsx`, `features/delivery-slips/DeliverySlips.tsx`, `features/dashboard/Dashboard.tsx`, `components/layout/TopBar.tsx`, `index.css`
+
+---
+
 ## Pending / 未来 (not yet built — 尚未开始)
 
 - **Available-to-Sell**（销售视图；`salesOrders` Mock 数据已就绪）

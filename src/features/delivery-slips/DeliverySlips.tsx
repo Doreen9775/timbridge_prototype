@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import { Truck, Upload, Loader, CheckCircle, RefreshCw, Edit3, MapPin } from "lucide-react";
-import type { Tag } from "@/lib/types";
+import type { Tag, EntryFilter } from "@/lib/types";
 import { parseDeliverySlip, type ParsedItem } from "@/lib/anthropic";
 import { calcFbm } from "@/lib/fbm";
 
@@ -22,15 +22,17 @@ const editSelectCls = "px-2.5 py-1.5 text-xs border border-sage rounded-md bg-wh
 interface DeliverySlipsProps {
   tags: Tag[];
   setTags: (tags: Tag[]) => void;
+  onViewInInventory: (filter: EntryFilter) => void;
 }
 
-export function DeliverySlips({ tags, setTags }: DeliverySlipsProps) {
+export function DeliverySlips({ tags, setTags, onViewInInventory }: DeliverySlipsProps) {
   const [stage, setStage] = useState<Stage>("upload");
   const [fileName, setFileName] = useState("");
   const [extracted, setExtracted] = useState<ExtractedItem[]>([]);
   const [selected, setSelected] = useState<number[]>([]);
   const [editIdx, setEditIdx] = useState<number | null>(null);
   const [createdCount, setCreatedCount] = useState(0);
+  const [createdIds, setCreatedIds] = useState<string[]>([]);
   const [error, setError] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -109,6 +111,7 @@ export function DeliverySlips({ tags, setTags }: DeliverySlipsProps) {
     }));
     setTags([...tags, ...newTags]);
     setCreatedCount(newTags.length);
+    setCreatedIds(newTags.map((t) => t.id));
     setStage("done");
   };
 
@@ -154,7 +157,7 @@ export function DeliverySlips({ tags, setTags }: DeliverySlipsProps) {
                   <div className="bg-coral/10 border border-coral rounded-lg px-3.5 py-2.5 text-[13px] text-coral mb-3">{error}</div>
                 )}
                 <div className="text-xs text-text-ter mt-2">— or try a demo —</div>
-                <button onClick={loadDemo} className="mt-2.5 px-5 py-2 bg-transparent border border-sage rounded-lg text-[13px] text-text-sec cursor-pointer">
+                <button onClick={loadDemo} className="mt-2.5 px-5 py-2 bg-transparent border border-sage rounded-lg text-[13px] text-text-sec cursor-pointer hover:border-coral hover:text-coral">
                   Use sample delivery slip
                 </button>
               </>
@@ -176,7 +179,7 @@ export function DeliverySlips({ tags, setTags }: DeliverySlipsProps) {
               <div className="text-[13px] text-text-sec">Source: {fileName || "sample delivery slip"} · {extracted.length} line items detected</div>
             </div>
             <div className="flex gap-2.5">
-              <button onClick={reset} className="px-4 py-2 bg-transparent border border-sage rounded-lg text-[13px] cursor-pointer text-text-sec flex items-center gap-1.5">
+              <button onClick={reset} className="px-4 py-2 bg-transparent border border-sage rounded-lg text-[13px] cursor-pointer text-text-sec flex items-center gap-1.5 hover:border-coral hover:text-coral">
                 <RefreshCw size={14} />Re-upload
               </button>
               <button
@@ -184,7 +187,7 @@ export function DeliverySlips({ tags, setTags }: DeliverySlipsProps) {
                 disabled={selected.length === 0}
                 className={[
                   "px-5 py-2 text-white border-0 rounded-lg text-[13px] font-semibold flex items-center gap-1.5",
-                  selected.length === 0 ? "bg-[#ccc] cursor-not-allowed" : "bg-coral cursor-pointer",
+                  selected.length === 0 ? "bg-[#ccc] cursor-not-allowed" : "bg-coral cursor-pointer hover:brightness-95",
                 ].join(" ")}
               >
                 <CheckCircle size={14} />Confirm & Create {selected.length} Tag{selected.length !== 1 ? "s" : ""}
@@ -259,7 +262,7 @@ export function DeliverySlips({ tags, setTags }: DeliverySlipsProps) {
                       onClick={() => setEditIdx(isEdit ? null : idx)}
                       className={[
                         "px-3 py-1.5 rounded-md text-xs cursor-pointer border flex items-center gap-1 whitespace-nowrap",
-                        isEdit ? "bg-coral text-white border-coral" : "bg-transparent text-text-sec border-sage",
+                        isEdit ? "bg-coral text-white border-coral" : "bg-transparent text-text-sec border-sage hover:border-coral hover:text-coral",
                       ].join(" ")}
                     >
                       {isEdit ? <><CheckCircle size={13} />Done</> : <><Edit3 size={13} />Edit</>}
@@ -284,11 +287,11 @@ export function DeliverySlips({ tags, setTags }: DeliverySlipsProps) {
         <div className="text-[15px] text-text-sec mb-1.5"><strong>{createdCount}</strong> inventory tag{createdCount !== 1 ? "s" : ""} added successfully</div>
         <div className="text-[13px] text-text-ter mb-7">New tags start as <strong>Pending</strong> — confirm them on the floor to receive.</div>
         <div className="flex gap-3 justify-center">
-          <button onClick={reset} className="px-5 py-2.5 bg-transparent border border-sage rounded-lg text-sm cursor-pointer text-text flex items-center gap-1.5">
+          <button onClick={reset} className="px-5 py-2.5 bg-transparent border border-sage rounded-lg text-sm cursor-pointer text-text flex items-center gap-1.5 hover:border-coral hover:text-coral">
             <Upload size={14} />Upload Another
           </button>
-          <button onClick={reset} className="px-5 py-2.5 bg-ink text-white border-0 rounded-lg text-sm cursor-pointer flex items-center gap-1.5">
-            <MapPin size={14} />View Inventory
+          <button onClick={() => onViewInInventory({ tagIds: createdIds })} className="px-5 py-2.5 bg-coral text-white border-0 rounded-lg text-sm cursor-pointer flex items-center gap-1.5 hover:brightness-95">
+            <MapPin size={14} />View in Inventory
           </button>
         </div>
       </div>

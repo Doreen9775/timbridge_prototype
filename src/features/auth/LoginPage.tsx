@@ -3,7 +3,7 @@ import { TimbridgeLogo } from "@/components/shared/TimbridgeLogo";
 
 // Right-side hero carousel. Drop the photos into public/login/ named 1.jpg, 2.jpg, 3.jpg…
 // and extend this list to match. Missing files fall back to the dark panel behind them.
-const HERO_IMAGES = ["/login/1.jpg", "/login/2.jpg", "/login/3.jpg"];
+const HERO_IMAGES = ["/login/1.jpg", "/login/2.jpg", "/login/3.jpg", "/login/4.jpg", "/login/5.jpg"];
 const ROTATE_MS = 5000;
 
 // Prototype credentials — pre-filled so testers can sign in with one click.

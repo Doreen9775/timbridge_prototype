@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Search, Scan, ChevronDown, ChevronLeft, ChevronRight, X, Download, Maximize2, Minimize2, Filter, RotateCcw, Pencil } from "lucide-react";
-import type { Tag, Species, Grade, MoistureState, Milling, TagStatus } from "@/lib/types";
+import type { Tag, Species, Grade, MoistureState, Milling, TagStatus, EntryFilter } from "@/lib/types";
 import { StatusBadge } from "@/components/shared/StatusBadge";
+import { ConfirmationBanner } from "@/components/shared/ConfirmationBanner";
 import { calcBoardFeet, calcLineal, calcFbm } from "@/lib/fbm";
 import { useRecentRecords } from "@/hooks/useRecentRecords";
 
@@ -69,7 +70,7 @@ function FilterDropdown({
         onClick={() => setOpen((o) => !o)}
         className={[
           "flex items-center gap-1.5 px-3.5 py-1.5 text-[13px] rounded-md cursor-pointer border bg-white",
-          appliedCount > 0 ? "border-coral text-coral" : "border-sage text-text-sec",
+          appliedCount > 0 ? "border-coral text-coral hover:bg-coral/5" : "border-sage text-text-sec hover:border-coral hover:text-coral",
         ].join(" ")}
       >
         <span>{label}</span>
@@ -128,7 +129,7 @@ function PillFilter({ label, options, applied, onApply }: { label: string; optio
               onClick={() => toggle(o)}
               className={[
                 "px-3.5 py-1.5 text-[13px] rounded-full border cursor-pointer transition-colors",
-                on ? "bg-coral text-white border-coral" : "bg-white text-text border-sage hover:border-coral",
+                on ? "bg-coral text-white border-coral hover:brightness-95" : "bg-white text-text border-sage hover:border-coral hover:text-coral",
               ].join(" ")}
             >
               {o}
@@ -186,7 +187,7 @@ function DateFilter({ applied, onApply }: { applied: string[]; onApply: (v: stri
                 onClick={() => toggle(iso)}
                 className={[
                   "w-8 h-8 rounded-lg text-[13px] cursor-pointer transition-colors",
-                  on ? "bg-coral text-white font-semibold" : "text-text hover:bg-sage/30",
+                  on ? "bg-coral text-white font-semibold hover:brightness-95" : "text-text hover:bg-sage/30",
                 ].join(" ")}
               >
                 {d}
@@ -225,15 +226,19 @@ interface StockLocatorProps {
   openTagId?: string | null;
   onTagOpened?: () => void;
   onUpdateTag?: (tag: Tag) => void;
+  entryFilter?: EntryFilter | null;
+  onClearEntryFilter?: () => void;
 }
 
-export function StockLocator({ tags, floorView, openTagId, onTagOpened, onUpdateTag }: StockLocatorProps) {
+export function StockLocator({ tags, floorView, openTagId, onTagOpened, onUpdateTag, entryFilter, onClearEntryFilter }: StockLocatorProps) {
   const [search, setSearch] = useState("");
   const [dates, setDates] = useState<string[]>([]);
   const [statusF, setStatusF] = useState<string[]>([]);
   const [speciesF, setSpeciesF] = useState<string[]>([]);
   const [yardF, setYardF] = useState<string[]>([]);
   const [lowQty, setLowQty] = useState(false);
+  // Hard ID-set gate from entryFilter (composes with the bar filters; cleared by Reset Filter).
+  const [idSet, setIdSet] = useState<string[] | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
   const [fullscreen, setFullscreen] = useState(false);
   const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
@@ -265,6 +270,18 @@ export function StockLocator({ tags, floorView, openTagId, onTagOpened, onUpdate
     }
   }, [openTagId, openTag, onTagOpened]);
 
+  // Entry-surface filter: apply once when an entryFilter arrives, then consume-and-clear it in App
+  // (same as openTagId). The applied state lives in the local bar/idSet for this visit only — so it's
+  // a one-shot: navigating away and back does NOT re-apply. Reset Filter / the banner clear it.
+  useEffect(() => {
+    if (!entryFilter) return;
+    if (entryFilter.status) setStatusF(entryFilter.status);
+    if (entryFilter.species) setSpeciesF(entryFilter.species);
+    if (entryFilter.lowQty !== undefined) setLowQty(entryFilter.lowQty);
+    if (entryFilter.tagIds) setIdSet(entryFilter.tagIds);
+    onClearEntryFilter?.();
+  }, [entryFilter, onClearEntryFilter]);
+
   const filtered = useMemo(
     () =>
       tags.filter((t) => {
@@ -276,6 +293,7 @@ export function StockLocator({ tags, floorView, openTagId, onTagOpened, onUpdate
           t.grade.toLowerCase().includes(q) ||
           t.yard.toLowerCase().includes(q);
         return (
+          (idSet === null || idSet.includes(t.id)) &&
           matchQ &&
           (dates.length === 0 || dates.includes(t.date)) &&
           (statusF.length === 0 || statusF.includes(t.status)) &&
@@ -284,7 +302,7 @@ export function StockLocator({ tags, floorView, openTagId, onTagOpened, onUpdate
           (!lowQty || t.qty < 50)
         );
       }),
-    [tags, search, dates, statusF, speciesF, yardF, lowQty],
+    [tags, search, dates, statusF, speciesF, yardF, lowQty, idSet],
   );
 
   const totals = useMemo(
@@ -299,9 +317,11 @@ export function StockLocator({ tags, floorView, openTagId, onTagOpened, onUpdate
 
   const selTag = selected ? tags.find((t) => t.id === selected) ?? null : null;
 
-  const filtersActive = search !== "" || dates.length > 0 || statusF.length > 0 || speciesF.length > 0 || yardF.length > 0 || lowQty;
+  const filtersActive = search !== "" || dates.length > 0 || statusF.length > 0 || speciesF.length > 0 || yardF.length > 0 || lowQty || idSet !== null;
   const resetFilters = () => {
     setSearch(""); setDates([]); setStatusF([]); setSpeciesF([]); setYardF([]); setLowQty(false);
+    setIdSet(null);
+    onClearEntryFilter?.();
   };
 
   // Row selection — export is gated on at least one checked tag, regardless of filters.
@@ -345,8 +365,21 @@ export function StockLocator({ tags, floorView, openTagId, onTagOpened, onUpdate
     URL.revokeObjectURL(url);
   };
 
+  // Post-creation confirmation banner — shown iff a tagIds entry-filter is active (one-shot).
+  const idCount = idSet?.length ?? 0;
+  const banner = idCount > 0 ? (
+    <ConfirmationBanner
+      message={`${idCount} tag${idCount === 1 ? "" : "s"} created`}
+      actionLabel="View all stock"
+      onAction={resetFilters}
+      onDismiss={resetFilters}
+    />
+  ) : null;
+
   if (floorView) {
     return (
+      <>
+      {banner}
       <div className="p-6 bg-cream min-h-full">
         <div className="relative mb-6">
           <Search size={22} className="absolute left-4 top-1/2 -translate-y-1/2 text-text-sec" />
@@ -367,12 +400,13 @@ export function StockLocator({ tags, floorView, openTagId, onTagOpened, onUpdate
               </div>
               <div className="text-xl text-text mb-2">📍 {t.yard} · {t.section} · {t.rack}</div>
               <div className="text-base text-text-sec mb-4">{t.species} · {t.grade} · {t.thick}×{t.width} × {t.length}' · {t.qty} pcs</div>
-              <button className="w-full p-4 bg-coral text-white border-0 rounded-lg text-lg font-semibold cursor-pointer">Update Location</button>
+              <button className="w-full p-4 bg-coral text-white border-0 rounded-lg text-lg font-semibold cursor-pointer hover:brightness-95">Update Location</button>
             </div>
           ))}
           {filtered.length === 0 && <div className="text-center text-text-sec text-lg py-10">No tags found</div>}
         </div>
       </div>
+      </>
     );
   }
 
@@ -391,6 +425,8 @@ export function StockLocator({ tags, floorView, openTagId, onTagOpened, onUpdate
   ];
 
   return (
+    <>
+    {banner}
     <div className="p-6 bg-cream min-h-full relative">
       <div className="relative mb-4">
         <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-sec" />
@@ -414,7 +450,7 @@ export function StockLocator({ tags, floorView, openTagId, onTagOpened, onUpdate
           onClick={() => setLowQty(!lowQty)}
           className={[
             "px-3.5 py-1.5 text-[13px] rounded-md cursor-pointer border",
-            lowQty ? "border-coral bg-coral/10 text-coral" : "border-sage bg-transparent text-text-sec",
+            lowQty ? "border-coral bg-coral/10 text-coral hover:bg-coral/20" : "border-sage bg-transparent text-text-sec hover:border-coral hover:text-coral",
           ].join(" ")}
         >
           Low Qty
@@ -530,6 +566,7 @@ export function StockLocator({ tags, floorView, openTagId, onTagOpened, onUpdate
         />
       )}
     </div>
+    </>
   );
 }
 

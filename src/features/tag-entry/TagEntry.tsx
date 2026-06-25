@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Scan, CheckCircle, Plus, ArrowRight } from "lucide-react";
-import type { Tag, Species, Grade, MoistureState, Milling } from "@/lib/types";
+import type { Tag, Species, Grade, MoistureState, Milling, EntryFilter } from "@/lib/types";
 import { parentLogs } from "@/lib/mock-data";
 import { calcFbm, calcLineal, fbmToM3 } from "@/lib/fbm";
 import { useRecentRecords } from "@/hooks/useRecentRecords";
@@ -24,9 +24,10 @@ interface TagEntryProps {
   tags: Tag[];
   setTags: (tags: Tag[]) => void;
   floorView: boolean;
+  onViewInInventory: (filter: EntryFilter) => void;
 }
 
-export function TagEntry({ tags, setTags, floorView }: TagEntryProps) {
+export function TagEntry({ tags, setTags, floorView, onViewInInventory }: TagEntryProps) {
   const { pushRecord } = useRecentRecords();
   const [step, setStep] = useState(1);
   const [toast, setToast] = useState<string | null>(null);
@@ -95,7 +96,7 @@ export function TagEntry({ tags, setTags, floorView }: TagEntryProps) {
       <div className="p-8 bg-cream min-h-full flex flex-col items-center">
         {!done ? (
           <>
-            <button onClick={handleScan} className="w-[260px] h-[260px] rounded-full bg-coral border-0 cursor-pointer flex flex-col items-center justify-center text-white mb-8">
+            <button onClick={handleScan} className="w-[260px] h-[260px] rounded-full bg-coral border-0 cursor-pointer flex flex-col items-center justify-center text-white mb-8 hover:brightness-95">
               <Scan size={64} className="mb-3" />
               <span className="text-[22px] font-semibold">Tap to Scan</span>
             </button>
@@ -118,7 +119,7 @@ export function TagEntry({ tags, setTags, floorView }: TagEntryProps) {
                   </select>
                 </div>
               </div>
-              <button onClick={handleSave} className="w-full p-5 bg-coral text-white border-0 rounded-[10px] text-[22px] font-bold cursor-pointer">Save Tag</button>
+              <button onClick={handleSave} className="w-full p-5 bg-coral text-white border-0 rounded-[10px] text-[22px] font-bold cursor-pointer hover:brightness-95">Save Tag</button>
             </div>
           </>
         ) : (
@@ -126,7 +127,12 @@ export function TagEntry({ tags, setTags, floorView }: TagEntryProps) {
             <CheckCircle size={80} className="text-coral mb-5 mx-auto" />
             <div className="text-[28px] font-display font-bold text-ink mb-2">Tag Saved!</div>
             <div className="font-mono text-[22px] text-text mb-6">{done}</div>
-            <button onClick={reset} className="px-8 py-4 bg-coral text-white border-0 rounded-lg text-lg cursor-pointer">Add Another</button>
+            <div className="flex flex-col gap-3 w-full max-w-[300px] mx-auto">
+              <button onClick={() => onViewInInventory({ tagIds: [done] })} className="px-8 py-4 bg-coral text-white border-0 rounded-lg text-lg font-semibold cursor-pointer flex items-center justify-center gap-2 hover:brightness-95">
+                View in Inventory<ArrowRight size={18} />
+              </button>
+              <button onClick={reset} className="px-8 py-4 bg-transparent border border-sage text-text rounded-lg text-lg cursor-pointer hover:border-coral hover:text-coral">Add Another</button>
+            </div>
           </div>
         )}
       </div>
@@ -143,10 +149,10 @@ export function TagEntry({ tags, setTags, floorView }: TagEntryProps) {
           <div className="font-mono text-xl font-bold text-text mb-2">{done}</div>
           <div className="text-[13px] text-text-sec mb-6">Tag is now live in Stock Locator</div>
           <div className="flex gap-3 justify-center">
-            <button onClick={reset} className="px-5 py-2.5 bg-transparent border border-sage rounded-lg text-sm cursor-pointer text-text flex items-center gap-1.5">
+            <button onClick={reset} className="px-5 py-2.5 bg-transparent border border-sage rounded-lg text-sm cursor-pointer text-text flex items-center gap-1.5 hover:border-coral hover:text-coral">
               <Plus size={14} />Add Another
             </button>
-            <button onClick={reset} className="px-5 py-2.5 bg-coral text-white border-0 rounded-lg text-sm cursor-pointer flex items-center gap-1.5">
+            <button onClick={() => onViewInInventory({ tagIds: [done] })} className="px-5 py-2.5 bg-coral text-white border-0 rounded-lg text-sm cursor-pointer flex items-center gap-1.5 hover:brightness-95">
               View in Inventory<ArrowRight size={14} />
             </button>
           </div>
@@ -186,7 +192,7 @@ export function TagEntry({ tags, setTags, floorView }: TagEntryProps) {
 
         {step === 1 && (
           <div className="bg-white rounded-xl p-7 shadow-[0_1px_6px_rgba(0,0,0,0.07)]">
-            <button onClick={handleScan} className="w-full py-3.5 border-2 border-dashed border-coral rounded-lg bg-transparent text-coral text-sm font-medium cursor-pointer mb-5 flex items-center justify-center gap-2">
+            <button onClick={handleScan} className="w-full py-3.5 border-2 border-dashed border-coral rounded-lg bg-transparent text-coral text-sm font-medium cursor-pointer mb-5 flex items-center justify-center gap-2 hover:bg-coral/5">
               <Scan size={18} />Scan Existing Tag to Duplicate
             </button>
             <div className="grid grid-cols-2 gap-4 mb-4">
@@ -206,7 +212,7 @@ export function TagEntry({ tags, setTags, floorView }: TagEntryProps) {
             {smartShown && (
               <div className="bg-sage/20 border border-sage rounded-lg px-3.5 py-2.5 mb-4 flex items-center justify-between">
                 <span className="text-[13px] text-ink">💡 Suggested: KD + STD (based on 12 similar tags this week)</span>
-                <button onClick={() => { setState_("KD"); setMilling("STD"); setSmartShown(false); }} className="px-3 py-1 bg-coral text-white border-0 rounded-md text-xs cursor-pointer">Apply</button>
+                <button onClick={() => { setState_("KD"); setMilling("STD"); setSmartShown(false); }} className="px-3 py-1 bg-coral text-white border-0 rounded-md text-xs cursor-pointer hover:brightness-95">Apply</button>
               </div>
             )}
             <div className="grid grid-cols-2 gap-4 mb-4">
@@ -243,7 +249,7 @@ export function TagEntry({ tags, setTags, floorView }: TagEntryProps) {
                 </select>
               </div>
             </div>
-            <button onClick={() => setStep(2)} className="w-full py-3 bg-ink text-white border-0 rounded-lg text-sm font-medium cursor-pointer">Next: Quantity & Location</button>
+            <button onClick={() => setStep(2)} className="w-full py-3 bg-ink text-white border-0 rounded-lg text-sm font-medium cursor-pointer hover:brightness-125">Next: Quantity & Location</button>
           </div>
         )}
 
@@ -294,8 +300,8 @@ export function TagEntry({ tags, setTags, floorView }: TagEntryProps) {
               </div>
             </div>
             <div className="flex gap-2.5">
-              <button onClick={() => setStep(1)} className="flex-1 py-3 bg-transparent border border-sage rounded-lg text-sm cursor-pointer text-text">Back</button>
-              <button onClick={() => setStep(3)} className="flex-[2] py-3 bg-ink text-white border-0 rounded-lg text-sm font-medium cursor-pointer">Next: Review</button>
+              <button onClick={() => setStep(1)} className="flex-1 py-3 bg-transparent border border-sage rounded-lg text-sm cursor-pointer text-text hover:border-coral hover:text-coral">Back</button>
+              <button onClick={() => setStep(3)} className="flex-[2] py-3 bg-ink text-white border-0 rounded-lg text-sm font-medium cursor-pointer hover:brightness-125">Next: Review</button>
             </div>
           </div>
         )}
@@ -317,8 +323,8 @@ export function TagEntry({ tags, setTags, floorView }: TagEntryProps) {
               </div>
             ))}
             <div className="flex gap-2.5 mt-5">
-              <button onClick={() => setStep(2)} className="flex-1 py-3 bg-transparent border border-sage rounded-lg text-sm cursor-pointer text-text">Back</button>
-              <button onClick={handleSave} className="flex-[2] py-[13px] bg-coral text-white border-0 rounded-lg text-sm font-semibold cursor-pointer flex items-center justify-center gap-1.5">
+              <button onClick={() => setStep(2)} className="flex-1 py-3 bg-transparent border border-sage rounded-lg text-sm cursor-pointer text-text hover:border-coral hover:text-coral">Back</button>
+              <button onClick={handleSave} className="flex-[2] py-[13px] bg-coral text-white border-0 rounded-lg text-sm font-semibold cursor-pointer flex items-center justify-center gap-1.5 hover:brightness-95">
                 <CheckCircle size={15} />Save Tag
               </button>
             </div>

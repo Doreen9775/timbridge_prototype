@@ -79,6 +79,16 @@ export interface FloorTask {
   priority: "High" | "Normal";
 }
 
+// ─── Entry-surface filter (deep-link Stock Locator with a pre-applied filter) ─────
+// Passed into Stock Locator from App via the same transient-state pattern as openTagId.
+// Provided fields map onto the existing filter bar; tagIds is a hard ID-set gate.
+export interface EntryFilter {
+  tagIds?: string[];
+  status?: TagStatus[];
+  species?: Species[];
+  lowQty?: boolean;
+}
+
 // ─── Recent records (top-nav "Recent" dropdown; persisted to localStorage) ────────
 export type RecentRecordType = "tag" | "slip";
 

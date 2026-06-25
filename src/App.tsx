@@ -9,13 +9,14 @@ import { TagEntry } from "@/features/tag-entry/TagEntry";
 import { DeliverySlips } from "@/features/delivery-slips/DeliverySlips";
 import { LoginPage } from "@/features/auth/LoginPage";
 import { RecentRecordsProvider } from "@/hooks/useRecentRecords";
-import type { RecentRecord, Tag } from "@/lib/types";
+import type { EntryFilter, RecentRecord, Tag } from "@/lib/types";
 import { useRole } from "@/hooks/useRole";
 import { useTags } from "@/hooks/useTags";
 
 export default function App() {
   const [nav, setNav] = useState<NavKey>("dashboard");
   const [pendingTagId, setPendingTagId] = useState<string | null>(null);
+  const [entryFilter, setEntryFilter] = useState<EntryFilter | null>(null);
   const [authed, setAuthed] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
   const { isFloor, setFloorView } = useRole();
@@ -50,6 +51,12 @@ export default function App() {
     setTags((prev) => prev.map((t) => (t.id === updated.id ? updated : t)));
   }, [setTags]);
 
+  // Deep-link into Stock Locator pre-filtered (Tag Entry / Delivery Slips "View in Inventory").
+  const handleViewInInventory = useCallback((filter: EntryFilter) => {
+    setNav("locator");
+    setEntryFilter(filter);
+  }, []);
+
   if (!authed) return <LoginPage onSignIn={handleSignIn} />;
 
   return (
@@ -61,9 +68,9 @@ export default function App() {
           {isFloor && <FloorBanner />}
           <div className="flex-1 overflow-y-auto">
             {nav === "dashboard" && <Dashboard tags={tags} floorView={isFloor} />}
-            {nav === "locator" && <StockLocator tags={tags} floorView={isFloor} openTagId={pendingTagId} onTagOpened={handleTagOpened} onUpdateTag={handleUpdateTag} />}
-            {nav === "tagentry" && <TagEntry tags={tags} setTags={setTags} floorView={isFloor} />}
-            {nav === "delivery" && <DeliverySlips tags={tags} setTags={setTags} />}
+            {nav === "locator" && <StockLocator tags={tags} floorView={isFloor} openTagId={pendingTagId} onTagOpened={handleTagOpened} onUpdateTag={handleUpdateTag} entryFilter={entryFilter} onClearEntryFilter={() => setEntryFilter(null)} />}
+            {nav === "tagentry" && <TagEntry tags={tags} setTags={setTags} floorView={isFloor} onViewInInventory={handleViewInInventory} />}
+            {nav === "delivery" && <DeliverySlips tags={tags} setTags={setTags} onViewInInventory={handleViewInInventory} />}
             {!["dashboard", "locator", "tagentry", "delivery"].includes(nav) && <ComingSoon name={nav} />}
           </div>
         </div>
