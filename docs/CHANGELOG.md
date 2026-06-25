@@ -248,6 +248,28 @@ A history of every commit (push) on `main`, in chronological order, with what wa
 
 ---
 
+## 2026-06-24 (3)
+
+### `d70ecd7` · Dashboard drill-through · Tag pricing · Linked Transactions — Dashboard 深链点击 + 标签定价 + 关联交易
+
+> 本条为一次 push 的汇总（含多项改动）。/ One push, several changes.
+
+**🇨🇳 中文**
+- **Dashboard 可点击深链（新）**：4 张 KPI 卡、FBM by Species 每根柱子、Tag Status Distribution 饼图的每个扇区与图例行，全部可点击并跳转到 Stock Locator、套用对应的 `entryFilter`（Available / Reserved / Low Qty / 按树种 / 按状态）；Yard Activity 每一行点击则通过 `openTagId` 直接打开该标签的详情抽屉（不是筛选）。所有可点元素补上 `role="button"` / `aria-label` / hover 反馈 / `cursor: pointer`。顺手修掉 Recharts v3 在点击柱子/饼图时默认弹出的焦点高亮方框（全局给 `.recharts-wrapper` 关掉 outline）。
+- **Tag 定价字段（新）**：`Tag` 新增可选的 `cost`（成本/件）与 `marketValue`（市场价/件），仅 Manager 维护/种子数据携带，Tag Entry 与 Delivery Slips 创建的标签留空。18 条 Mock 标签按真实木材市场板英尺单价（按树种/等级分级）×每件实际板英尺数回填，毛利率统一落在约 36–48%。
+- **Stock Locator 详情面板 · Pricing 区块（新，仅 Manager 可见）**：在 Units 区块下方新增成本/市场价/毛利三项统计，毛利为视觉主项（更大更粗）；编辑模式下成本与市场价变为输入框，毛利随输入实时重算，保存复用现有「Edited via Stock Locator」历史事件，不新增保存逻辑。
+- **Stock Locator 详情面板 · Linked Transactions 区块（新，Manager 与未来 Sales 角色可见，Floor 不渲染）**：展示关联到该标签的销售单（单号 / 客户 / 状态徽章 / 数量 / 单价）；单号 hover 显示「Sales Order detail coming soon」提示，暂不可点击跳转。`SalesOrder` Mock 结构改为按行（`lineItems`）记录数量与单价，重新播种 4 笔订单（3 个客户，Open/Picked/Shipped 状态齐全，均关联现有 Reserved 标签）。
+
+**🇬🇧 English**
+- **Dashboard clickable drill-throughs (new)**: all 4 KPI cards, every FBM-by-Species bar, and every Tag Status Distribution donut segment + legend row now click through to Stock Locator with the matching `entryFilter` (Available / Reserved / Low Qty / by species / by status); each Yard Activity row instead opens that exact tag's detail drawer via `openTagId` (a single-tag jump, not a filter). Added `role="button"` / `aria-label` / hover states / `cursor: pointer` throughout. Also fixed Recharts v3's default focus-ring box that flashed on bar/pie clicks (scoped `outline: none` on `.recharts-wrapper`).
+- **Tag pricing fields (new)**: optional `cost` / `marketValue` (per unit) added to `Tag`, populated only on Manager-curated/seeded tags — Tag Entry and Delivery Slips tags leave them undefined. Backfilled all 18 mock tags using real $/board-foot market rates by species/grade × each tag's actual board footage, keeping margins in a realistic ~36–48% band.
+- **Stock Locator detail panel · Pricing block (new, Manager-only)**: cost/market-value/margin stat row under Units, margin as the primary (larger/bolder) value; editable in the existing edit/save flow with live margin recalculation as you type, reusing the existing "Edited via Stock Locator" history event.
+- **Stock Locator detail panel · Linked Transactions block (new, visible to Manager and future Sales, never rendered for Floor)**: lists Sales Orders linked to the tag (SO number / customer / status pill / qty / unit price); the SO number shows a "Sales Order detail coming soon" tooltip on hover but isn't wired to navigate yet. Restructured the `SalesOrder` mock model to per-line `qty`/`unitPrice` and reseeded 4 orders across 3 customers (Open/Picked/Shipped all represented, all linked to existing Reserved tags).
+
+**Files / 改动:** `App.tsx`, `features/dashboard/Dashboard.tsx`, `features/stock-locator/StockLocator.tsx`, `lib/types.ts`, `lib/mock-data.ts`, `index.css`
+
+---
+
 ## Pending / 未来 (not yet built — 尚未开始)
 
 - **Available-to-Sell**（销售视图；`salesOrders` Mock 数据已就绪）
