@@ -6,6 +6,7 @@ import { ArrowLeftRight, PackageCheck, BookmarkCheck, BadgeCheck, ScanLine, type
 import type { Tag, TagStatus, Species, ActivityType, EntryFilter } from "@/lib/types";
 import { recentActivity, floorTasks } from "@/lib/mock-data";
 import { Sparkline } from "@/components/shared/Sparkline";
+import { YardMap } from "./YardMap";
 
 const ACTIVITY_META: Record<ActivityType, { label: string; Icon: LucideIcon }> = {
   move: { label: "Moved", Icon: ArrowLeftRight },
@@ -234,9 +235,12 @@ export function Dashboard({ tags, floorView, onNavigateToLocator, onOpenTag }: D
         </div>
       </div>
 
+      <div className="grid grid-cols-2 gap-5 items-stretch">
       <div className="bg-white rounded-[10px] p-5 shadow-[0_1px_4px_rgba(0,0,0,0.07)]">
-        <div className="flex items-center justify-between gap-3 flex-wrap mb-4">
+        <div className="flex items-center justify-between gap-3 mb-3">
           <div className="text-[13px] font-display font-semibold text-text">Yard Activity</div>
+        </div>
+        <div className="mb-4">
           <div className="flex gap-1.5 flex-wrap">
             {ACTIVITY_FILTERS.map((f) => {
               const active = activityFilter === f;
@@ -280,6 +284,9 @@ export function Dashboard({ tags, floorView, onNavigateToLocator, onOpenTag }: D
         {filteredActivity.length === 0 && (
           <div className="py-6 text-center text-xs text-text-ter">No activity in this category.</div>
         )}
+      </div>
+
+      <YardMap tags={tags} onNavigateToLocator={onNavigateToLocator} />
       </div>
       </div>
     </div>

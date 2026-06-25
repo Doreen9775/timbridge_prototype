@@ -97,6 +97,7 @@ export interface EntryFilter {
   tagIds?: string[];
   status?: TagStatus[];
   species?: Species[];
+  yard?: string[]; // feeds the existing Location filter — used by the Dashboard Yard Map drill-through
   lowQty?: boolean;
 }
 

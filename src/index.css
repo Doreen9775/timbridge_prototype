@@ -178,3 +178,28 @@ body {
 .recharts-wrapper :focus-visible {
   outline: none;
 }
+/* Dashboard Yard Map — Mapbox hover popup themed in brand lime (#AADB1E). The little
+   pointer "tip" is a CSS triangle made from borders, so its visible side must be recolored
+   per anchor direction. */
+.yard-popup .mapboxgl-popup-content {
+  background: #AADB1E;
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
+  padding: 8px 12px;
+}
+.yard-popup.mapboxgl-popup-anchor-top .mapboxgl-popup-tip,
+.yard-popup.mapboxgl-popup-anchor-top-left .mapboxgl-popup-tip,
+.yard-popup.mapboxgl-popup-anchor-top-right .mapboxgl-popup-tip {
+  border-bottom-color: #AADB1E;
+}
+.yard-popup.mapboxgl-popup-anchor-bottom .mapboxgl-popup-tip,
+.yard-popup.mapboxgl-popup-anchor-bottom-left .mapboxgl-popup-tip,
+.yard-popup.mapboxgl-popup-anchor-bottom-right .mapboxgl-popup-tip {
+  border-top-color: #AADB1E;
+}
+.yard-popup.mapboxgl-popup-anchor-left .mapboxgl-popup-tip {
+  border-right-color: #AADB1E;
+}
+.yard-popup.mapboxgl-popup-anchor-right .mapboxgl-popup-tip {
+  border-left-color: #AADB1E;
+}

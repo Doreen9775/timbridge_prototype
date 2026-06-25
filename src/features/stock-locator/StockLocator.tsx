@@ -316,6 +316,7 @@ export function StockLocator({ tags, floorView, role, openTagId, onTagOpened, on
     if (!entryFilter) return;
     if (entryFilter.status) setStatusF(entryFilter.status);
     if (entryFilter.species) setSpeciesF(entryFilter.species);
+    if (entryFilter.yard) setYardF(entryFilter.yard);
     if (entryFilter.lowQty !== undefined) setLowQty(entryFilter.lowQty);
     if (entryFilter.tagIds) setIdSet(entryFilter.tagIds);
     onClearEntryFilter?.();
