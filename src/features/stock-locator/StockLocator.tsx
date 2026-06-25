@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Search, Scan, ChevronDown, ChevronLeft, ChevronRight, X, Download, Maximize2, Minimize2, Filter, RotateCcw, Pencil } from "lucide-react";
-import type { Tag, Species, Grade, MoistureState, Milling, TagStatus, EntryFilter } from "@/lib/types";
+import type { Tag, Species, Grade, MoistureState, Milling, TagStatus, EntryFilter, Role, SalesOrderStatus } from "@/lib/types";
 import { StatusBadge } from "@/components/shared/StatusBadge";
 import { ConfirmationBanner } from "@/components/shared/ConfirmationBanner";
 import { calcBoardFeet, calcLineal, calcFbm } from "@/lib/fbm";
 import { useRecentRecords } from "@/hooks/useRecentRecords";
+import { salesOrders } from "@/lib/mock-data";
 
 const STATUS_OPTIONS = ["Pending", "Received", "Available", "Reserved", "Shipped", "Discrepancy"];
 const SPECIES_OPTIONS = ["SPF", "Doug Fir", "Western Red Cedar", "Hem-Fir"];
@@ -32,6 +33,29 @@ function nowStamp(): string {
   const d = new Date();
   const p = (n: number) => String(n).padStart(2, "0");
   return `${MONTHS_SHORT[d.getMonth()]} ${p(d.getDate())} ${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+
+// Pricing block (Manager-only) — cost/marketValue are optional, so render "—" when absent.
+function formatUSD(v?: number): string {
+  return v === undefined ? "—" : `$${v.toFixed(2)}`;
+}
+function formatMargin(cost?: number, marketValue?: number): string {
+  if (cost === undefined || marketValue === undefined) return "—";
+  const margin = marketValue - cost;
+  const pct = cost === 0 ? "—" : `${Math.round((margin / cost) * 100)}%`;
+  return `$${margin.toFixed(2)} (${pct})`;
+}
+
+// Linked Transactions status pill — reuses StatusBadge's exact color tokens (no new palette),
+// remapped onto SalesOrderStatus since the two status unions mostly don't overlap.
+const SO_STATUS_STYLES: Record<SalesOrderStatus, string> = {
+  Open: "bg-[#EEF0F2] text-[#6B7280]", // neutral gray, same as Tag "Pending"
+  Picked: "bg-[#EAF5D0] text-[#4E6B0E]", // lime, same as Tag "Reserved"
+  Shipped: "bg-[#D9DDE3] text-[#3B4250]", // darker gray, same as Tag "Shipped"
+  Cancelled: "bg-[#FCE0D7] text-[#B23A1A]", // coral alert, same as Tag "Discrepancy"
+};
+function SOStatusPill({ status }: { status: SalesOrderStatus }) {
+  return <span className={`whitespace-nowrap inline-block px-2.5 py-[3px] rounded-xl text-[11px] font-medium ${SO_STATUS_STYLES[status]}`}>{status}</span>;
 }
 
 // Set-equality on string arrays — drives the "Apply Now" enabled state.
@@ -223,6 +247,7 @@ function csvFilename(): string {
 interface StockLocatorProps {
   tags: Tag[];
   floorView: boolean;
+  role: Role;
   openTagId?: string | null;
   onTagOpened?: () => void;
   onUpdateTag?: (tag: Tag) => void;
@@ -230,7 +255,7 @@ interface StockLocatorProps {
   onClearEntryFilter?: () => void;
 }
 
-export function StockLocator({ tags, floorView, openTagId, onTagOpened, onUpdateTag, entryFilter, onClearEntryFilter }: StockLocatorProps) {
+export function StockLocator({ tags, floorView, role, openTagId, onTagOpened, onUpdateTag, entryFilter, onClearEntryFilter }: StockLocatorProps) {
   const [search, setSearch] = useState("");
   const [dates, setDates] = useState<string[]>([]);
   const [statusF, setStatusF] = useState<string[]>([]);
@@ -560,6 +585,7 @@ export function StockLocator({ tags, floorView, openTagId, onTagOpened, onUpdate
           key={selTag.id}
           tag={selTag}
           fullscreen={fullscreen}
+          role={role}
           onToggleFullscreen={() => setFullscreen((f) => !f)}
           onClose={closeDrawer}
           onSave={onUpdateTag}
@@ -573,19 +599,27 @@ export function StockLocator({ tags, floorView, openTagId, onTagOpened, onUpdate
 function DetailDrawer({
   tag,
   fullscreen,
+  role,
   onToggleFullscreen,
   onClose,
   onSave,
 }: {
   tag: Tag;
   fullscreen: boolean;
+  role: Role;
   onToggleFullscreen: () => void;
   onClose: () => void;
   onSave?: (tag: Tag) => void;
 }) {
+  const isManager = role === "manager";
+  const showLinkedTransactions = role !== "floor";
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState<Tag>(tag);
   const canEdit = !!onSave;
+  const linkedSOs = useMemo(
+    () => salesOrders.flatMap((so) => so.lineItems.filter((li) => li.tagId === tag.id).map((li) => ({ so, li }))),
+    [tag.id],
+  );
 
   const startEdit = () => { setDraft(tag); setEditing(true); };
   const saveEdit = () => {
@@ -723,6 +757,40 @@ function DetailDrawer({
         </div>
         <div className="text-[10px] text-text-ter mt-1.5">FBM updates to {calcFbm(draft.thick, draft.width, draft.length, draft.qty).toLocaleString()} on save. ID, traceability and movement history stay read-only.</div>
       </div>
+
+      {isManager && (
+        <div>
+          <div className="text-xs text-text-sec mb-2">Pricing</div>
+          <div className="bg-[#F9FAFB] rounded-md px-4 py-3 mb-2 flex items-end justify-between">
+            <div>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={draft.cost ?? ""}
+                onChange={(e) => setDraft((d) => ({ ...d, cost: e.target.value === "" ? undefined : Math.max(0, Number(e.target.value)) }))}
+                className="w-20 border border-sage rounded-md px-1.5 py-1 text-base font-semibold text-text outline-none focus:border-coral"
+              />
+              <div className="text-[10px] text-text-ter mt-1">cost / unit</div>
+            </div>
+            <div className="text-right">
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={draft.marketValue ?? ""}
+                onChange={(e) => setDraft((d) => ({ ...d, marketValue: e.target.value === "" ? undefined : Math.max(0, Number(e.target.value)) }))}
+                className="w-20 border border-sage rounded-md px-1.5 py-1 text-base font-semibold text-text outline-none focus:border-coral text-right"
+              />
+              <div className="text-[10px] text-text-ter mt-1">value / unit</div>
+            </div>
+            <div className="text-right">
+              <div className="text-2xl font-display font-bold text-ink leading-none">{formatMargin(draft.cost, draft.marketValue)}</div>
+              <div className="text-[10px] text-text-ter mt-1">margin</div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 
@@ -773,6 +841,52 @@ function DetailDrawer({
             <div className="text-[10px] text-text-ter mt-1">lf</div>
           </div>
         </div>
+
+        {isManager && (
+          <>
+            <div className="text-xs text-text-sec mb-2">Pricing</div>
+            <div className="bg-[#F9FAFB] rounded-md px-4 py-3 mb-5 flex items-end justify-between">
+              <div>
+                <div className="text-base font-semibold text-text leading-none">{formatUSD(tag.cost)}</div>
+                <div className="text-[10px] text-text-ter mt-1">cost / unit</div>
+              </div>
+              <div className="text-right">
+                <div className="text-base font-semibold text-text leading-none">{formatUSD(tag.marketValue)}</div>
+                <div className="text-[10px] text-text-ter mt-1">value / unit</div>
+              </div>
+              <div className="text-right">
+                <div className="text-2xl font-display font-bold text-ink leading-none">{formatMargin(tag.cost, tag.marketValue)}</div>
+                <div className="text-[10px] text-text-ter mt-1">margin</div>
+              </div>
+            </div>
+          </>
+        )}
+
+        {showLinkedTransactions && (
+          <div className="mb-5">
+            <div className="text-xs text-text-sec mb-2">Linked Transactions</div>
+            {linkedSOs.length === 0 ? (
+              <div className="bg-[#F9FAFB] rounded-md px-4 py-3 text-[13px] text-text-ter">No linked transactions yet</div>
+            ) : (
+              <div className="flex flex-col gap-1.5">
+                {linkedSOs.map(({ so, li }) => (
+                  <div key={so.id} className="bg-[#F9FAFB] rounded-md px-3 py-2 flex items-center gap-2 text-[13px]">
+                    <span
+                      title="Sales Order detail coming soon"
+                      className="font-mono font-semibold text-coral cursor-pointer hover:underline"
+                    >
+                      {so.id}
+                    </span>
+                    <span className="flex-1 text-text truncate">{so.customer}</span>
+                    <SOStatusPill status={so.status} />
+                    <span className="text-text-sec whitespace-nowrap">{li.qty.toLocaleString()} pcs</span>
+                    <span className="text-text-sec whitespace-nowrap">${li.unitPrice.toFixed(2)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
         {tag.parentLog && (
           <div className="mb-5">

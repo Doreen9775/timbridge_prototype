@@ -170,3 +170,11 @@ body {
 .animate-fade-in {
   animation: tb-fade-in 0.6s ease-out;
 }
+
+/* Recharts' Bar/Pie groups carry a native tabindex, so clicking one focuses the whole
+   chart group and the browser draws a default focus ring around its full bounding box.
+   Our own per-segment hover/aria-label states already provide the click affordance. */
+.recharts-wrapper :focus,
+.recharts-wrapper :focus-visible {
+  outline: none;
+}

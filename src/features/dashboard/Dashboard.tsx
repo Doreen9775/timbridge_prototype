@@ -3,7 +3,7 @@ import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, PieChart, Pie,
 } from "recharts";
 import { ArrowLeftRight, PackageCheck, BookmarkCheck, BadgeCheck, ScanLine, type LucideIcon } from "lucide-react";
-import type { Tag, TagStatus, Species, ActivityType } from "@/lib/types";
+import type { Tag, TagStatus, Species, ActivityType, EntryFilter } from "@/lib/types";
 import { recentActivity, floorTasks } from "@/lib/mock-data";
 import { Sparkline } from "@/components/shared/Sparkline";
 
@@ -38,9 +38,11 @@ const SPECIES: Species[] = ["SPF", "Doug Fir", "Western Red Cedar", "Hem-Fir"];
 interface DashboardProps {
   tags: Tag[];
   floorView: boolean;
+  onNavigateToLocator?: (filter: EntryFilter) => void;
+  onOpenTag?: (tagId: string) => void;
 }
 
-export function Dashboard({ tags, floorView }: DashboardProps) {
+export function Dashboard({ tags, floorView, onNavigateToLocator, onOpenTag }: DashboardProps) {
   const available = tags.filter((t) => t.status === "Available");
   const reserved = tags.filter((t) => t.status === "Reserved");
   const totalFBM = available.reduce((s, t) => s + t.fbm, 0);
@@ -48,7 +50,12 @@ export function Dashboard({ tags, floorView }: DashboardProps) {
   const [activityFilter, setActivityFilter] = useState<ActivityType | "all">("all");
   const filteredActivity = recentActivity.filter((a) => activityFilter === "all" || a.type === activityFilter);
 
+  const [hoveredBar, setHoveredBar] = useState<number | null>(null);
+  const [hoveredSlice, setHoveredSlice] = useState<number | null>(null);
+
+  // sp kept alongside the display-renamed name so bar clicks filter on the real Species value.
   const speciesData = SPECIES.map((sp) => ({
+    sp,
     name: sp === "Western Red Cedar" ? "W.R. Cedar" : sp,
     fbm: tags.filter((t) => t.species === sp).reduce((s, t) => s + t.fbm, 0),
   }));
@@ -91,11 +98,11 @@ export function Dashboard({ tags, floorView }: DashboardProps) {
     );
   }
 
-  const kpis: { label: string; value: string | number; sub: string; spark?: number[]; alert?: boolean }[] = [
-    { label: "Total FBM Available", value: totalFBM.toLocaleString(), sub: "board feet", spark: [8200, 9100, 8700, 10200, 11400, 10800, totalFBM] },
-    { label: "Tags Available", value: available.length, sub: "+2 vs last week", spark: [9, 10, 11, 10, 12, 11, available.length] },
-    { label: "Tags Reserved", value: reserved.length, sub: "active holds", alert: reserved.length > 5 },
-    { label: "Low Stock Alerts", value: tags.filter((t) => t.qty < 50).length, sub: "qty < 50 units", alert: true },
+  const kpis: { label: string; value: string | number; sub: string; spark?: number[]; alert?: boolean; entryFilter: EntryFilter; ariaLabel: string }[] = [
+    { label: "Total FBM Available", value: totalFBM.toLocaleString(), sub: "board feet", spark: [8200, 9100, 8700, 10200, 11400, 10800, totalFBM], entryFilter: { status: ["Available"] }, ariaLabel: "Filter to Available tags" },
+    { label: "Tags Available", value: available.length, sub: "+2 vs last week", spark: [9, 10, 11, 10, 12, 11, available.length], entryFilter: { status: ["Available"] }, ariaLabel: "Filter to Available tags" },
+    { label: "Tags Reserved", value: reserved.length, sub: "active holds", alert: reserved.length > 5, entryFilter: { status: ["Reserved"] }, ariaLabel: "Filter to Reserved tags" },
+    { label: "Low Stock Alerts", value: tags.filter((t) => t.qty < 50).length, sub: "qty < 50 units", alert: true, entryFilter: { lowQty: true }, ariaLabel: "Show low stock tags" },
   ];
 
   // Colored KPI cards (reference layout, brand colors): neutral white + sage + coral + lime.
@@ -132,7 +139,15 @@ export function Dashboard({ tags, floorView }: DashboardProps) {
         {kpis.map((c, i) => {
           const th = kpiThemes[i % kpiThemes.length];
           return (
-            <div key={i} className={`${th.card} rounded-2xl px-5 py-4 shadow-[0_1px_4px_rgba(0,0,0,0.06)]`}>
+            <div
+              key={i}
+              role="button"
+              tabIndex={0}
+              aria-label={c.ariaLabel}
+              onClick={() => onNavigateToLocator?.(c.entryFilter)}
+              onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") onNavigateToLocator?.(c.entryFilter); }}
+              className={`${th.card} rounded-2xl px-5 py-4 shadow-[0_1px_4px_rgba(0,0,0,0.06)] cursor-pointer border border-transparent hover:border-ink/15 hover:brightness-[0.97] transition`}
+            >
               <div className={`text-xs mb-2 ${th.label}`}>{c.label}</div>
               <div className="flex items-end justify-between">
                 <div>
@@ -150,12 +165,24 @@ export function Dashboard({ tags, floorView }: DashboardProps) {
         <div className="bg-white rounded-[10px] pt-5 px-5 pb-3 shadow-[0_1px_4px_rgba(0,0,0,0.07)]">
           <div className="text-[13px] font-display font-semibold text-text mb-4">FBM by Species</div>
           <ResponsiveContainer width="100%" height={180}>
-            <BarChart data={speciesData} barCategoryGap="30%">
+            <BarChart data={speciesData} barCategoryGap="30%" accessibilityLayer={false}>
               <XAxis dataKey="name" interval={0} tick={{ fontSize: 10, fill: C.textSec }} axisLine={false} tickLine={false} />
               <YAxis tick={{ fontSize: 10, fill: C.textTer }} axisLine={false} tickLine={false} tickFormatter={(v) => (v >= 1000 ? `${(v / 1000).toFixed(1)}k` : v)} />
               <Tooltip formatter={(v) => [`${Number(v).toLocaleString()} FBM`]} contentStyle={{ fontSize: 12, border: `1px solid ${C.sage}`, borderRadius: 6 }} />
               <Bar dataKey="fbm" radius={[4, 4, 0, 0]}>
-                {speciesData.map((_, i) => <Cell key={i} fill={i % 2 === 0 ? C.ink : C.coral} />)}
+                {speciesData.map((d, i) => (
+                  <Cell
+                    key={i}
+                    fill={i % 2 === 0 ? C.ink : C.coral}
+                    fillOpacity={hoveredBar === i ? 0.85 : 1}
+                    cursor="pointer"
+                    role="button"
+                    aria-label={`Filter to ${d.sp} tags`}
+                    onClick={() => onNavigateToLocator?.({ species: [d.sp] })}
+                    onMouseEnter={() => setHoveredBar(i)}
+                    onMouseLeave={() => setHoveredBar(null)}
+                  />
+                ))}
               </Bar>
             </BarChart>
           </ResponsiveContainer>
@@ -165,9 +192,21 @@ export function Dashboard({ tags, floorView }: DashboardProps) {
           <div className="flex items-center gap-2">
             <div className="w-1/2">
               <ResponsiveContainer width="100%" height={150}>
-                <PieChart>
+                <PieChart accessibilityLayer={false}>
                   <Pie data={statusData} cx="50%" cy="50%" innerRadius={42} outerRadius={68} dataKey="value" labelLine={false}>
-                    {statusData.map((e, i) => <Cell key={i} fill={e.fill} />)}
+                    {statusData.map((e, i) => (
+                      <Cell
+                        key={i}
+                        fill={e.fill}
+                        fillOpacity={hoveredSlice === i ? 0.85 : 1}
+                        cursor="pointer"
+                        role="button"
+                        aria-label={`Show all ${e.name} tags`}
+                        onClick={() => onNavigateToLocator?.({ status: [e.name] })}
+                        onMouseEnter={() => setHoveredSlice(i)}
+                        onMouseLeave={() => setHoveredSlice(null)}
+                      />
+                    ))}
                   </Pie>
                   <Tooltip formatter={(v) => [`${v} tags`]} contentStyle={{ fontSize: 12, borderRadius: 6 }} />
                 </PieChart>
@@ -175,7 +214,15 @@ export function Dashboard({ tags, floorView }: DashboardProps) {
             </div>
             <div className="flex-1 flex flex-col gap-1.5">
               {statusData.map((d) => (
-                <div key={d.name} className="flex items-center gap-2 text-xs">
+                <div
+                  key={d.name}
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`Show all ${d.name} tags`}
+                  onClick={() => onNavigateToLocator?.({ status: [d.name] })}
+                  onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") onNavigateToLocator?.({ status: [d.name] }); }}
+                  className="flex items-center gap-2 text-xs cursor-pointer rounded px-1 -mx-1 py-0.5 hover:bg-sage/15"
+                >
                   <span className="w-2.5 h-2.5 rounded-[3px] shrink-0" style={{ background: d.fill }} />
                   <span className="text-text flex-1">{d.name}</span>
                   <span className="text-text-sec font-medium">{d.value}</span>
@@ -211,7 +258,15 @@ export function Dashboard({ tags, floorView }: DashboardProps) {
         {filteredActivity.map((a, i) => {
           const { Icon } = ACTIVITY_META[a.type];
           return (
-            <div key={i} className={`flex items-center gap-3 py-2.5 ${i < filteredActivity.length - 1 ? "border-b border-[#F3F4F6]" : ""}`}>
+            <div
+              key={i}
+              role="button"
+              tabIndex={0}
+              aria-label={`Open tag ${a.tagId}`}
+              onClick={() => onOpenTag?.(a.tagId)}
+              onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") onOpenTag?.(a.tagId); }}
+              className={`flex items-center gap-3 py-2.5 cursor-pointer hover:bg-sage/10 -mx-1 px-1 rounded ${i < filteredActivity.length - 1 ? "border-b border-[#F3F4F6]" : ""}`}
+            >
               <span className="w-7 h-7 rounded-md bg-sage/30 flex items-center justify-center shrink-0">
                 <Icon size={15} className="text-ink" />
               </span>

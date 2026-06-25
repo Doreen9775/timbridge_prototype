@@ -19,7 +19,7 @@ export default function App() {
   const [entryFilter, setEntryFilter] = useState<EntryFilter | null>(null);
   const [authed, setAuthed] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
-  const { isFloor, setFloorView } = useRole();
+  const { role, isFloor, setFloorView } = useRole();
   const { tags, setTags } = useTags();
 
   // Every sign-in lands on the Dashboard, regardless of where the last session left off.
@@ -57,6 +57,18 @@ export default function App() {
     setEntryFilter(filter);
   }, []);
 
+  // Dashboard drill-through: KPI cards, species bars, status donut/legend → pre-filtered Stock Locator.
+  const handleNavigateToLocator = useCallback((filter: EntryFilter) => {
+    setNav("locator");
+    setEntryFilter(filter);
+  }, []);
+
+  // Dashboard drill-through: Yard Activity row → that tag's detail drawer.
+  const handleOpenTagFromDashboard = useCallback((tagId: string) => {
+    setNav("locator");
+    setPendingTagId(tagId);
+  }, []);
+
   if (!authed) return <LoginPage onSignIn={handleSignIn} />;
 
   return (
@@ -67,8 +79,8 @@ export default function App() {
           <TopBar nav={nav} floorView={isFloor} setFloorView={setFloorView} onOpenRecord={handleOpenRecord} />
           {isFloor && <FloorBanner />}
           <div className="flex-1 overflow-y-auto">
-            {nav === "dashboard" && <Dashboard tags={tags} floorView={isFloor} />}
-            {nav === "locator" && <StockLocator tags={tags} floorView={isFloor} openTagId={pendingTagId} onTagOpened={handleTagOpened} onUpdateTag={handleUpdateTag} entryFilter={entryFilter} onClearEntryFilter={() => setEntryFilter(null)} />}
+            {nav === "dashboard" && <Dashboard tags={tags} floorView={isFloor} onNavigateToLocator={handleNavigateToLocator} onOpenTag={handleOpenTagFromDashboard} />}
+            {nav === "locator" && <StockLocator tags={tags} floorView={isFloor} role={role} openTagId={pendingTagId} onTagOpened={handleTagOpened} onUpdateTag={handleUpdateTag} entryFilter={entryFilter} onClearEntryFilter={() => setEntryFilter(null)} />}
             {nav === "tagentry" && <TagEntry tags={tags} setTags={setTags} floorView={isFloor} onViewInInventory={handleViewInInventory} />}
             {nav === "delivery" && <DeliverySlips tags={tags} setTags={setTags} onViewInInventory={handleViewInInventory} />}
             {!["dashboard", "locator", "tagentry", "delivery"].includes(nav) && <ComingSoon name={nav} />}

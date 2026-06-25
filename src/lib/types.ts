@@ -47,20 +47,26 @@ export interface Tag {
   updated: string; // relative display string, e.g. "2h ago"
   parentLog: string | null; // display-only traceability (out of scope this semester)
   supplier?: string; // origin supplier (from a delivery slip; "In-house production" or absent otherwise)
+  cost?: number; // per unit, USD — Manager-curated/seeded tags only; absent from Tag Entry / Delivery Slips
+  marketValue?: number; // per unit, USD — same availability as cost
   history: MovementEvent[];
 }
 
 // ─── Sales orders (kickoff §4.5 — link Reserved tags; unblocks Available-to-Sell) ─
-export type SalesOrderStatus = "Open" | "Confirmed" | "Shipped" | "Cancelled";
+export type SalesOrderStatus = "Open" | "Picked" | "Shipped" | "Cancelled";
+
+export interface SalesOrderLineItem {
+  tagId: string; // links to a Tag — typically one with status Reserved while the order is active
+  qty: number; // pieces drawn from this tag, may be less than the tag's full qty
+  unitPrice: number; // USD per piece
+}
 
 export interface SalesOrder {
-  id: string; // e.g. "SO-2026-0445"
-  orderNumber: string; // human reference shown in history, e.g. "#445"
+  id: string; // e.g. "SO-0042"
   customer: string;
   status: SalesOrderStatus;
-  createdAt: string; // display string
-  tagIds: string[]; // linked tags (Reserved while order is active)
-  notes?: string;
+  date: string; // ISO date (YYYY-MM-DD)
+  lineItems: SalesOrderLineItem[];
 }
 
 // ─── Dashboard / activity feed ───────────────────────────────────────────────────
@@ -71,6 +77,7 @@ export interface ActivityEvent {
   msg: string;
   worker: string;
   time: string;
+  tagId: string; // links back to the Tag table — Dashboard click-through opens this tag's drawer
 }
 
 export interface FloorTask {
