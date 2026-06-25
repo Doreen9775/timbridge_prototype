@@ -328,6 +328,18 @@ A history of every commit (push) on `main`, in chronological order, with what wa
 
 ---
 
+## 2026-06-25 (2)
+
+### `71c2453` · Revert Export CSV/Last synced row — 撤回导出按钮的单独一行
+
+**🇨🇳 中文** — 根据反馈撤回上一条改动：「Export CSV」与「Last synced」从单独一行撤回，重新回到 Filter By 筛选 pill 同一行（依旧靠 `ml-auto` 折行到右侧），恢复成改动前的样子。
+
+**🇬🇧 English** — Reverted the previous push's change per feedback: "Export CSV" and "Last synced" are back to sharing the wrapped Filter By pill row via `ml-auto`, instead of their own separate row.
+
+**Files / 改动:** `features/stock-locator/StockLocator.tsx`
+
+---
+
 ## Pending / 未来 (not yet built — 尚未开始)
 
 - **Available-to-Sell**（销售视图；`salesOrders` 已是真实状态，落地视图待建）
