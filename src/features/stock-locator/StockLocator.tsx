@@ -453,6 +453,7 @@ export function StockLocator({ tags, floorView, role, openTagId, onTagOpened, on
     <>
     {banner}
     <div className="p-6 bg-cream min-h-full relative">
+      <div className="max-w-[1600px] mx-auto">
       <div className="relative mb-4">
         <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-sec" />
         <input
@@ -506,7 +507,7 @@ export function StockLocator({ tags, floorView, role, openTagId, onTagOpened, on
         </div>
       </div>
 
-      <div className="grid grid-cols-4 gap-3 mb-5">
+      <div className="grid grid-cols-2 2xl:grid-cols-4 gap-3 mb-5">
         {summaryCards.map(([label, value], i) => {
           const th = cardThemes[i % cardThemes.length];
           return (
@@ -519,6 +520,7 @@ export function StockLocator({ tags, floorView, role, openTagId, onTagOpened, on
       </div>
 
       <div className="bg-white rounded-[10px] overflow-hidden shadow-[0_1px_4px_rgba(0,0,0,0.07)]">
+        <div className="overflow-x-auto">
         <table className="w-full border-collapse text-[13px]">
           <thead>
             <tr className="bg-[#F9FAFB] border-b border-sage">
@@ -578,6 +580,8 @@ export function StockLocator({ tags, floorView, role, openTagId, onTagOpened, on
             )}
           </tbody>
         </table>
+        </div>
+      </div>
       </div>
 
       {selTag && (

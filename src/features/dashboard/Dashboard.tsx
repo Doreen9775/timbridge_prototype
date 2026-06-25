@@ -115,6 +115,7 @@ export function Dashboard({ tags, floorView, onNavigateToLocator, onOpenTag }: D
 
   return (
     <div className="p-6 bg-cream min-h-full">
+      <div className="max-w-[1600px] mx-auto">
       <div className="flex items-center justify-between mb-5">
         <div className="flex gap-2">
           {["Today", "This Week", "This Month"].map((t) => {
@@ -135,7 +136,7 @@ export function Dashboard({ tags, floorView, onNavigateToLocator, onOpenTag }: D
         <span className="text-xs text-text-ter">Last updated 14:32</span>
       </div>
 
-      <div className="grid grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-2 2xl:grid-cols-4 gap-4 mb-6">
         {kpis.map((c, i) => {
           const th = kpiThemes[i % kpiThemes.length];
           return (
@@ -279,6 +280,7 @@ export function Dashboard({ tags, floorView, onNavigateToLocator, onOpenTag }: D
         {filteredActivity.length === 0 && (
           <div className="py-6 text-center text-xs text-text-ter">No activity in this category.</div>
         )}
+      </div>
       </div>
     </div>
   );
