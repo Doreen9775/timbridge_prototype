@@ -35,6 +35,12 @@ function formatEntryDate(iso: string): string {
 
 const toISO = (y: number, m: number, d: number) => `${y}-${String(m + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
 
+// "2026-02-14" → "14 Feb 2026" — shown directly on the Date filter trigger once a date is chosen.
+function formatFilterDate(iso: string): string {
+  const [y, m, d] = iso.split("-").map(Number);
+  return `${d} ${MONTHS_SHORT[m - 1]} ${y}`;
+}
+
 // "Jun 23 2026 14:32" — for movement-history events written on save.
 function nowStamp(): string {
   const d = new Date();
@@ -75,6 +81,7 @@ function sameSet(a: string[], b: string[]): boolean {
 // Shared dropdown shell: trigger (label + count badge + chevron) → click-outside popover → Apply Now footer.
 function FilterDropdown({
   label,
+  triggerLabel,
   appliedCount,
   applyEnabled,
   onApply,
@@ -83,6 +90,7 @@ function FilterDropdown({
   note,
 }: {
   label: string;
+  triggerLabel?: string; // overrides the label+count badge with specific text (e.g. a chosen date)
   appliedCount: number;
   applyEnabled: boolean;
   onApply: () => void;
@@ -104,8 +112,8 @@ function FilterDropdown({
           appliedCount > 0 ? "border-coral text-coral hover:bg-coral/5" : "border-sage text-text-sec hover:border-coral hover:text-coral",
         ].join(" ")}
       >
-        <span>{label}</span>
-        {appliedCount > 0 && (
+        <span>{triggerLabel ?? label}</span>
+        {!triggerLabel && appliedCount > 0 && (
           <span className="bg-coral text-white rounded-full text-[10px] leading-none px-1.5 py-0.5 font-semibold">{appliedCount}</span>
         )}
         <ChevronDown size={13} className={`transition-transform ${open ? "rotate-180" : ""}`} />
@@ -190,9 +198,13 @@ function DateFilter({ applied, onApply }: { applied: string[]; onApply: (v: stri
   const cells: (number | null)[] = [...Array(firstDow).fill(null), ...Array.from({ length: daysInMonth }, (_, i) => i + 1)];
   while (cells.length % 7 !== 0) cells.push(null);
 
+  const triggerLabel =
+    applied.length === 1 ? formatFilterDate(applied[0]) : applied.length > 1 ? `${applied.length} dates` : undefined;
+
   return (
     <FilterDropdown
       label="Date"
+      triggerLabel={triggerLabel}
       appliedCount={applied.length}
       applyEnabled={!sameSet(draft, applied)}
       onApply={() => onApply(draft)}
@@ -492,14 +504,30 @@ export function StockLocator({ tags, floorView, role, openTagId, onTagOpened, on
     {banner}
     <div className="p-6 bg-cream min-h-full relative">
       <div className="max-w-[1600px] mx-auto">
-      <div className="relative mb-4">
-        <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-sec" />
-        <input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search by Tag ID, species, grade, or location..."
-          className="w-full py-2.5 pl-[38px] pr-3 text-sm border border-sage rounded-lg outline-none bg-white box-border"
-        />
+      <div className="flex gap-3 mb-4 items-center">
+        <div className="relative flex-1">
+          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-sec" />
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search by Tag ID, species, grade, or location..."
+            className="w-full py-2.5 pl-[38px] pr-3 text-sm border border-sage rounded-lg outline-none bg-white box-border"
+          />
+        </div>
+        <button
+          onClick={handleExport}
+          disabled={checkedIds.size === 0}
+          title={checkedIds.size === 0 ? "Select one or more tags to export" : `Export ${checkedIds.size} selected tag${checkedIds.size === 1 ? "" : "s"}`}
+          className={[
+            "px-3.5 py-1.5 text-[13px] rounded-md border flex items-center gap-1.5 transition-colors whitespace-nowrap",
+            checkedIds.size === 0
+              ? "border-sage bg-white text-text-ter opacity-60 cursor-not-allowed"
+              : "border-coral bg-coral text-white cursor-pointer hover:brightness-95",
+          ].join(" ")}
+        >
+          <Download size={14} />Export CSV{checkedIds.size > 0 ? ` (${checkedIds.size})` : ""}
+        </button>
+        <span className="text-xs text-text-ter whitespace-nowrap">Last synced 14:32</span>
       </div>
 
       <div className="flex gap-2.5 mb-4 flex-wrap items-center">
@@ -530,22 +558,6 @@ export function StockLocator({ tags, floorView, role, openTagId, onTagOpened, on
             <RotateCcw size={13} />Reset Filter
           </button>
         )}
-        <div className="ml-auto flex items-center gap-3">
-          <button
-            onClick={handleExport}
-            disabled={checkedIds.size === 0}
-            title={checkedIds.size === 0 ? "Select one or more tags to export" : `Export ${checkedIds.size} selected tag${checkedIds.size === 1 ? "" : "s"}`}
-            className={[
-              "px-3.5 py-1.5 text-[13px] rounded-md border flex items-center gap-1.5 transition-colors",
-              checkedIds.size === 0
-                ? "border-sage bg-white text-text-ter opacity-60 cursor-not-allowed"
-                : "border-coral bg-coral text-white cursor-pointer hover:brightness-95",
-            ].join(" ")}
-          >
-            <Download size={14} />Export CSV{checkedIds.size > 0 ? ` (${checkedIds.size})` : ""}
-          </button>
-          <span className="text-xs text-text-ter self-center">Last synced 14:32</span>
-        </div>
       </div>
 
       <div className="grid grid-cols-4 gap-3 mb-5">
@@ -583,13 +595,21 @@ export function StockLocator({ tags, floorView, role, openTagId, onTagOpened, on
           <tbody>
             {filtered.map((t, i) => {
               const hl = !!search && (t.id.toLowerCase().includes(search.toLowerCase()) || t.species.toLowerCase().includes(search.toLowerCase()));
+              const isSelected = selected === t.id;
+              const isChecked = checkedIds.has(t.id);
               return (
                 <tr
                   key={t.id}
                   onClick={() => handleRowClick(t.id)}
                   className={[
-                    "border-b border-[#F3F4F6] cursor-pointer hover:bg-sage/20",
-                    hl ? "bg-coral/[0.07]" : i % 2 === 0 ? "bg-transparent" : "bg-[#FAFAFA]",
+                    "border-b border-[#F3F4F6] cursor-pointer",
+                    isSelected
+                      ? "bg-coral/[0.12] hover:bg-coral/[0.18]"
+                      : isChecked
+                        ? "bg-sage/25 hover:bg-sage/35"
+                        : hl
+                          ? "bg-coral/[0.07] hover:bg-sage/20"
+                          : `${i % 2 === 0 ? "bg-transparent" : "bg-[#FAFAFA]"} hover:bg-sage/20`,
                   ].join(" ")}
                 >
                   <td className="pl-3.5 pr-1 py-[11px]" onClick={(e) => e.stopPropagation()}>
@@ -1084,7 +1104,7 @@ function DetailDrawer({
                     <span className="flex-1 text-text truncate">{so.customer}</span>
                     <SOStatusPill status={so.status} />
                     <span className="text-text-sec whitespace-nowrap">{li.qty.toLocaleString()} pcs</span>
-                    <span className="text-text-sec whitespace-nowrap">${li.unitPrice.toFixed(2)}</span>
+                    <span className="text-text-sec whitespace-nowrap">${(li.qty * li.unitPrice).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                   </div>
                 ))}
               </div>
