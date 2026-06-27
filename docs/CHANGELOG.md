@@ -377,7 +377,29 @@ A history of every commit (push) on `main`, in chronological order, with what wa
 **Files / 改动:** `components/layout/Sidebar.tsx`, `index.css`
 
 ---
+## 2026-06-26
 
+### Stock Locator UX fixes — Stock Locator 体验细节修复
+
+> 本条为一次 push 的汇总（含多项改动）。/ One push, several fixes.
+
+**🇨🇳 中文**
+- **Linked Transactions 显示总价**：详情面板「Linked Transactions」区块原来显示的是单价（$/件），现在改成数量 × 单价的总价，与销售单实际金额一致。
+- **Date 筛选直接显示具体日期**：选中 1 个日期后，筛选按钮不再显示通用的「Date + 数字徽章」，而是直接显示该日期（如「1 Jun 2026」）；选中多个则显示「N dates」。
+- **Export CSV / Last synced 挪到搜索框同一行**：原来和 Filter By 的筛选 pill 挤在一起，现在和顶部搜索框同一行右对齐；Filter By 的筛选 pill 单独占一行。
+- **选中的 Tag 行高亮**：点开详情面板后，对应的表格行会高亮（珊瑚色），关闭面板后恢复正常；鼠标悬停在已高亮的行上时保持高亮（不会被悬停色覆盖掉）。
+- **勾选框选中的行也高亮**：勾选导出用的复选框后，该行同样会高亮（绿色调，与选中态的珊瑚色区分），悬停时同理保持高亮。
+
+**🇬🇧 English**
+- **Linked Transactions now shows the line item's total price** (qty × unit price) instead of the per-unit price, matching the actual order amount.
+- **Date filter shows the specific date directly**: once one date is picked, the filter button shows that date (e.g. "1 Jun 2026") instead of a generic "Date" + count badge; multiple dates show "N dates".
+- **Export CSV / Last synced moved to share the search-bar row**, instead of crowding the Filter By pill row; Filter By pills now have their own row.
+- **Selected tag row is highlighted**: opening a tag's detail panel highlights its table row (coral tint), clearing when the panel closes; hovering the highlighted row keeps it highlighted instead of being overridden by the generic hover color.
+- **Checkbox-checked rows are highlighted too** (sage tint, distinct from the coral selection highlight), with the same hover-preserves-highlight fix.
+
+**Files / 改动:** `features/stock-locator/StockLocator.tsx`
+
+---
 ## Pending / 未来 (not yet built — 尚未开始)
 
 - **Available-to-Sell**（销售视图；`salesOrders` 已是真实状态，落地视图待建）
