@@ -781,6 +781,9 @@ function SupplierField({ value, onChange }: { value: string; onChange: (v: strin
 }
 
 // ── Metadata accordion section ───────────────────────────────────────────────
+// One Edit/Done toggle next to the section title puts every row in the block
+// into edit mode at once — rather than a pencil per row. Edits apply live as
+// the user types (no separate per-row save); Done just exits the edit view.
 function SectionAccordion({
   spec, aiItems, manualItems, onAdd, onRemoveManual, onEditAi, onEditManual,
 }: {
@@ -793,10 +796,13 @@ function SectionAccordion({
   onEditManual: (index: number, value: string) => void;
 }) {
   const [open, setOpen] = useState(spec.defaultOpen);
+  const [editingBlock, setEditingBlock] = useState(false);
   if (aiItems.length === 0 && manualItems.length === 0 && !spec.alwaysRender) return null;
   if (aiItems.length === 0 && !spec.alwaysRender) return null;
 
   const totalCount = aiItems.length + manualItems.length;
+  const hasFields = totalCount > 0;
+
   return (
     <div className="bg-white rounded-lg border border-sage/60 overflow-hidden">
       <div
@@ -807,20 +813,40 @@ function SectionAccordion({
           <span className="text-[12px] font-semibold text-ink truncate">{spec.title}</span>
           <span className="text-[10px] text-text-ter bg-sage/30 rounded-full px-1.5 py-0.5">{totalCount}</span>
         </div>
-        <ChevronDown size={13} className={`text-text-sec transition-transform shrink-0 ${open ? "rotate-180" : ""}`} />
+        <div className="flex items-center gap-2 shrink-0">
+          {hasFields ? (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                if (!editingBlock) setOpen(true);
+                setEditingBlock((b) => !b);
+              }}
+              className={[
+                "flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-semibold border cursor-pointer",
+                editingBlock
+                  ? "bg-coral text-white border-coral"
+                  : "bg-transparent text-text-sec border-sage hover:border-coral hover:text-coral",
+              ].join(" ")}
+            >
+              {editingBlock ? <><CheckCircle size={10} />Done</> : <><Edit3 size={10} />Edit</>}
+            </button>
+          ) : null}
+          <ChevronDown size={13} className={`text-text-sec transition-transform ${open ? "rotate-180" : ""}`} />
+        </div>
       </div>
       {open ? (
         <div className="border-t border-sage/40">
           {aiItems.map((f, i) => (
-            <FieldRow key={`ai-${i}`} field={f} onEdit={(value) => onEditAi(i, value)} />
+            <FieldRow key={`ai-${i}`} field={f} editing={editingBlock} onChange={(value) => onEditAi(i, value)} />
           ))}
           {manualItems.map((f, i) => (
             <FieldRow
               key={`m-${i}`}
               field={f}
               manual
+              editing={editingBlock}
+              onChange={(value) => onEditManual(i, value)}
               onDelete={() => onRemoveManual(i)}
-              onEdit={(value) => onEditManual(i, value)}
             />
           ))}
           <AddFieldRow onAdd={onAdd} />
@@ -830,53 +856,37 @@ function SectionAccordion({
   );
 }
 
-// Every metadata field row — AI-extracted or manual — is editable in place via
-// the pencil icon, same interaction pattern as the Summary Card's Supplier field.
 function FieldRow({
-  field, manual, onDelete, onEdit,
+  field, manual, editing, onChange, onDelete,
 }: {
   field: SlipField;
   manual?: boolean;
+  editing: boolean;
+  onChange: (value: string) => void;
   onDelete?: () => void;
-  onEdit: (value: string) => void;
 }) {
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState(field.value);
-
-  const startEdit = () => {
-    setDraft(field.value);
-    setEditing(true);
-  };
-  const commit = () => {
-    onEdit(draft.trim());
-    setEditing(false);
-  };
-  const cancel = () => {
-    setDraft(field.value);
-    setEditing(false);
-  };
-
   if (editing) {
     return (
-      <div className="flex items-start gap-2 px-3 py-2 border-t border-sage/20 first:border-t-0 text-[11.5px]">
-        <div className="w-[88px] shrink-0 text-text-sec leading-tight pt-1">{toTitleCase(field.field)}</div>
-        <div className="flex-1 min-w-0 flex items-center gap-1">
-          <input
-            autoFocus
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") commit();
-              if (e.key === "Escape") cancel();
-            }}
-            className="flex-1 min-w-0 px-1.5 py-1 text-[11.5px] border border-sage rounded-md bg-white outline-none focus:border-coral"
-          />
-          <button onClick={commit} aria-label="Save field" className="shrink-0 p-1 rounded bg-coral text-white cursor-pointer hover:brightness-95">
-            <CheckCircle size={10} />
-          </button>
-          <button onClick={cancel} aria-label="Cancel edit" className="shrink-0 p-1 rounded border border-sage text-text-sec cursor-pointer hover:border-coral hover:text-coral">
-            <X size={10} />
-          </button>
+      <div className="flex items-center gap-2 px-3 py-2 border-t border-sage/20 first:border-t-0 text-[11.5px]">
+        <div className="w-[88px] shrink-0 text-text-sec leading-tight">{toTitleCase(field.field)}</div>
+        <input
+          value={field.value}
+          onChange={(e) => onChange(e.target.value)}
+          className="flex-1 min-w-0 px-1.5 py-1 text-[11.5px] border border-sage rounded-md bg-white outline-none focus:border-coral"
+        />
+        <div className="flex items-center gap-1 shrink-0">
+          {manual ? (
+            <span className="text-[9px] uppercase tracking-wide bg-[#E5E7EB] text-[#4B5563] rounded-full px-1.5 py-0.5 font-semibold">
+              Manual
+            </span>
+          ) : (
+            <ConfidenceDot level={field.confidence} />
+          )}
+          {onDelete ? (
+            <button onClick={onDelete} aria-label="Delete field" className="shrink-0 p-0.5 rounded hover:bg-sage/30 cursor-pointer text-text-ter hover:text-coral">
+              <X size={11} />
+            </button>
+          ) : null}
         </div>
       </div>
     );
@@ -894,9 +904,6 @@ function FieldRow({
         ) : (
           <ConfidenceDot level={field.confidence} />
         )}
-        <button onClick={startEdit} aria-label="Edit field" className="p-0.5 rounded hover:bg-sage/30 cursor-pointer text-text-ter hover:text-coral">
-          <Edit3 size={10} />
-        </button>
         {onDelete ? (
           <button onClick={onDelete} aria-label="Delete field" className="p-0.5 rounded hover:bg-sage/30 cursor-pointer text-text-ter hover:text-coral">
             <X size={11} />
