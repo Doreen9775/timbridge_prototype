@@ -520,6 +520,24 @@ A history of every commit (push) on `main`, in chronological order, with what wa
 - `src/App.tsx` (`avail` route + Floor redirect; DeliverySlips wired with `onNavigateToLocator`)
 
 ---
+
+## 2026-06-28 (2)
+
+### Delivery Slips：Supplier 可编辑换行 + 左侧面板可拖拽变宽 — editable/wrapping Supplier + draggable panel resize
+
+**🇨🇳 中文**
+- **Supplier 不再截断**：Summary 卡里的 Supplier 原来超长就被省略号截断成一行，现在改成单独一行展示并允许自然换行（如 "AC Transport Ltd. (Surrey, BC)" 会显示两行）。
+- **Supplier 可编辑**：旁边新增铅笔图标，点击进入编辑态（文本框 + 保存 ✓ / 取消 ✕），用于 AI 的候选字段查找（supplier/shipper/vendor/carrier 等）没能命中真实文档里不常见表头时的人工修正。编辑值会同步用到 Confirm & Create 时写入新 Tag 的 `supplier` 字段；清空后自动恢复到 AI 识别值。
+- **左侧 Metadata 面板可拖拽变宽**：左侧栏与右侧 Cargo Line Items 之间新增一条可拖拽分隔条（hover 高亮 coral），左右拖动可在 220px–480px 范围内调整面板宽度，方便看清 Logistics / Parties 里较长的字段值（如 Vessel 名称、地址）不被挤压。
+
+**🇬🇧 English**
+- **Supplier no longer truncates**: previously ellipsis-clipped to one line in the Summary Card; now its own row, wrapping naturally onto multiple lines (e.g. "AC Transport Ltd. (Surrey, BC)" renders on two lines).
+- **Supplier is now editable**: a pencil icon toggles an inline text field (Save ✓ / Cancel ✕) for correcting cases where the AI's candidate lookup (supplier/shipper/vendor/carrier/…) misses an unusual document header. The edited value feeds both the Summary Card display and the `Tag.supplier` written on Confirm & Create; clearing the field reverts to the AI-derived value.
+- **Left metadata panel is now drag-resizable**: a draggable divider between the left aside and the Cargo Line Items area lets the panel width be adjusted (clamped 220–480px), giving room for long Logistics/Parties values (vessel names, addresses) that were getting cramped at the fixed 260px width.
+
+**Files / 改动:** `features/delivery-slips/DeliverySlips.tsx`
+
+---
 ## Pending / 未来 (not yet built — 尚未开始)
 
 - **Reports & Saved Views**（报表与保存视图）
