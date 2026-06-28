@@ -556,6 +556,20 @@ A history of every commit (push) on `main`, in chronological order, with what wa
 **Files / 改动:** `features/delivery-slips/DeliverySlips.tsx`
 
 ---
+
+## 2026-06-28 (4)
+
+### Delivery Slips：Metadata 编辑改为整块切换 — metadata Edit moved to block-level
+
+**🇨🇳 中文**
+- **编辑入口从「每一行」改为「每个分类标题旁」**：上一条改动里给每行字段单独加的铅笔图标撤掉了，改成每个 Metadata 分类（Shipment Identity / Logistics / Parties / Dates & Location / Financial / Unrecognized）标题旁放一个 Edit 按钮——点一下，整块里的所有字段同时变成可输入框（若分类是折叠的会自动展开），编辑内容实时生效；再点 Done 一次性退出编辑态、回到只读展示。和 Cargo Line Items 卡片现有的 Edit / Done 交互保持一致，不再有第二套编辑模式。
+
+**🇬🇧 English**
+- **Edit entry point moved from per-row to per-block**: the previous batch's per-field pencil icon is gone — each metadata section (Shipment Identity / Logistics / Parties / Dates & Location / Financial / Unrecognized) now has a single Edit button next to its title. Clicking it opens the section if collapsed and switches every field in that block into an inline input at once, applying edits live as you type; Done exits back to the read-only view in one click. Matches the existing Edit/Done interaction already used on the Cargo Line Item cards instead of introducing a second pattern.
+
+**Files / 改动:** `features/delivery-slips/DeliverySlips.tsx`
+
+---
 ## Pending / 未来 (not yet built — 尚未开始)
 
 - **Reports & Saved Views**（报表与保存视图）
