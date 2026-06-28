@@ -538,6 +538,24 @@ A history of every commit (push) on `main`, in chronological order, with what wa
 **Files / 改动:** `features/delivery-slips/DeliverySlips.tsx`
 
 ---
+
+## 2026-06-28 (3)
+
+### Delivery Slips：每个 Metadata 字段可编辑 + 拖拽下限调大 — per-field edit in every metadata section + larger resize floor
+
+**🇨🇳 中文**
+- **6 个 Metadata 分类的每一行都可编辑**：Shipment Identity / Logistics / Parties / Dates & Location / Financial / Unrecognized —— 不论是 AI 提取的字段还是手动 `+ Add field` 加的字段，行尾都新增铅笔图标，点击进入编辑态（同 Supplier 的交互模式：文本框 + 保存 ✓ / 取消 ✕）。
+- **Supplier 查找联动**：Parties（或 Logistics）里的 supplier/shipper/vendor/carrier 字段一旦被手动改值，Summary 卡的 Supplier 与 Confirm & Create 写入新 Tag 的 `supplier` 也会同步更新（除非 Summary 卡上单独覆盖过）。内部把只读的 `parsed.sections` 换成了一份可编辑副本 `editedSections`，与既有的 line items 可编辑模式保持一致。
+- **拖拽面板宽度下限调大**：原来最窄可拖到 220px，会导致 Total FBM / Total Pcs / Total Pkgs 三格统计数字挤在一起重叠；下限提到 300px，三格数字与标签在最窄状态下也不会重叠。
+
+**🇬🇧 English**
+- **Every row in all 6 metadata sections is now editable**: Shipment Identity / Logistics / Parties / Dates & Location / Financial / Unrecognized — both AI-extracted fields and manually-added ones get a pencil icon at the end of the row, toggling the same inline edit pattern used by the Supplier field (text input + Save ✓ / Cancel ✕).
+- **Supplier lookup now reads the edited copy**: correcting a supplier/shipper/vendor/carrier field directly inside Parties (or Logistics) updates the Summary Card's Supplier cell and the `Tag.supplier` written on Confirm & Create (unless overridden separately via the Summary Card). Internally swapped the read-only `parsed.sections` for an editable `editedSections` copy, mirroring the existing line-items editing pattern.
+- **Raised the panel resize floor**: the divide could previously be dragged down to 220px, which caused the Total FBM / Total Pcs / Total Pkgs stat grid to overlap. Floor raised to 300px so the stat numbers and labels never collide at the narrowest width.
+
+**Files / 改动:** `features/delivery-slips/DeliverySlips.tsx`
+
+---
 ## Pending / 未来 (not yet built — 尚未开始)
 
 - **Reports & Saved Views**（报表与保存视图）
