@@ -97,8 +97,12 @@ export interface EntryFilter {
   tagIds?: string[];
   status?: TagStatus[];
   species?: Species[];
+  grade?: Grade[]; // feeds the existing Grade filter — used by Delivery Slip "Match to Tags"
   yard?: string[]; // feeds the existing Location filter — used by the Dashboard Yard Map drill-through
   lowQty?: boolean;
+  // Resolves to a tagIds set (Sales Orders → linked tags). Auto-opens the drawer
+  // if exactly one tag matches. Used by Delivery Slip "Match to Transaction".
+  orderNo?: string;
 }
 
 // ─── Recent records (top-nav "Recent" dropdown; persisted to localStorage) ────────

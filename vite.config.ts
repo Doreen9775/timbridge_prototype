@@ -24,8 +24,8 @@ function devParseSlipApi(apiKey: string | undefined): Plugin {
           const { base64, mediaType, isPDF } = JSON.parse(Buffer.concat(chunks).toString('utf8'))
           // Load the shared server core through Vite's SSR pipeline (handles the TS).
           const core = await server.ssrLoadModule('/api/_core.ts')
-          const items = await core.extractLineItems(base64, mediaType, isPDF, apiKey)
-          send(200, { items })
+          const parsed = await core.extractSlipSections(base64, mediaType, isPDF, apiKey)
+          send(200, { parsed })
         } catch (err) {
           send(502, { error: err instanceof Error ? err.message : 'Parsing failed.' })
         }

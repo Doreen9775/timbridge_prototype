@@ -9,6 +9,7 @@ import { TagEntry } from "@/features/tag-entry/TagEntry";
 import { DeliverySlips } from "@/features/delivery-slips/DeliverySlips";
 import { LoginPage } from "@/features/auth/LoginPage";
 import { CustomValuesSettings } from "@/features/settings/CustomValuesSettings";
+import { AvailableToSell } from "@/features/available-to-sell/AvailableToSell";
 import { RecentRecordsProvider } from "@/hooks/useRecentRecords";
 import { LookupsProvider } from "@/hooks/useLookups";
 import type { EntryFilter, RecentRecord, Tag } from "@/lib/types";
@@ -30,6 +31,12 @@ export default function App() {
   // (e.g. switching to Floor View) or if it's somehow reached otherwise.
   useEffect(() => {
     if (nav === "settings" && role !== "manager") setNav("dashboard");
+  }, [nav, role]);
+
+  // Available to Sell is Manager + Sales only; bounce Floor to Stock Locator if they
+  // somehow reach it (sidebar already hides it for Floor, this is defense-in-depth).
+  useEffect(() => {
+    if (nav === "avail" && role === "floor") setNav("locator");
   }, [nav, role]);
 
   // Every sign-in lands on the Dashboard, regardless of where the last session left off.
@@ -101,9 +108,18 @@ export default function App() {
               {nav === "dashboard" && <Dashboard tags={tags} floorView={isFloor} onNavigateToLocator={handleNavigateToLocator} onOpenTag={handleOpenTagFromDashboard} />}
               {nav === "locator" && <StockLocator tags={tags} floorView={isFloor} role={role} openTagId={pendingTagId} onTagOpened={handleTagOpened} onUpdateTag={handleUpdateTag} entryFilter={entryFilter} onClearEntryFilter={() => setEntryFilter(null)} salesOrders={salesOrders} onLinkSalesOrder={handleLinkSalesOrder} />}
               {nav === "tagentry" && <TagEntry tags={tags} setTags={setTags} floorView={isFloor} onViewInInventory={handleViewInInventory} />}
-              {nav === "delivery" && <DeliverySlips tags={tags} setTags={setTags} onViewInInventory={handleViewInInventory} />}
+              {nav === "delivery" && <DeliverySlips tags={tags} setTags={setTags} onNavigateToLocator={handleNavigateToLocator} />}
               {nav === "settings" && role === "manager" && <CustomValuesSettings />}
-              {!["dashboard", "locator", "tagentry", "delivery", "settings"].includes(nav) && <ComingSoon name={nav} />}
+              {nav === "avail" && role !== "floor" && (
+                <AvailableToSell
+                  tags={tags}
+                  role={role}
+                  salesOrders={salesOrders}
+                  onUpdateTag={handleUpdateTag}
+                  onLinkSalesOrder={handleLinkSalesOrder}
+                />
+              )}
+              {!["dashboard", "locator", "tagentry", "delivery", "settings", "avail"].includes(nav) && <ComingSoon name={nav} />}
             </div>
           </div>
         </div>

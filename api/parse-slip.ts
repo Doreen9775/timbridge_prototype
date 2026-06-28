@@ -1,7 +1,7 @@
-import { extractLineItems } from "./_core";
+import { extractSlipSections } from "./_core";
 
 // Vercel Edge Function. Receives { base64, mediaType, isPDF } from the browser, calls
-// Anthropic with the server-only ANTHROPIC_API_KEY, and returns { items }.
+// Anthropic with the server-only ANTHROPIC_API_KEY, and returns { parsed: ParsedSlip }.
 export const config = { runtime: "edge" };
 
 function json(body: unknown, status = 200): Response {
@@ -21,8 +21,8 @@ export default async function handler(req: Request): Promise<Response> {
       isPDF?: boolean;
     };
     if (!base64) return json({ error: "No file data received." }, 400);
-    const items = await extractLineItems(base64, mediaType ?? "application/pdf", Boolean(isPDF), apiKey);
-    return json({ items });
+    const parsed = await extractSlipSections(base64, mediaType ?? "application/pdf", Boolean(isPDF), apiKey);
+    return json({ parsed });
   } catch (err) {
     return json({ error: err instanceof Error ? err.message : "Parsing failed." }, 502);
   }
