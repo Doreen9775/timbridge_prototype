@@ -400,9 +400,128 @@ A history of every commit (push) on `main`, in chronological order, with what wa
 **Files / 改动:** `features/stock-locator/StockLocator.tsx`
 
 ---
+
+## 2026-06-28
+
+### Available to Sell 上线 + Delivery Slips 解析与详情大重做 — Available to Sell launch + Delivery Slips parser & detail overhaul
+
+> 本条为一次 push 的汇总（多次迭代到当前形态）。/ One push, iterated to the current form.
+
+**🇨🇳 中文**
+
+- **Available to Sell 销售视图（新页面）**
+  - 抽离筛选原件：把 Stock Locator 的 `FilterDropdown` / `PillFilter` / `DateFilter` 及日历助手迁到 `features/stock-locator/filters.tsx`，两个页面共享，Stock Locator 行为不变。
+  - 新页面 `features/available-to-sell/AvailableToSell.tsx`：只显示 `status === "Available"` 的 tag。9 列：Tag ID / Species / Grade / Dimensions (T×W×L) / Pieces / Total FBM / Location / Market Value / Days in Yard。Days in Yard 由 `history[0].t` 解析得到。
+  - 四个 PillFilter（Species / Grade / Length / Location），选项从当前 Available 池动态推导；空筛选状态有「Clear filters」链接。
+  - 每行 Reserve 按钮 → 弹窗只列 **Open** 的 Sales Order；Confirm 走既有 `onUpdateTag` + `onLinkSalesOrder` 通路把 tag 置为 Reserved、给对应 SO 追加 lineItem，落地后跳出 3 秒的 sage 成功 toast，tag 立刻从列表消失。
+  - 仅 Manager + Sales 可见；Floor 切到该路由自动 redirect 到 Stock Locator（沿用 Settings 的 redirect 模式）。
+
+- **Delivery Slips 解析与详情大重做（一次 push 多次迭代）**
+
+  **AI Prompt 与数据形状（服务端）**
+  - 原 prompt 按行返回 11 字段 (`species/grade/thick/...`) → 新 prompt 返回 `{ lineItems, sections }` 双部分结构：
+    - `lineItems`: 一份带 `species/grade/thick/width/length/qty/pkgs?/state/milling/notes/confidence` 的产品行数组；当 PDF 含 Package Details 时再挂一个 `tags: [{tagNo, pcs, fbm}, ...]` 子数组（per-tag tally）。
+    - `sections`: 按 6 大 ERP 分类的 key-value 元数据 — `shipment_identity / logistics / parties / dates_location / financial / unrecognized`，每条带 `field` (camelCase) / `value` / `confidence`。
+  - **Financial 单独成类**：Payment Terms / Taxable Amount / Sales Tax / Total Invoice / Discount Note 等不再掉进 Unrecognized。
+  - **明确支持多种文档形态**：发货单 Summary 表、Invoice 的 Description 列、Pick / Packing list 都算 line item — 修掉了之前 prompt 暗示「只看 Summary 行」导致 Invoice PDF（如 `16li2.pdf`）解析返回空数组的问题。
+  - 服务端 `ensureFieldArray` / `ensureLineItemArray` 防御性清洗（drop 缺关键字段的条目，confidence 兜底为 `low`），UI 永远拿到完整的 6-section 形状。Wire 字段从 `items` → `parsed`。
+
+  **详情页三栏式布局（前端）**
+  - 三栏 `h-full flex flex-col` 容器内 `flex overflow-hidden` 中间区域：
+    - **左侧 260px 侧栏**（独立滚动）：上方 Summary 卡 + 下方 6 个 metadata accordion；
+    - **中间主区**（独立滚动）：line item 卡片列表；
+    - **底部 sticky 操作栏**：左 ⚠️ 警告 + 右 Cancel + Confirm CTA。
+  - 没有用 `position: fixed`，没有动 App.tsx 全局布局。
+
+  **Summary 卡**：4 格主数据 Total FBM / Total pcs / Total pkgs / Supplier；次级一行 `N tags · M products`。Supplier 与 PO Number 用「按候选优先级 + 多 section 兜底」查找（supplier → shipper → vendor → from → carrier；poNumber → po → purchaseOrder → orderNo → bookingNumber），实际 PDF 解析常见命名都能命中；不重复显示 Slip No / Order No（那些在下方 Shipment Identity accordion 里）。
+
+  **6 个 Metadata Accordion**：每个分类一张卡，标题 + 数量徽章 + 折叠箭头；Shipment Identity 永远渲染、Unrecognized 默认折叠、其它分类有内容才显示。每条字段：左 Title Case 标签（`orderNo` → `Order No`）/ 右值 + Confidence dot（高=实心绿 6px / 中=实心琥珀 6px / 低=红边空心环 6px，hover 显示「Review recommended」/「Verify manually」）。底部 `+ Add field` 内联输入框可手动补字段，手动条目带灰色「Manual」徽章 + ✕ 删除按钮。
+
+  **Line Item 卡片（Mode A / Mode B 自动）**
+  - 判定逻辑：`lineItems.some(it => it.tags?.length > 0) ? 'A' : 'B'`。
+  - 每条 line item 一张卡，**选中 = coral 实色边框 + 完全不透明**；未选中 = sage 边 + 60% 透明度。
+  - 卡内默认行：☑ + 下拉箭头（仅 Mode A 有 tags 时显示）+ 物种 + 等级胶囊 + `T×W × L'` 单色字号 + `N pcs` + `State · Milling` + `· N pkgs` + Confidence dot + **FBM 数字右对齐**。下方一行小灰字显示 `notes`（如 `2×6×12 #1 S4S HT White; 2.000 PKG; ...`）。
+  - **Mode A 展开**：卡内嵌入 Package Details 列表，每条 child 行：🏷 + `tagNo` + `270 pcs · 964 FBM · 1 pkg`。
+  - **Per-row Edit**（恢复）：点 Edit → 卡体切换为 4×2 下拉网格（Species / Grade / State / Milling / Thick / Width / Length / Qty）+ 实时 FBM 公式回显（`FBM = 1×4×14×1080÷12 = 3,840`）。非标准等级（Stud / Utility 等）由 `optionsFor` 自动 prepend 当前值，保持 select 有效。Done 切回展示态。
+
+  **Confirm & Create**
+  - **Mode A**: 每个勾选 group 的 child tag 数 → 等量 Pending Tag（每条 tag 的 species/grade/dims/state/milling 继承父 group，`qty/fbm` 取 child tally，slip 的 `tagNo` 写入 history event `"... · Slip Tag: 999048597"`）。Demo A 数据 7 个 group → 16 个 tag。
+  - **Mode B**: 每个勾选 line item → 一个 Pending Tag。
+  - 落地后跳到 Stock Locator 并只显示新建 tag，触发现有的 sage「N tags created · View all stock」横幅。
+
+  **底部 sticky 操作栏**：⚠️ 警告条仅在有中/低信心条目时出现（`N items with medium or low confidence — review before confirming`）；右侧 Cancel（→ 返回上传）+ Confirm & create N tags（coral CTA，N 实时反映 Mode A 子项 / Mode B 行数）。
+
+  **两份 demo 数据**：上传卡的「— or try a demo —」下方一对按钮：
+  - **Mode A — Package Details**：AC Transport 出口发货单形态，7 个 SPF/Hem-Fir line items × 16 个 tag children；
+  - **Mode B — Flat Invoice**：参考用户给的 SPF 发票 `16li2.pdf`，3 行 SPF #1 2×6 × 12'/14'/16'。
+
+- **`EntryFilter` 扩展**：新增 `grade?: Grade[]` 和 `orderNo?: string`。Stock Locator 收到 `orderNo` 时解析对应 SO 的 `lineItems` → 拼出 `idSet`；如果只有 1 个匹配 tag，自动打开 drawer 并定位到 Linked Transactions（沿用 deep-link 模式）。
+
+**🇬🇧 English**
+
+- **Available to Sell (new page)**
+  - Extracted Stock Locator's filter primitives (`FilterDropdown` / `PillFilter` / `DateFilter` + helpers) into a shared module `features/stock-locator/filters.tsx`. Stock Locator behavior unchanged.
+  - New page `features/available-to-sell/AvailableToSell.tsx`: shows only tags where `status === "Available"`. Nine columns: Tag ID / Species / Grade / Dimensions / Pieces / Total FBM / Location / Market Value / Days in Yard (computed from `history[0].t`).
+  - Four PillFilters (Species / Grade / Length / Location) with options derived from the live Available pool. Empty filter state shows a "Clear filters" link.
+  - Per-row Reserve button → modal lists only **Open** sales orders. Confirm flows through the existing `onUpdateTag` + `onLinkSalesOrder` callbacks to flip the tag to Reserved and append a SO line item; sage success toast for 3s; tag drops off the list immediately.
+  - Manager + Sales only; Floor auto-redirects to Stock Locator (mirrors the Settings redirect pattern).
+
+- **Delivery Slips parser & detail page total rewrite (iterated multiple times in one push)**
+
+  **AI prompt + data shape (server)**
+  - Old prompt returned a per-row array of 11 fields → new prompt returns `{ lineItems, sections }`:
+    - `lineItems`: products (`species/grade/thick/width/length/qty/pkgs?/state/milling/notes/confidence`). When the PDF has Package Details, each line item also carries a `tags: [{tagNo, pcs, fbm}, ...]` per-tag tally.
+    - `sections`: ERP-categorized key-value metadata across 6 buckets — `shipment_identity / logistics / parties / dates_location / financial / unrecognized` — each item is `{ field (camelCase), value, confidence }`.
+  - **Financial is its own bucket** so taxes / totals / discount notes no longer land in Unrecognized.
+  - **Explicitly handles multiple document types**: delivery-slip Summary rows, invoice Description-column line items, pick / packing lists. Fixed the previous prompt's bias toward "Summary rows" that was causing real invoice PDFs (e.g. `16li2.pdf`) to return an empty `lineItems` array.
+  - Defensive coercion in `ensureFieldArray` / `ensureLineItemArray` (drops malformed entries, defaults bad confidence to `low`), so the UI always sees the full 6-section shape. Wire field renamed `items` → `parsed`.
+
+  **Three-zone detail layout (client)**
+  - Feature root `h-full flex flex-col`, middle `flex overflow-hidden`:
+    - **Left aside 260px** (independently scrollable): summary card + 6 metadata accordions
+    - **Main** (independently scrollable): line item card list
+    - **Sticky bottom bar**: warning + Cancel + Confirm CTA
+  - No `position: fixed`, no edits to App.tsx layout.
+
+  **Summary card**: 4 cells — Total FBM / Total pcs / Total pkgs / Supplier; secondary `N tags · M products` line. Supplier / PO Number use ranked-candidate cross-section lookup (supplier → shipper → vendor → from → carrier; poNumber → po → purchaseOrder → orderNo → bookingNumber), so real-world AI variations resolve. Slip No / Order No deliberately not duplicated here — they live in the Shipment Identity accordion.
+
+  **6 metadata accordions**: header with title + count badge + chevron. Shipment Identity always renders; Unrecognized defaults closed; others render only if non-empty. Each field row: Title-Case label (`orderNo` → `Order No`) + value + confidence dot (high = solid green 6px / medium = solid amber 6px / low = red hollow ring 6px, with hover tooltips "Review recommended" / "Verify manually — low confidence"). Inline `+ Add field` at the bottom of every section; manual entries get a grey "Manual" badge and an ✕ delete button.
+
+  **Line item cards (Mode A / Mode B auto)**
+  - Detection: `lineItems.some(it => it.tags?.length > 0) ? 'A' : 'B'`.
+  - Each line item is a card with coral solid border + full opacity when selected, sage border + 60% opacity when not.
+  - Card row: ☑ + expand chevron (Mode A only) + species + grade chip + `T×W × L'` + `N pcs` + `State · Milling` + `· N pkgs` + confidence dot + **right-aligned FBM**. Notes render as a small grey line beneath.
+  - **Mode A expand**: list of individual tag children inside the card — 🏷 + `tagNo` + `270 pcs · 964 FBM · 1 pkg`.
+  - **Per-row Edit (restored)**: Edit toggles the card body to a 4×2 select grid (Species / Grade / State / Milling / Thick / Width / Length / Qty) with live FBM formula echo (`FBM = 1×4×14×1080÷12 = 3,840`). Non-standard incoming values (Stud / Utility / …) auto-prepended via `optionsFor` so the select stays valid. Done flips back to display.
+
+  **Confirm & Create**
+  - **Mode A**: one Pending Tag per child tag row across checked groups (species/grade/dims/state/milling inherited from parent; `qty/fbm` from the child tally; slip's `tagNo` recorded in the history event as `"... · Slip Tag: 999048597"`). Demo A: 7 groups → 16 Tags.
+  - **Mode B**: one Pending Tag per checked row.
+  - Lands on Stock Locator filtered to the new tag IDs, triggering the existing sage "N tags created · View all stock" banner.
+
+  **Sticky bottom bar**: amber ⚠️ warning shows only when at least one line item is medium/low confidence (`N items with medium or low confidence — review before confirming`); Cancel returns to upload; Confirm & create N tags is the coral primary CTA (N updates live per Mode A child count / Mode B row count).
+
+  **Two demo seeds** behind a pair of buttons on the upload card:
+  - **Mode A — Package Details**: AC Transport-style export delivery slip — 7 SPF / Hem-Fir line items × 16 tag children
+  - **Mode B — Flat Invoice**: mirrors the user-supplied SPF invoice (`16li2.pdf`) with 3 SPF #1 2×6 × 12'/14'/16' product lines
+
+- **`EntryFilter` extended**: added `grade?: Grade[]` and `orderNo?: string`. When Stock Locator receives `orderNo`, it resolves the matching SO's `lineItems` into a tagIds set; if exactly one tag matches, auto-opens its drawer and surfaces Linked Transactions (reuses the deep-link pattern).
+
+**Files / 改动:**
+- `features/stock-locator/filters.tsx` (new — shared filter primitives)
+- `features/stock-locator/StockLocator.tsx` (extracted filters, added `grade` + `orderNo` entryFilter handling, drawer auto-open on single-tag match)
+- `features/available-to-sell/AvailableToSell.tsx` (new page + Reserve modal)
+- `features/delivery-slips/DeliverySlips.tsx` (multi-iteration rewrite — three-zone layout, Mode A/B cards, inline Edit, Add field, two demo seeds)
+- `api/_core.ts` (new prompt — line_items + 6 sections + tags[]; defensive coercion)
+- `api/parse-slip.ts` (returns `{ parsed: ParsedSlip }`)
+- `vite.config.ts` (dev middleware mirrors the new wire shape)
+- `src/lib/anthropic.ts` (new types — `SlipField` / `SlipLineItem` / `SlipLineItemTag` / `ParsedSlip`; `emptyParsedSlip()` helper)
+- `src/lib/types.ts` (`EntryFilter.grade` + `EntryFilter.orderNo`)
+- `src/App.tsx` (`avail` route + Floor redirect; DeliverySlips wired with `onNavigateToLocator`)
+
+---
 ## Pending / 未来 (not yet built — 尚未开始)
 
-- **Available-to-Sell**（销售视图；`salesOrders` 已是真实状态，落地视图待建）
 - **Reports & Saved Views**（报表与保存视图）
 - **Sales role UI entry point**（`Role` 类型已含 sales，但仍无角色切换入口；权限矩阵已按角色生效）
-- **Delivery Slip detail view**（送货单详情页 — 之后 Recent 下拉即可追踪 `slip` 记录）
+- **Delivery Slip 持久化与列表视图**（送货单解析结果当前只在会话内存里；持久化 + Recent 下拉追踪 + 列表视图都还没建）
