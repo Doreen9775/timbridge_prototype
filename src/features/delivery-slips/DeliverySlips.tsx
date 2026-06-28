@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import {
   Truck, Upload, Loader, ArrowLeft, RefreshCw, ChevronDown, ChevronRight,
   Plus, X, AlertTriangle, Tag as TagIcon, Edit3, CheckCircle,
@@ -248,6 +248,11 @@ export function DeliverySlips({ tags, setTags, onNavigateToLocator }: DeliverySl
   const [manualSections, setManualSections] = useState<SlipSections>(emptyParsedSlip().sections);
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [error, setError] = useState("");
+  // Manual override for the Supplier summary cell — null means "use the AI/lookup
+  // value"; an empty-string commit from the editor clears back to null.
+  const [supplierOverride, setSupplierOverride] = useState<string | null>(null);
+  // Width of the left metadata panel, in px — user-draggable via the divider.
+  const [leftWidth, setLeftWidth] = useState(260);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const initParsed = (p: ParsedSlip, name: string) => {
@@ -256,6 +261,7 @@ export function DeliverySlips({ tags, setTags, onNavigateToLocator }: DeliverySl
     setLineItems(p.lineItems);
     setManualSections(emptyParsedSlip().sections);
     setSelected(new Set(p.lineItems.map((_, i) => i)));
+    setSupplierOverride(null);
     setStage("detail");
   };
 
@@ -291,8 +297,26 @@ export function DeliverySlips({ tags, setTags, onNavigateToLocator }: DeliverySl
     setLineItems([]);
     setManualSections(emptyParsedSlip().sections);
     setSelected(new Set());
+    setSupplierOverride(null);
     setError("");
   };
+
+  // ── Left-panel resize (drag the divider to widen/narrow the metadata panel) ─
+  const handleResizeStart = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startWidth = leftWidth;
+    const onMove = (ev: MouseEvent) => {
+      const next = startWidth + (ev.clientX - startX);
+      setLeftWidth(Math.min(480, Math.max(220, next)));
+    };
+    const onUp = () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+  }, [leftWidth]);
 
   // ── Line-item editing ─────────────────────────────────────────────────────
   const updateLineItem = (idx: number, key: keyof SlipLineItem, val: string) => {
@@ -332,16 +356,20 @@ export function DeliverySlips({ tags, setTags, onNavigateToLocator }: DeliverySl
     }));
   };
 
+  // Supplier from parties (broadened lookup), unless the user has overridden it
+  // via the editable Summary Card field. Shared by the Summary Card display and
+  // the Tag.supplier value written on Confirm & Create.
+  const supplier = supplierOverride ?? lookupField(
+    [parsed.sections.parties, parsed.sections.logistics],
+    ["supplier", "shipper", "vendor", "from", "carrier"],
+  );
+
   // ── Confirm & Create ──────────────────────────────────────────────────────
   // Mode A: one Pending Tag per tag-child row across all checked groups.
   // Mode B: one Pending Tag per checked flat row.
   const confirmCreate = () => {
     const groups = lineItems.filter((_, i) => selected.has(i));
     if (groups.length === 0) return;
-    const supplier = lookupField(
-      [parsed.sections.parties, parsed.sections.logistics],
-      ["supplier", "shipper", "vendor", "from", "carrier"],
-    );
     const poNumber = lookupField(
       [parsed.sections.shipment_identity],
       ["poNumber", "po", "purchaseOrder", "purchaseOrderNumber", "orderNo", "orderNumber", "bookingNumber"],
@@ -417,11 +445,6 @@ export function DeliverySlips({ tags, setTags, onNavigateToLocator }: DeliverySl
     return selectedItems.reduce((s, it) => s + (it.tags?.length ?? 1), 0);
   }, [mode, selectedItems]);
   const productCount = lineItems.length;
-  // Supplier from parties (broadened lookup).
-  const supplier = lookupField(
-    [parsed.sections.parties, parsed.sections.logistics],
-    ["supplier", "shipper", "vendor", "from", "carrier"],
-  );
   // Warning count: number of items with med/low confidence.
   const warningCount = lineItems.filter((it) => it.confidence !== "high").length;
 
@@ -513,19 +536,28 @@ export function DeliverySlips({ tags, setTags, onNavigateToLocator }: DeliverySl
         </button>
       </div>
 
-      {/* Middle area: left aside + main */}
+      {/* Middle area: left aside + draggable divider + main */}
       <div className="flex-1 flex overflow-hidden">
         <LeftPanel
+          width={leftWidth}
           totalFbm={totalFbm}
           totalPcs={totalPcs}
           totalPkgs={totalPkgs}
           supplier={supplier}
+          onChangeSupplier={(v) => setSupplierOverride(v === "" ? null : v)}
           tagsToCreate={tagsToCreate}
           productCount={productCount}
           sections={parsed.sections}
           manualSections={manualSections}
           onAdd={addManualField}
           onRemoveManual={removeManualField}
+        />
+        <div
+          onMouseDown={handleResizeStart}
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="Resize metadata panel"
+          className="w-1 shrink-0 cursor-col-resize bg-sage/50 hover:bg-coral/60 active:bg-coral transition-colors"
         />
         <main className="flex-1 overflow-y-auto p-6">
           <LineItemsCards
@@ -582,20 +614,23 @@ export function DeliverySlips({ tags, setTags, onNavigateToLocator }: DeliverySl
 
 // ── Left panel ──────────────────────────────────────────────────────────────
 function LeftPanel({
-  totalFbm, totalPcs, totalPkgs, supplier, tagsToCreate, productCount,
+  width, totalFbm, totalPcs, totalPkgs, supplier, onChangeSupplier, tagsToCreate, productCount,
   sections, manualSections, onAdd, onRemoveManual,
 }: {
+  width: number;
   totalFbm: number; totalPcs: number; totalPkgs: number; supplier: string;
+  onChangeSupplier: (v: string) => void;
   tagsToCreate: number; productCount: number;
   sections: SlipSections; manualSections: SlipSections;
   onAdd: (key: SectionKey, field: string, value: string) => void;
   onRemoveManual: (key: SectionKey, index: number) => void;
 }) {
   return (
-    <aside className="w-[260px] shrink-0 overflow-y-auto bg-white border-r border-sage">
+    <aside style={{ width }} className="shrink-0 overflow-y-auto bg-white border-r border-sage">
       <div className="p-4">
         <SummaryCard
-          totalFbm={totalFbm} totalPcs={totalPcs} totalPkgs={totalPkgs} supplier={supplier}
+          totalFbm={totalFbm} totalPcs={totalPcs} totalPkgs={totalPkgs}
+          supplier={supplier} onChangeSupplier={onChangeSupplier}
           tagsToCreate={tagsToCreate} productCount={productCount}
         />
         <div className="mt-4 flex flex-col gap-2">
@@ -616,18 +651,21 @@ function LeftPanel({
 }
 
 function SummaryCard({
-  totalFbm, totalPcs, totalPkgs, supplier, tagsToCreate, productCount,
+  totalFbm, totalPcs, totalPkgs, supplier, onChangeSupplier, tagsToCreate, productCount,
 }: {
   totalFbm: number; totalPcs: number; totalPkgs: number; supplier: string;
+  onChangeSupplier: (v: string) => void;
   tagsToCreate: number; productCount: number;
 }) {
   return (
     <div className="bg-cream/50 rounded-lg border border-sage/60 p-3.5">
-      <div className="grid grid-cols-2 gap-x-3 gap-y-3">
+      <div className="grid grid-cols-3 gap-x-3 gap-y-3">
         <Stat label="Total FBM" value={totalFbm.toLocaleString()} big />
         <Stat label="Total pcs" value={totalPcs.toLocaleString()} big />
         <Stat label="Total pkgs" value={totalPkgs > 0 ? totalPkgs.toLocaleString() : "—"} big />
-        <Stat label="Supplier" value={supplier} truncate />
+      </div>
+      <div className="mt-3 pt-3 border-t border-sage/40">
+        <SupplierField value={supplier} onChange={onChangeSupplier} />
       </div>
       <div className="mt-3 pt-2.5 border-t border-sage/40 text-[11px] text-text-ter">
         {tagsToCreate} tag{tagsToCreate === 1 ? "" : "s"} · {productCount} product{productCount === 1 ? "" : "s"}
@@ -636,19 +674,75 @@ function SummaryCard({
   );
 }
 
-function Stat({ label, value, big, truncate }: { label: string; value: string; big?: boolean; truncate?: boolean }) {
+function Stat({ label, value, big }: { label: string; value: string; big?: boolean }) {
   return (
     <div className="min-w-0">
       <div className="text-[10px] text-text-ter uppercase tracking-wide font-medium">{label}</div>
-      <div
-        className={[
-          "mt-0.5",
-          big ? "text-[18px] font-bold text-ink tabular-nums" : "text-[13px] font-medium text-ink",
-          truncate ? "truncate" : "",
-        ].join(" ")}
-        title={truncate ? value : undefined}
-      >
+      <div className={big ? "mt-0.5 text-[18px] font-bold text-ink tabular-nums" : "mt-0.5 text-[13px] font-medium text-ink"}>
         {value}
+      </div>
+    </div>
+  );
+}
+
+// Supplier is the one summary field a Manager may need to correct (the AI's
+// candidate lookup can miss unusual headers) — editable in place, and wraps
+// onto multiple lines instead of truncating since supplier names run long.
+function SupplierField({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(value);
+
+  const startEdit = () => {
+    setDraft(value === "—" ? "" : value);
+    setEditing(true);
+  };
+  const commit = () => {
+    onChange(draft.trim());
+    setEditing(false);
+  };
+  const cancel = () => {
+    setDraft(value);
+    setEditing(false);
+  };
+
+  if (!editing) {
+    return (
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <div className="text-[10px] text-text-ter uppercase tracking-wide font-medium">Supplier</div>
+          <div className="mt-0.5 text-[13px] font-medium text-ink leading-snug break-words">{value}</div>
+        </div>
+        <button
+          onClick={startEdit}
+          aria-label="Edit supplier"
+          className="shrink-0 mt-3.5 p-1 rounded hover:bg-sage/30 cursor-pointer text-text-ter hover:text-coral"
+        >
+          <Edit3 size={12} />
+        </button>
+      </div>
+    );
+  }
+  return (
+    <div>
+      <div className="text-[10px] text-text-ter uppercase tracking-wide font-medium mb-1">Supplier</div>
+      <div className="flex items-center gap-1.5">
+        <input
+          autoFocus
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") commit();
+            if (e.key === "Escape") cancel();
+          }}
+          placeholder="Supplier name"
+          className="flex-1 min-w-0 px-2 py-1 text-[13px] border border-sage rounded-md bg-white outline-none focus:border-coral"
+        />
+        <button onClick={commit} aria-label="Save supplier" className="shrink-0 p-1 rounded bg-coral text-white cursor-pointer hover:brightness-95">
+          <CheckCircle size={12} />
+        </button>
+        <button onClick={cancel} aria-label="Cancel edit" className="shrink-0 p-1 rounded border border-sage text-text-sec cursor-pointer hover:border-coral hover:text-coral">
+          <X size={12} />
+        </button>
       </div>
     </div>
   );
