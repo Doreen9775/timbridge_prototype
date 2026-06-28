@@ -17,6 +17,13 @@ import { calcFbm } from "@/lib/fbm";
 
 type Stage = "upload" | "analyzing" | "detail";
 
+// Left metadata panel width bounds (px). MIN is large enough that the 3-column
+// Total FBM / Total Pcs / Total Pkgs stat grid in the Summary Card never wraps
+// or overlaps — narrower than this and 5-6 digit bold numbers collide.
+const LEFT_PANEL_MIN = 300;
+const LEFT_PANEL_MAX = 480;
+const LEFT_PANEL_DEFAULT = 300;
+
 interface SectionSpec {
   key: SectionKey;
   title: string;
@@ -241,10 +248,13 @@ interface DeliverySlipsProps {
 export function DeliverySlips({ tags, setTags, onNavigateToLocator }: DeliverySlipsProps) {
   const [stage, setStage] = useState<Stage>("upload");
   const [fileName, setFileName] = useState("");
-  const [parsed, setParsed] = useState<ParsedSlip>(emptyParsedSlip());
-  // Editable copy of the AI-parsed line items. parsed.lineItems stays as the
-  // pristine source; user-edited values live here and feed Confirm & Create.
+  // Editable copy of the AI-parsed line items — seeded once from the parse result,
+  // then mutated in place as the user edits/selects. Confirm & Create reads from here.
   const [lineItems, setLineItems] = useState<SlipLineItem[]>([]);
+  // Editable copy of the AI-parsed metadata sections, same pattern as lineItems —
+  // edits to existing AI field values (Shipment Identity, Logistics, Parties, etc.)
+  // live here.
+  const [editedSections, setEditedSections] = useState<SlipSections>(emptyParsedSlip().sections);
   const [manualSections, setManualSections] = useState<SlipSections>(emptyParsedSlip().sections);
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [error, setError] = useState("");
@@ -252,13 +262,13 @@ export function DeliverySlips({ tags, setTags, onNavigateToLocator }: DeliverySl
   // value"; an empty-string commit from the editor clears back to null.
   const [supplierOverride, setSupplierOverride] = useState<string | null>(null);
   // Width of the left metadata panel, in px — user-draggable via the divider.
-  const [leftWidth, setLeftWidth] = useState(260);
+  const [leftWidth, setLeftWidth] = useState(LEFT_PANEL_DEFAULT);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const initParsed = (p: ParsedSlip, name: string) => {
     setFileName(name);
-    setParsed(p);
     setLineItems(p.lineItems);
+    setEditedSections(p.sections);
     setManualSections(emptyParsedSlip().sections);
     setSelected(new Set(p.lineItems.map((_, i) => i)));
     setSupplierOverride(null);
@@ -293,8 +303,8 @@ export function DeliverySlips({ tags, setTags, onNavigateToLocator }: DeliverySl
   const reset = () => {
     setStage("upload");
     setFileName("");
-    setParsed(emptyParsedSlip());
     setLineItems([]);
+    setEditedSections(emptyParsedSlip().sections);
     setManualSections(emptyParsedSlip().sections);
     setSelected(new Set());
     setSupplierOverride(null);
@@ -308,7 +318,7 @@ export function DeliverySlips({ tags, setTags, onNavigateToLocator }: DeliverySl
     const startWidth = leftWidth;
     const onMove = (ev: MouseEvent) => {
       const next = startWidth + (ev.clientX - startX);
-      setLeftWidth(Math.min(480, Math.max(220, next)));
+      setLeftWidth(Math.min(LEFT_PANEL_MAX, Math.max(LEFT_PANEL_MIN, next)));
     };
     const onUp = () => {
       window.removeEventListener("mousemove", onMove);
@@ -356,11 +366,27 @@ export function DeliverySlips({ tags, setTags, onNavigateToLocator }: DeliverySl
     }));
   };
 
-  // Supplier from parties (broadened lookup), unless the user has overridden it
-  // via the editable Summary Card field. Shared by the Summary Card display and
-  // the Tag.supplier value written on Confirm & Create.
+  // ── AI-extracted field editing (every section — Shipment Identity, Logistics,
+  // Parties, Dates & Location, Financial, Unrecognized) ─────────────────────
+  const updateSectionField = (key: SectionKey, index: number, value: string) => {
+    setEditedSections((prev) => ({
+      ...prev,
+      [key]: prev[key].map((f, i) => (i === index ? { ...f, value } : f)),
+    }));
+  };
+  const updateManualField = (key: SectionKey, index: number, value: string) => {
+    setManualSections((prev) => ({
+      ...prev,
+      [key]: prev[key].map((f, i) => (i === index ? { ...f, value } : f)),
+    }));
+  };
+
+  // Supplier from parties (broadened lookup over the *edited* sections so a
+  // correction made directly on the Parties row also updates this), unless the
+  // user has overridden it via the editable Summary Card field. Shared by the
+  // Summary Card display and the Tag.supplier value written on Confirm & Create.
   const supplier = supplierOverride ?? lookupField(
-    [parsed.sections.parties, parsed.sections.logistics],
+    [editedSections.parties, editedSections.logistics],
     ["supplier", "shipper", "vendor", "from", "carrier"],
   );
 
@@ -371,7 +397,7 @@ export function DeliverySlips({ tags, setTags, onNavigateToLocator }: DeliverySl
     const groups = lineItems.filter((_, i) => selected.has(i));
     if (groups.length === 0) return;
     const poNumber = lookupField(
-      [parsed.sections.shipment_identity],
+      [editedSections.shipment_identity],
       ["poNumber", "po", "purchaseOrder", "purchaseOrderNumber", "orderNo", "orderNumber", "bookingNumber"],
     );
     const today = new Date();
@@ -547,10 +573,12 @@ export function DeliverySlips({ tags, setTags, onNavigateToLocator }: DeliverySl
           onChangeSupplier={(v) => setSupplierOverride(v === "" ? null : v)}
           tagsToCreate={tagsToCreate}
           productCount={productCount}
-          sections={parsed.sections}
+          sections={editedSections}
           manualSections={manualSections}
           onAdd={addManualField}
           onRemoveManual={removeManualField}
+          onEditAi={updateSectionField}
+          onEditManual={updateManualField}
         />
         <div
           onMouseDown={handleResizeStart}
@@ -615,7 +643,7 @@ export function DeliverySlips({ tags, setTags, onNavigateToLocator }: DeliverySl
 // ── Left panel ──────────────────────────────────────────────────────────────
 function LeftPanel({
   width, totalFbm, totalPcs, totalPkgs, supplier, onChangeSupplier, tagsToCreate, productCount,
-  sections, manualSections, onAdd, onRemoveManual,
+  sections, manualSections, onAdd, onRemoveManual, onEditAi, onEditManual,
 }: {
   width: number;
   totalFbm: number; totalPcs: number; totalPkgs: number; supplier: string;
@@ -624,6 +652,8 @@ function LeftPanel({
   sections: SlipSections; manualSections: SlipSections;
   onAdd: (key: SectionKey, field: string, value: string) => void;
   onRemoveManual: (key: SectionKey, index: number) => void;
+  onEditAi: (key: SectionKey, index: number, value: string) => void;
+  onEditManual: (key: SectionKey, index: number, value: string) => void;
 }) {
   return (
     <aside style={{ width }} className="shrink-0 overflow-y-auto bg-white border-r border-sage">
@@ -642,6 +672,8 @@ function LeftPanel({
               manualItems={manualSections[spec.key]}
               onAdd={(field, value) => onAdd(spec.key, field, value)}
               onRemoveManual={(idx) => onRemoveManual(spec.key, idx)}
+              onEditAi={(idx, value) => onEditAi(spec.key, idx, value)}
+              onEditManual={(idx, value) => onEditManual(spec.key, idx, value)}
             />
           ))}
         </div>
@@ -750,13 +782,15 @@ function SupplierField({ value, onChange }: { value: string; onChange: (v: strin
 
 // ── Metadata accordion section ───────────────────────────────────────────────
 function SectionAccordion({
-  spec, aiItems, manualItems, onAdd, onRemoveManual,
+  spec, aiItems, manualItems, onAdd, onRemoveManual, onEditAi, onEditManual,
 }: {
   spec: SectionSpec;
   aiItems: SlipField[];
   manualItems: SlipField[];
   onAdd: (field: string, value: string) => void;
   onRemoveManual: (index: number) => void;
+  onEditAi: (index: number, value: string) => void;
+  onEditManual: (index: number, value: string) => void;
 }) {
   const [open, setOpen] = useState(spec.defaultOpen);
   if (aiItems.length === 0 && manualItems.length === 0 && !spec.alwaysRender) return null;
@@ -778,7 +812,7 @@ function SectionAccordion({
       {open ? (
         <div className="border-t border-sage/40">
           {aiItems.map((f, i) => (
-            <FieldRow key={`ai-${i}`} field={f} />
+            <FieldRow key={`ai-${i}`} field={f} onEdit={(value) => onEditAi(i, value)} />
           ))}
           {manualItems.map((f, i) => (
             <FieldRow
@@ -786,6 +820,7 @@ function SectionAccordion({
               field={f}
               manual
               onDelete={() => onRemoveManual(i)}
+              onEdit={(value) => onEditManual(i, value)}
             />
           ))}
           <AddFieldRow onAdd={onAdd} />
@@ -795,7 +830,58 @@ function SectionAccordion({
   );
 }
 
-function FieldRow({ field, manual, onDelete }: { field: SlipField; manual?: boolean; onDelete?: () => void }) {
+// Every metadata field row — AI-extracted or manual — is editable in place via
+// the pencil icon, same interaction pattern as the Summary Card's Supplier field.
+function FieldRow({
+  field, manual, onDelete, onEdit,
+}: {
+  field: SlipField;
+  manual?: boolean;
+  onDelete?: () => void;
+  onEdit: (value: string) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(field.value);
+
+  const startEdit = () => {
+    setDraft(field.value);
+    setEditing(true);
+  };
+  const commit = () => {
+    onEdit(draft.trim());
+    setEditing(false);
+  };
+  const cancel = () => {
+    setDraft(field.value);
+    setEditing(false);
+  };
+
+  if (editing) {
+    return (
+      <div className="flex items-start gap-2 px-3 py-2 border-t border-sage/20 first:border-t-0 text-[11.5px]">
+        <div className="w-[88px] shrink-0 text-text-sec leading-tight pt-1">{toTitleCase(field.field)}</div>
+        <div className="flex-1 min-w-0 flex items-center gap-1">
+          <input
+            autoFocus
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") commit();
+              if (e.key === "Escape") cancel();
+            }}
+            className="flex-1 min-w-0 px-1.5 py-1 text-[11.5px] border border-sage rounded-md bg-white outline-none focus:border-coral"
+          />
+          <button onClick={commit} aria-label="Save field" className="shrink-0 p-1 rounded bg-coral text-white cursor-pointer hover:brightness-95">
+            <CheckCircle size={10} />
+          </button>
+          <button onClick={cancel} aria-label="Cancel edit" className="shrink-0 p-1 rounded border border-sage text-text-sec cursor-pointer hover:border-coral hover:text-coral">
+            <X size={10} />
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex items-start gap-2 px-3 py-2 border-t border-sage/20 first:border-t-0 text-[11.5px]">
       <div className="w-[88px] shrink-0 text-text-sec leading-tight">{toTitleCase(field.field)}</div>
@@ -808,6 +894,9 @@ function FieldRow({ field, manual, onDelete }: { field: SlipField; manual?: bool
         ) : (
           <ConfidenceDot level={field.confidence} />
         )}
+        <button onClick={startEdit} aria-label="Edit field" className="p-0.5 rounded hover:bg-sage/30 cursor-pointer text-text-ter hover:text-coral">
+          <Edit3 size={10} />
+        </button>
         {onDelete ? (
           <button onClick={onDelete} aria-label="Delete field" className="p-0.5 rounded hover:bg-sage/30 cursor-pointer text-text-ter hover:text-coral">
             <X size={11} />
