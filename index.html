@@ -1,6 +1,36 @@
 <!doctype html>
 <html lang="en">
   <head>
+    <!-- Maze user-testing snippet — loads the universal recorder + heatmap loader.
+         Kept immediately after <head> per Maze's install instructions. -->
+    <script>
+      (function (m, a, z, e) {
+        var s, t, u, v;
+        try {
+          t = m.sessionStorage.getItem('maze-us');
+        } catch (err) {}
+
+        if (!t) {
+          t = new Date().getTime();
+          try {
+            m.sessionStorage.setItem('maze-us', t);
+          } catch (err) {}
+        }
+
+        u = document.currentScript || (function () {
+          var w = document.getElementsByTagName('script');
+          return w[w.length - 1];
+        })();
+        v = u && u.nonce;
+
+        s = a.createElement('script');
+        s.src = z + '?apiKey=' + e;
+        s.async = true;
+        if (v) s.setAttribute('nonce', v);
+        a.getElementsByTagName('head')[0].appendChild(s);
+        m.mazeUniversalSnippetApiKey = e;
+      })(window, document, 'https://snippet.maze.co/maze-universal-loader.js', 'bf5dbe15-00ca-4c62-bdb4-f053724f33d3');
+    </script>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
