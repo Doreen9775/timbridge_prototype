@@ -570,6 +570,22 @@ A history of every commit (push) on `main`, in chronological order, with what wa
 **Files / 改动:** `features/delivery-slips/DeliverySlips.tsx`
 
 ---
+
+## 2026-06-30
+
+### Stock Locator：删除 Tag + Maze 用户测试录制 — Delete tag + Maze user-testing snippet
+
+**🇨🇳 中文**
+- **Stock Locator 支持删除 Tag（Manager 专属）**：两个入口共用同一个确认弹窗——工具栏 Export CSV 旁新增 **Delete (N)** 按钮，勾选一个或多个行后生效；详情面板 header 里 Edit 旁边加了 **Delete** 按钮。弹窗列出所有待删 Tag ID，被 Sales Order 引用的 tag 会自动标注"linked to a sales order — will be skipped"并从删除清单里剔除（避免孤儿 `lineItem` 引用），全部被引用时 Delete 按钮直接 disabled。删除成功后自动清理表格勾选态，当前打开的详情面板若被删也会自动关闭。
+- **接入 Maze 用户测试录制**：`index.html` 的 `<head>` 里嵌入 Maze universal loader（api key `bf5dbe15-…-f053724f33d3`）——为 7 月用户测试提供录屏、热成像与 in-product prompts。按 Maze 的官方要求直接嵌入，未走 GTM。
+
+**🇬🇧 English**
+- **Stock Locator supports deleting tags (Manager-only)**: two entry points share one confirmation modal — a new **Delete (N)** button in the toolbar next to Export CSV (activates once rows are checked), and a **Delete** button in the DetailDrawer header next to Edit. The modal lists every selected Tag ID; any that are referenced by a Sales Order lineItem are flagged "linked to a sales order — will be skipped" and filtered out of the actual delete (prevents dangling SO references). If all selected tags are linked, the Delete button is disabled. On success the toolbar selection is cleared, and if the currently-open DetailDrawer belongs to a deleted tag it auto-closes.
+- **Maze user-testing snippet installed**: added Maze's universal loader (`bf5dbe15-…-f053724f33d3`) to `index.html`'s `<head>` for the July round of user testing — enables session recordings, click heatmaps, and in-product prompts. Embedded directly per Maze's install guidance rather than via GTM.
+
+**Files / 改动:** `App.tsx`, `features/stock-locator/StockLocator.tsx`, `index.html`
+
+---
 ## Pending / 未来 (not yet built — 尚未开始)
 
 - **Reports & Saved Views**（报表与保存视图）
