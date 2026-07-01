@@ -68,6 +68,14 @@ export default function App() {
     setTags((prev) => prev.map((t) => (t.id === updated.id ? updated : t)));
   }, [setTags]);
 
+  // Manager-only destructive drop from the Tag table (Stock Locator). Callers pre-filter
+  // SO-linked tags — this just removes what's handed in, no cascade.
+  const handleDeleteTags = useCallback((ids: string[]) => {
+    if (ids.length === 0) return;
+    const idSet = new Set(ids);
+    setTags((prev) => prev.filter((t) => !idSet.has(t.id)));
+  }, [setTags]);
+
   // Available → Reserved is a side-effect of linking a tag to a Sales Order (Manager status
   // dropdown), not a direct manual status edit — this appends the real lineItem.
   const handleLinkSalesOrder = useCallback((soId: string, tagId: string, qty: number, unitPrice: number) => {
@@ -106,7 +114,7 @@ export default function App() {
             {isFloor && <FloorBanner />}
             <div className="flex-1 overflow-y-auto">
               {nav === "dashboard" && <Dashboard tags={tags} floorView={isFloor} onNavigateToLocator={handleNavigateToLocator} onOpenTag={handleOpenTagFromDashboard} />}
-              {nav === "locator" && <StockLocator tags={tags} floorView={isFloor} role={role} openTagId={pendingTagId} onTagOpened={handleTagOpened} onUpdateTag={handleUpdateTag} entryFilter={entryFilter} onClearEntryFilter={() => setEntryFilter(null)} salesOrders={salesOrders} onLinkSalesOrder={handleLinkSalesOrder} />}
+              {nav === "locator" && <StockLocator tags={tags} floorView={isFloor} role={role} openTagId={pendingTagId} onTagOpened={handleTagOpened} onUpdateTag={handleUpdateTag} onDeleteTags={handleDeleteTags} entryFilter={entryFilter} onClearEntryFilter={() => setEntryFilter(null)} salesOrders={salesOrders} onLinkSalesOrder={handleLinkSalesOrder} />}
               {nav === "tagentry" && <TagEntry tags={tags} setTags={setTags} floorView={isFloor} onViewInInventory={handleViewInInventory} />}
               {nav === "delivery" && <DeliverySlips tags={tags} setTags={setTags} onNavigateToLocator={handleNavigateToLocator} />}
               {nav === "settings" && role === "manager" && <CustomValuesSettings />}

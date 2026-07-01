@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { Search, Scan, X, Download, Maximize2, Minimize2, Filter, RotateCcw, Pencil } from "lucide-react";
+import { Search, Scan, X, Download, Maximize2, Minimize2, Filter, RotateCcw, Pencil, Trash2 } from "lucide-react";
 import type { Tag, Species, Grade, MoistureState, Milling, TagStatus, EntryFilter, Role, SalesOrder, SalesOrderStatus } from "@/lib/types";
 import { StatusBadge } from "@/components/shared/StatusBadge";
 import { ConfirmationBanner } from "@/components/shared/ConfirmationBanner";
@@ -86,13 +86,16 @@ interface StockLocatorProps {
   openTagId?: string | null;
   onTagOpened?: () => void;
   onUpdateTag?: (tag: Tag) => void;
+  onDeleteTags?: (ids: string[]) => void;
   entryFilter?: EntryFilter | null;
   onClearEntryFilter?: () => void;
   salesOrders: SalesOrder[];
   onLinkSalesOrder?: (soId: string, tagId: string, qty: number, unitPrice: number) => void;
 }
 
-export function StockLocator({ tags, floorView, role, openTagId, onTagOpened, onUpdateTag, entryFilter, onClearEntryFilter, salesOrders, onLinkSalesOrder }: StockLocatorProps) {
+export function StockLocator({ tags, floorView, role, openTagId, onTagOpened, onUpdateTag, onDeleteTags, entryFilter, onClearEntryFilter, salesOrders, onLinkSalesOrder }: StockLocatorProps) {
+  const isManager = role === "manager";
+  const canDelete = isManager && !!onDeleteTags;
   const [search, setSearch] = useState("");
   const [dates, setDates] = useState<string[]>([]);
   const [statusF, setStatusF] = useState<string[]>([]);
@@ -108,6 +111,13 @@ export function StockLocator({ tags, floorView, role, openTagId, onTagOpened, on
   const [fullscreen, setFullscreen] = useState(false);
   const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
   const [confirmTagId, setConfirmTagId] = useState<string | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<{ ids: string[] } | null>(null);
+  // Tags currently referenced by any Sales Order line item — blocked from deletion so
+  // the SO doesn't dangle. Set for O(1) lookup on selection changes.
+  const linkedTagIds = useMemo(
+    () => new Set(salesOrders.flatMap((so) => so.lineItems.map((li) => li.tagId))),
+    [salesOrders],
+  );
   const { pushRecord } = useRecentRecords();
   const lookups = useLookups();
 
@@ -352,6 +362,21 @@ export function StockLocator({ tags, floorView, role, openTagId, onTagOpened, on
         >
           <Download size={14} />Export CSV{checkedIds.size > 0 ? ` (${checkedIds.size})` : ""}
         </button>
+        {canDelete && (
+          <button
+            onClick={() => setDeleteConfirm({ ids: Array.from(checkedIds) })}
+            disabled={checkedIds.size === 0}
+            title={checkedIds.size === 0 ? "Select one or more tags to delete" : `Delete ${checkedIds.size} selected tag${checkedIds.size === 1 ? "" : "s"}`}
+            className={[
+              "px-3.5 py-1.5 text-[13px] rounded-md border flex items-center gap-1.5 transition-colors whitespace-nowrap",
+              checkedIds.size === 0
+                ? "border-sage bg-white text-text-ter opacity-60 cursor-not-allowed"
+                : "border-coral bg-white text-coral cursor-pointer hover:bg-coral/10",
+            ].join(" ")}
+          >
+            <Trash2 size={14} />Delete{checkedIds.size > 0 ? ` (${checkedIds.size})` : ""}
+          </button>
+        )}
         <span className="text-xs text-text-ter whitespace-nowrap">Last synced 14:32</span>
       </div>
 
@@ -479,10 +504,73 @@ export function StockLocator({ tags, floorView, role, openTagId, onTagOpened, on
           onToggleFullscreen={() => setFullscreen((f) => !f)}
           onClose={closeDrawer}
           onSave={onUpdateTag}
+          onDelete={canDelete ? () => setDeleteConfirm({ ids: [selTag.id] }) : undefined}
           salesOrders={salesOrders}
           onLinkSalesOrder={onLinkSalesOrder}
         />
       )}
+      {deleteConfirm && (() => {
+        const linked = deleteConfirm.ids.filter((id) => linkedTagIds.has(id));
+        const deletable = deleteConfirm.ids.filter((id) => !linkedTagIds.has(id));
+        const commit = () => {
+          if (deletable.length === 0) { setDeleteConfirm(null); return; }
+          onDeleteTags?.(deletable);
+          setCheckedIds((prev) => {
+            const next = new Set(prev);
+            deletable.forEach((id) => next.delete(id));
+            return next;
+          });
+          if (selected && deletable.includes(selected)) closeDrawer();
+          setDeleteConfirm(null);
+        };
+        return (
+          <div className="fixed inset-0 z-[110] bg-ink/40 flex items-center justify-center p-6" onClick={() => setDeleteConfirm(null)}>
+            <div className="bg-white w-full max-w-sm rounded-xl p-5 shadow-[0_10px_40px_rgba(0,0,0,0.25)]" onClick={(e) => e.stopPropagation()}>
+              <div className="text-sm font-semibold text-ink mb-1">
+                Delete {deleteConfirm.ids.length === 1 ? "tag" : `${deleteConfirm.ids.length} tags`}?
+              </div>
+              <div className="text-[13px] text-text-sec mb-3">
+                This removes the tag{deleteConfirm.ids.length === 1 ? "" : "s"} from the Tag table. This cannot be undone.
+              </div>
+              <div className="bg-[#F9FAFB] rounded-md px-3 py-2 mb-3 max-h-32 overflow-y-auto">
+                {deleteConfirm.ids.map((id) => (
+                  <div key={id} className="flex items-center gap-2 text-[12px] py-0.5">
+                    <span className="font-mono text-coral font-semibold">{id}</span>
+                    {linkedTagIds.has(id) && (
+                      <span className="text-[10px] text-text-ter">linked to a sales order — will be skipped</span>
+                    )}
+                  </div>
+                ))}
+              </div>
+              {linked.length > 0 && deletable.length > 0 && (
+                <div className="text-[11px] text-text-ter mb-3">
+                  {linked.length} of {deleteConfirm.ids.length} {linked.length === 1 ? "is" : "are"} linked to a sales order and will be skipped.
+                </div>
+              )}
+              {deletable.length === 0 && (
+                <div className="text-[11px] text-coral mb-3">
+                  All selected tags are linked to sales orders — none can be deleted.
+                </div>
+              )}
+              <div className="flex gap-2 justify-end">
+                <button onClick={() => setDeleteConfirm(null)} className="px-3 py-1.5 text-[13px] rounded-md border border-sage text-text-sec hover:text-coral hover:border-coral cursor-pointer">Cancel</button>
+                <button
+                  onClick={commit}
+                  disabled={deletable.length === 0}
+                  className={[
+                    "px-3.5 py-1.5 text-[13px] rounded-md font-semibold",
+                    deletable.length === 0
+                      ? "bg-sage/40 text-text-ter cursor-not-allowed"
+                      : "bg-coral text-white hover:brightness-95 cursor-pointer",
+                  ].join(" ")}
+                >
+                  Delete{deletable.length > 0 && deleteConfirm.ids.length > 1 ? ` (${deletable.length})` : ""}
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
     </>
   );
@@ -606,6 +694,7 @@ function DetailDrawer({
   onToggleFullscreen,
   onClose,
   onSave,
+  onDelete,
   salesOrders,
   onLinkSalesOrder,
 }: {
@@ -615,6 +704,7 @@ function DetailDrawer({
   onToggleFullscreen: () => void;
   onClose: () => void;
   onSave?: (tag: Tag) => void;
+  onDelete?: () => void;
   salesOrders: SalesOrder[];
   onLinkSalesOrder?: (soId: string, tagId: string, qty: number, unitPrice: number) => void;
 }) {
@@ -703,6 +793,11 @@ function DetailDrawer({
             {canEdit && (
               <button onClick={startEdit} aria-label="Edit" title="Edit" className="flex items-center gap-1 px-2.5 py-1 text-[13px] rounded-md border border-sage text-text-sec hover:text-coral hover:border-coral cursor-pointer">
                 <Pencil size={13} />Edit
+              </button>
+            )}
+            {onDelete && (
+              <button onClick={onDelete} aria-label="Delete" title="Delete tag" className="flex items-center gap-1 px-2.5 py-1 text-[13px] rounded-md border border-coral text-coral hover:bg-coral/10 cursor-pointer">
+                <Trash2 size={13} />Delete
               </button>
             )}
             <button
