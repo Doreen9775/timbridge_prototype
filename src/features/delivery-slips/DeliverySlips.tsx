@@ -15,7 +15,7 @@ import {
 } from "@/lib/anthropic";
 import { calcFbm } from "@/lib/fbm";
 
-type Stage = "upload" | "analyzing" | "detail";
+type Stage = "upload" | "analyzing" | "detail" | "error";
 
 // Left metadata panel width bounds (px). MIN is large enough that the 3-column
 // Total FBM / Total Pcs / Total Pkgs stat grid in the Summary Card never wraps
@@ -248,6 +248,13 @@ interface DeliverySlipsProps {
 export function DeliverySlips({ tags, setTags, onNavigateToLocator }: DeliverySlipsProps) {
   const [stage, setStage] = useState<Stage>("upload");
   const [fileName, setFileName] = useState("");
+  // Multi-file queue — files parse and confirm strictly one at a time, in order.
+  // queueIndex points at the file currently being parsed/reviewed; createdIds
+  // accumulates Tag ids across every confirmed file so the final navigation to
+  // Stock Locator shows the whole batch, not just the last slip's tags.
+  const [queue, setQueue] = useState<File[]>([]);
+  const [queueIndex, setQueueIndex] = useState(0);
+  const [createdIds, setCreatedIds] = useState<string[]>([]);
   // Editable copy of the AI-parsed line items — seeded once from the parse result,
   // then mutated in place as the user edits/selects. Confirm & Create reads from here.
   const [lineItems, setLineItems] = useState<SlipLineItem[]>([]);
@@ -275,29 +282,38 @@ export function DeliverySlips({ tags, setTags, onNavigateToLocator }: DeliverySl
     setStage("detail");
   };
 
-  const handleFile = (file?: File) => {
-    if (!file) return;
+  // Parse the file at `index` of `files` — the single-file path is just a queue of one.
+  const parseAt = (files: File[], index: number) => {
+    const file = files[index];
     setFileName(file.name);
-    setError("");
-    const isPDF = file.type === "application/pdf";
-    const isImage = file.type.startsWith("image/");
-    if (!isPDF && !isImage) {
-      setError("Please upload a PDF or image file (JPG / PNG).");
-      return;
-    }
+    setStage("analyzing");
     const reader = new FileReader();
     reader.onload = async (e) => {
       const b64 = String(e.target?.result).split(",")[1];
-      setStage("analyzing");
       try {
-        const result = await parseDeliverySlip(b64, file.type, isPDF);
+        const result = await parseDeliverySlip(b64, file.type, file.type === "application/pdf");
         initParsed(result, file.name);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Parse failed.");
-        setStage("upload");
+        setStage("error");
       }
     };
     reader.readAsDataURL(file);
+  };
+
+  const handleFiles = (list?: FileList | null) => {
+    if (!list || list.length === 0) return;
+    const files = Array.from(list);
+    const valid = files.filter((f) => f.type === "application/pdf" || f.type.startsWith("image/"));
+    if (valid.length === 0) {
+      setError("Please upload PDF or image files (JPG / PNG).");
+      return;
+    }
+    setError(valid.length < files.length ? `${files.length - valid.length} unsupported file(s) skipped — only PDF / JPG / PNG are parsed.` : "");
+    setQueue(valid);
+    setQueueIndex(0);
+    setCreatedIds([]);
+    parseAt(valid, 0);
   };
 
   const reset = () => {
@@ -309,7 +325,27 @@ export function DeliverySlips({ tags, setTags, onNavigateToLocator }: DeliverySl
     setSelected(new Set());
     setSupplierOverride(null);
     setError("");
+    setQueue([]);
+    setQueueIndex(0);
+    setCreatedIds([]);
   };
+
+  // Advance past the current file: parse the next one, or — queue exhausted —
+  // jump to Stock Locator filtered to everything created this batch (or back
+  // to upload if nothing was confirmed at all).
+  const goToNext = (idsSoFar: string[]) => {
+    const next = queueIndex + 1;
+    if (next < queue.length) {
+      setQueueIndex(next);
+      parseAt(queue, next);
+    } else if (idsSoFar.length > 0) {
+      onNavigateToLocator({ tagIds: idsSoFar });
+    } else {
+      reset();
+    }
+  };
+
+  const hasNextFile = queueIndex + 1 < queue.length;
 
   // ── Left-panel resize (drag the divider to widen/narrow the metadata panel) ─
   const handleResizeStart = useCallback((e: React.MouseEvent) => {
@@ -441,7 +477,9 @@ export function DeliverySlips({ tags, setTags, onNavigateToLocator }: DeliverySl
       }
     }
     setTags([...tags, ...newTags]);
-    onNavigateToLocator({ tagIds: newTags.map((t) => t.id) });
+    const allIds = [...createdIds, ...newTags.map((t) => t.id)];
+    setCreatedIds(allIds);
+    goToNext(allIds);
   };
 
   // ── Derived ───────────────────────────────────────────────────────────────
@@ -474,8 +512,8 @@ export function DeliverySlips({ tags, setTags, onNavigateToLocator }: DeliverySl
   // Warning count: number of items with med/low confidence.
   const warningCount = lineItems.filter((it) => it.confidence !== "high").length;
 
-  // ── Upload / Analyzing ────────────────────────────────────────────────────
-  if (stage === "upload" || stage === "analyzing") {
+  // ── Upload / Analyzing / Parse error ──────────────────────────────────────
+  if (stage === "upload" || stage === "analyzing" || stage === "error") {
     return (
       <div className="p-8 bg-cream min-h-full">
         <div className="max-w-[600px] mx-auto">
@@ -485,15 +523,48 @@ export function DeliverySlips({ tags, setTags, onNavigateToLocator }: DeliverySl
             </div>
             <div className="text-xl font-display font-semibold text-ink mb-2">Delivery Slip — AI Parser</div>
             <div className="text-[13px] text-text-sec mb-7 leading-relaxed">
-              Upload a delivery slip (PDF or photo) and AI will extract the cargo line items<br />
-              and structured metadata (shipment, logistics, parties, dates, financial).
+              Upload one or more delivery slips (PDF or photo) — AI extracts the cargo line items<br />
+              and structured metadata, and you review & confirm each file in turn.
             </div>
 
             {stage === "analyzing" ? (
               <div className="py-10">
                 <Loader size={36} className="text-coral animate-spin mx-auto mb-4" />
-                <div className="text-sm text-text-sec">Analyzing "{fileName}"…</div>
+                <div className="text-sm text-text-sec">
+                  Analyzing "{fileName}"…
+                  {queue.length > 1 ? <span className="text-text-ter"> · file {queueIndex + 1} of {queue.length}</span> : null}
+                </div>
                 <div className="text-xs text-text-ter mt-1.5">AI is extracting cargo lines and categorizing every field</div>
+                {queue.length > 1 ? <QueueProgress queue={queue} current={queueIndex} /> : null}
+              </div>
+            ) : stage === "error" ? (
+              <div className="py-6">
+                <AlertTriangle size={32} className="text-coral mx-auto mb-3" />
+                <div className="text-sm font-semibold text-ink mb-1">Couldn't parse "{fileName}"</div>
+                <div className="text-[13px] text-coral mb-5">{error}</div>
+                {queue.length > 1 ? <QueueProgress queue={queue} current={queueIndex} /> : null}
+                <div className="flex gap-2 justify-center mt-5">
+                  <button
+                    onClick={() => parseAt(queue, queueIndex)}
+                    className="px-4 py-2 bg-coral text-white rounded-lg text-[13px] font-semibold cursor-pointer hover:brightness-95"
+                  >
+                    Retry
+                  </button>
+                  {hasNextFile ? (
+                    <button
+                      onClick={() => goToNext(createdIds)}
+                      className="px-4 py-2 bg-transparent border border-sage rounded-lg text-[13px] text-text-sec cursor-pointer hover:border-coral hover:text-coral"
+                    >
+                      Skip this file →
+                    </button>
+                  ) : null}
+                  <button
+                    onClick={reset}
+                    className="px-4 py-2 bg-transparent border border-sage rounded-lg text-[13px] text-text-sec cursor-pointer hover:border-coral hover:text-coral"
+                  >
+                    Cancel
+                  </button>
+                </div>
               </div>
             ) : (
               <>
@@ -503,9 +574,9 @@ export function DeliverySlips({ tags, setTags, onNavigateToLocator }: DeliverySl
                 >
                   <Upload size={28} className="text-text-ter mx-auto mb-2.5" />
                   <div className="text-sm text-text font-medium mb-1">Click to upload or drag & drop</div>
-                  <div className="text-xs text-text-ter">PDF, JPG, PNG supported</div>
+                  <div className="text-xs text-text-ter">PDF, JPG, PNG · select multiple files to parse them one at a time</div>
                 </div>
-                <input ref={fileRef} type="file" accept=".pdf,image/*" className="hidden" onChange={(e) => handleFile(e.target.files?.[0])} />
+                <input ref={fileRef} type="file" accept=".pdf,image/*" multiple className="hidden" onChange={(e) => { handleFiles(e.target.files); e.target.value = ""; }} />
                 {error && (
                   <div className="bg-coral/10 border border-coral rounded-lg px-3.5 py-2.5 text-[13px] text-coral mb-3">{error}</div>
                 )}
@@ -551,6 +622,10 @@ export function DeliverySlips({ tags, setTags, onNavigateToLocator }: DeliverySl
             </div>
             <div className="text-[11px] text-text-ter">
               {productCount} {productCount === 1 ? "product" : "products"} · {mode === "A" ? "Two-level (Package Details)" : "Flat invoice"}
+              {queue.length > 1 ? (
+                <span className="text-coral font-semibold"> · File {queueIndex + 1} of {queue.length}</span>
+              ) : null}
+              {createdIds.length > 0 ? ` · ${createdIds.length} tag${createdIds.length === 1 ? "" : "s"} created so far` : ""}
             </div>
           </div>
         </div>
@@ -622,6 +697,14 @@ export function DeliverySlips({ tags, setTags, onNavigateToLocator }: DeliverySl
           >
             Cancel
           </button>
+          {queue.length > 1 ? (
+            <button
+              onClick={() => goToNext(createdIds)}
+              className="px-4 py-2 bg-transparent border border-sage rounded-md text-[13px] cursor-pointer text-text-sec hover:border-coral hover:text-coral"
+            >
+              Skip this file{hasNextFile ? " →" : " · finish"}
+            </button>
+          ) : null}
           <button
             onClick={confirmCreate}
             disabled={tagsToCreate === 0}
@@ -632,10 +715,34 @@ export function DeliverySlips({ tags, setTags, onNavigateToLocator }: DeliverySl
                 : "bg-coral text-white cursor-pointer hover:brightness-95",
             ].join(" ")}
           >
-            Confirm & create {tagsToCreate} tag{tagsToCreate === 1 ? "" : "s"} →
+            Confirm & create {tagsToCreate} tag{tagsToCreate === 1 ? "" : "s"}{hasNextFile ? " · next file" : ""} →
           </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+// ── Multi-file queue progress (analyzing / error panels) ────────────────────
+// Files before `current` are done (confirmed or skipped), `current` is in
+// flight, the rest wait their turn.
+function QueueProgress({ queue, current }: { queue: File[]; current: number }) {
+  return (
+    <div className="mt-6 mx-auto max-w-[380px] flex flex-col gap-1.5 text-left">
+      {queue.map((f, i) => (
+        <div key={i} className="flex items-center gap-2 text-[12px]">
+          {i < current ? (
+            <CheckCircle size={13} className="text-emerald-500 shrink-0" />
+          ) : i === current ? (
+            <Loader size={13} className="text-coral animate-spin shrink-0" />
+          ) : (
+            <span className="w-[13px] h-[13px] rounded-full border border-sage shrink-0" />
+          )}
+          <span className={`truncate ${i === current ? "text-ink font-medium" : i < current ? "text-text-ter line-through" : "text-text-sec"}`}>
+            {f.name}
+          </span>
+        </div>
+      ))}
     </div>
   );
 }
