@@ -586,6 +586,28 @@ A history of every commit (push) on `main`, in chronological order, with what wa
 **Files / 改动:** `App.tsx`, `features/stock-locator/StockLocator.tsx`, `index.html`
 
 ---
+
+## 2026-07-06
+
+### Delivery Slips：多文件上传、逐个解析确认 — multi-file upload, parse & confirm one at a time
+
+**🇨🇳 中文**
+- **一次上传多个送货单**：文件选择框支持多选（PDF / JPG / PNG，不支持的格式自动剔除并提示），文件排成队列**严格按顺序逐个处理**——解析 → 审核 → 确认建 tag → 自动进入下一个文件。
+- **进度可见**：Analyzing 页显示整个队列清单（已完成 ✓ / 当前解析中 ⟳ / 等待 ○）和 "file 1 of 2"；审核页 header 显示 **File 2 of 3** 与累计已建 tag 数。
+- **底栏新增 Skip this file**：跳过当前文件继续队列（最后一个文件时变为 "finish"）；还有后续文件时 Confirm 按钮显示 "· next file →" 提示。
+- **跳转时机变化**：中间文件 confirm 后不再立刻跳走，而是直接解析下一个；**整个队列处理完**才跳转 Stock Locator，且带上本批**所有文件**创建的全部 tag；全部跳过则回到上传页。
+- **解析失败恢复**：新增错误页，可 Retry / Skip this file / Cancel，单个文件解析失败不再中断整批。单文件与 demo 路径行为不变（即长度为 1 的队列）。
+
+**🇬🇧 English**
+- **Upload multiple slips at once**: the file picker now accepts multi-select (PDF / JPG / PNG; unsupported formats are filtered out with a notice). Files form a queue processed **strictly one at a time** — parse → review → confirm → auto-advance to the next file.
+- **Visible progress**: the Analyzing panel lists the whole queue (done ✓ / parsing ⟳ / waiting ○) with "file 1 of 2"; the review header shows **File 2 of 3** plus a running count of tags created so far.
+- **New Skip this file action** in the bottom bar (reads "finish" on the last file); the Confirm button appends "· next file →" when more files remain.
+- **Navigation timing changed**: confirming a mid-queue file no longer leaves the page — it starts parsing the next file immediately. Stock Locator opens only **after the whole queue finishes**, filtered to every tag created across **all files in the batch**; skipping everything returns to upload.
+- **Parse-failure recovery**: a new error panel offers Retry / Skip this file / Cancel, so one bad file no longer aborts the batch. Single-file uploads and the demo buttons behave exactly as before (a queue of one).
+
+**Files / 改动:** `features/delivery-slips/DeliverySlips.tsx`
+
+---
 ## Pending / 未来 (not yet built — 尚未开始)
 
 - **Reports & Saved Views**（报表与保存视图）
