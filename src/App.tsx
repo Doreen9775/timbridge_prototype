@@ -19,6 +19,10 @@ import { useSalesOrders } from "@/hooks/useSalesOrders";
 
 export default function App() {
   const [nav, setNav] = useState<NavKey>("dashboard");
+  // Bumped when the user re-clicks the sidebar item they're already on — used as
+  // the feature container's React key, so a same-page click remounts the feature
+  // and returns it to its initial screen (wizard step 1, cleared filters, etc.).
+  const [navEpoch, setNavEpoch] = useState(0);
   const [pendingTagId, setPendingTagId] = useState<string | null>(null);
   const [entryFilter, setEntryFilter] = useState<EntryFilter | null>(null);
   const [authed, setAuthed] = useState(false);
@@ -38,6 +42,15 @@ export default function App() {
   useEffect(() => {
     if (nav === "avail" && role === "floor") setNav("locator");
   }, [nav, role]);
+
+  // Sidebar click: navigate, or — already on that item — reset the feature to its
+  // initial screen by bumping the remount epoch.
+  const handleNav = useCallback((key: NavKey) => {
+    setNav((current) => {
+      if (current === key) setNavEpoch((e) => e + 1);
+      return key;
+    });
+  }, []);
 
   // Every sign-in lands on the Dashboard, regardless of where the last session left off.
   const handleSignIn = useCallback(() => {
@@ -108,11 +121,11 @@ export default function App() {
     <RecentRecordsProvider>
       <LookupsProvider>
         <div className={`flex h-screen bg-cream text-text overflow-hidden animate-fade-in transition-opacity duration-500 ${loggingOut ? "opacity-0" : "opacity-100"}`}>
-          <Sidebar nav={nav} setNav={setNav} floorView={isFloor} role={role} onLogout={handleLogout} />
+          <Sidebar nav={nav} setNav={handleNav} floorView={isFloor} role={role} onLogout={handleLogout} />
           <div className="flex-1 flex flex-col overflow-hidden">
             <TopBar nav={nav} floorView={isFloor} setFloorView={setFloorView} onOpenRecord={handleOpenRecord} />
             {isFloor && <FloorBanner />}
-            <div className="flex-1 overflow-y-auto">
+            <div key={`${nav}:${navEpoch}`} className="flex-1 overflow-y-auto">
               {nav === "dashboard" && <Dashboard tags={tags} floorView={isFloor} onNavigateToLocator={handleNavigateToLocator} onOpenTag={handleOpenTagFromDashboard} />}
               {nav === "locator" && <StockLocator tags={tags} floorView={isFloor} role={role} openTagId={pendingTagId} onTagOpened={handleTagOpened} onUpdateTag={handleUpdateTag} onDeleteTags={handleDeleteTags} entryFilter={entryFilter} onClearEntryFilter={() => setEntryFilter(null)} salesOrders={salesOrders} onLinkSalesOrder={handleLinkSalesOrder} />}
               {nav === "tagentry" && <TagEntry tags={tags} setTags={setTags} floorView={isFloor} onViewInInventory={handleViewInInventory} />}
