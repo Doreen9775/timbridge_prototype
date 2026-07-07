@@ -608,6 +608,22 @@ A history of every commit (push) on `main`, in chronological order, with what wa
 **Files / 改动:** `features/delivery-slips/DeliverySlips.tsx`
 
 ---
+
+## 2026-07-07
+
+### Sidebar 重复点击回到功能初始页 + Delivery Slips 拖拽上传 — sidebar re-click resets feature + drag & drop upload
+
+**🇨🇳 中文**
+- **Sidebar 重复点击 = 回到初始界面**：不管当前功能进行到哪一步（送货单审核页、Tag Entry 向导第 3 步、Stock Locator 筛选 + 详情抽屉……），再点一次 sidebar 里**当前所在**的那一项，该功能就整体回到初始状态。实现上是 App 里加了一个 `navEpoch` 计数器：同页重复点击时递增，与 `nav` 一起作为功能容器的 React key，key 变化触发整个功能组件重挂载——所有内部状态自动归零、滚动回顶部，不需要每个功能单独写 reset 逻辑，未来新增功能自动获得同样行为。Tag 数据本身存在 App 层（`useTags`），不受影响。
+- **Delivery Slips 支持拖拽上传**：把文件（可多个）直接拖进虚线框即可上传，悬停时边框/图标变 coral、文案切换为 "Drop to upload"。松手后走与点击上传完全相同的逻辑——格式过滤、多文件队列、逐个解析确认。
+
+**🇬🇧 English**
+- **Re-clicking the active sidebar item resets that feature to its initial screen**: wherever you are inside a feature (slip review page, Tag Entry wizard step 3, Stock Locator filters + open drawer…), clicking its sidebar entry again returns it to the starting view. Implemented with a `navEpoch` counter in App: a same-page click bumps it, and `nav + epoch` form the feature container's React key, so the change remounts the whole feature component — every piece of internal state resets and scroll returns to top, with no per-feature reset code, and future features inherit the behavior automatically. Tag data lives in App-level state (`useTags`) and is untouched.
+- **Drag & drop upload in Delivery Slips**: drop one or more files straight onto the dashed dropzone — while hovering, the border/icon turn coral and the copy switches to "Drop to upload". Dropped files run through exactly the same pipeline as click-to-upload: format filtering, the multi-file queue, and one-at-a-time parse & confirm.
+
+**Files / 改动:** `App.tsx`, `features/delivery-slips/DeliverySlips.tsx`
+
+---
 ## Pending / 未来 (not yet built — 尚未开始)
 
 - **Reports & Saved Views**（报表与保存视图）
