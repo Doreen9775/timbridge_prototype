@@ -270,6 +270,8 @@ export function DeliverySlips({ tags, setTags, onNavigateToLocator }: DeliverySl
   const [supplierOverride, setSupplierOverride] = useState<string | null>(null);
   // Width of the left metadata panel, in px — user-draggable via the divider.
   const [leftWidth, setLeftWidth] = useState(LEFT_PANEL_DEFAULT);
+  // True while files are being dragged over the dropzone — drives the highlight.
+  const [dragOver, setDragOver] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const initParsed = (p: ParsedSlip, name: string) => {
@@ -570,10 +572,22 @@ export function DeliverySlips({ tags, setTags, onNavigateToLocator }: DeliverySl
               <>
                 <div
                   onClick={() => fileRef.current?.click()}
-                  className="border-2 border-dashed border-sage rounded-[10px] px-6 py-9 cursor-pointer transition-colors hover:border-coral mb-4"
+                  onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+                  onDragLeave={() => setDragOver(false)}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    setDragOver(false);
+                    handleFiles(e.dataTransfer.files);
+                  }}
+                  className={[
+                    "border-2 border-dashed rounded-[10px] px-6 py-9 cursor-pointer transition-colors mb-4",
+                    dragOver ? "border-coral bg-coral/5" : "border-sage hover:border-coral",
+                  ].join(" ")}
                 >
-                  <Upload size={28} className="text-text-ter mx-auto mb-2.5" />
-                  <div className="text-sm text-text font-medium mb-1">Click to upload or drag & drop</div>
+                  <Upload size={28} className={`mx-auto mb-2.5 ${dragOver ? "text-coral" : "text-text-ter"}`} />
+                  <div className="text-sm text-text font-medium mb-1">
+                    {dragOver ? "Drop to upload" : "Click to upload or drag & drop"}
+                  </div>
                   <div className="text-xs text-text-ter">PDF, JPG, PNG · select multiple files to parse them one at a time</div>
                 </div>
                 <input ref={fileRef} type="file" accept=".pdf,image/*" multiple className="hidden" onChange={(e) => { handleFiles(e.target.files); e.target.value = ""; }} />
