@@ -41,6 +41,8 @@ export interface SlipLineItem {
   milling: string;
   notes: string;
   confidence: Confidence;
+  // Per-piece USD unit price when the document exposes one (invoice line, quote).
+  unitPrice?: number;
   // Present only on Mode A documents (Package Details with per-tag tally).
   // Each entry is one tag row; aggregated counts (qty / pkgs / fbm) on the parent.
   tags?: SlipLineItemTag[];
@@ -91,6 +93,9 @@ For each product line, extract:
   "state":      "GRN | KD | HT | KD-HT" (default KD if unclear),
   "milling":    "RGH | STD | S4S" (default STD if unclear),
   "notes":      string (per-line description text or note; empty string if none),
+  "unitPrice":  number (USD PER PIECE) if the document lists a unit price for this line, otherwise omit.
+                If the price is stated per MBF (thousand board feet) — e.g. "$350.00/MBF" — convert to per-piece: unitPrice = perMbf × (thick × width × length ÷ 12) ÷ 1000.
+                If the price is stated as a lump-sum line total instead of a unit price, omit unitPrice (do NOT invent it).
   "confidence": "high | medium | low"
 }
 
@@ -113,7 +118,7 @@ financial, not unrecognized. A vessel name is logistics, not unrecognized.
    - logistics          (vessel, voyage, shipping line, ports, container type, carrier, vehicle type, tare weight, VGM weight, cargo weight, loading port, destination)
    - parties            (customer, ship-to address, supplier, shipper, vendor, consignee, billTo)
    - dates_location     (dates, yard location, delivery address, ship date)
-   - financial          (payment terms, taxable / non-taxable amounts, sales tax, tax rates, total invoice amount, currency, discount notes, price totals)
+   - financial          (MONEY ONLY: payment terms, taxable / non-taxable subtotals, sales tax, tax rates, total invoice amount, currency, discount notes, freight cost). Every financial value MUST be a monetary amount, a currency, a rate/percentage, or payment terms. NEVER put footage / FBM / board-feet / total pieces / total packages in financial — those are cargo tallies and belong in unrecognized (or omit if already captured as per-line qty/pkgs).
    - unrecognized       (only if a field truly fits none of the above — e.g. page numbers, internal stamps, free-text comments unrelated to money/parties/dates/logistics/IDs)
 
 For each metadata field: normalize the key to camelCase English; assign confidence (high|medium|low).
@@ -121,7 +126,7 @@ Do not filter, skip, or summarize any non-cargo fields.
 
 Return ONLY a valid JSON object in this exact shape — no preamble, no markdown fences, no explanation:
 {
-  "line_items":        [{ "species":"string","grade":"string","thick":0,"width":0,"length":0,"qty":0,"pkgs":0,"state":"string","milling":"string","notes":"string","confidence":"high|medium|low" }],
+  "line_items":        [{ "species":"string","grade":"string","thick":0,"width":0,"length":0,"qty":0,"pkgs":0,"state":"string","milling":"string","notes":"string","unitPrice":0,"confidence":"high|medium|low" }],
   "shipment_identity": [{ "field":"string","value":"string","confidence":"high|medium|low" }],
   "logistics":         [{ "field":"string","value":"string","confidence":"high|medium|low" }],
   "parties":           [{ "field":"string","value":"string","confidence":"high|medium|low" }],
@@ -188,6 +193,8 @@ function ensureLineItemArray(raw: unknown): SlipLineItem[] {
       }
       if (cleaned.length > 0) tags = cleaned;
     }
+    const unitPriceRaw = Number(o.unitPrice);
+    const unitPrice = Number.isFinite(unitPriceRaw) && unitPriceRaw > 0 ? unitPriceRaw : undefined;
     out.push({
       species,
       grade,
@@ -200,6 +207,7 @@ function ensureLineItemArray(raw: unknown): SlipLineItem[] {
       milling: typeof o.milling === "string" && o.milling ? o.milling : "STD",
       notes: typeof o.notes === "string" ? o.notes : "",
       confidence: asConfidence(o.confidence),
+      unitPrice,
       tags,
     });
   }
@@ -260,6 +268,16 @@ export async function extractSlipSections(
   for (const key of SECTION_KEYS) {
     sections[key] = ensureFieldArray(parsed[key]);
   }
+  // Safety net for the "financial = money only" rule: if the AI still puts an FBM /
+  // footage / board-feet / total-pcs / total-pkg field in financial, move it to
+  // unrecognized so the UI's Financial panel never mixes cargo tallies with money.
+  const FBM_KEY = /fbm|footage|board[\s_-]*feet|totalpcs|totalpieces|totalpkg|totalpackages/i;
+  const kept: SlipField[] = [];
+  for (const f of sections.financial) {
+    if (FBM_KEY.test(f.field) || FBM_KEY.test(f.value)) sections.unrecognized.push(f);
+    else kept.push(f);
+  }
+  sections.financial = kept;
   return {
     lineItems: ensureLineItemArray(parsed.line_items),
     sections,

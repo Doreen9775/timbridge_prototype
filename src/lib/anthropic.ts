@@ -39,6 +39,9 @@ export interface SlipLineItem {
   milling: string;
   notes: string;
   confidence: Confidence;
+  // Per-piece USD unit price when the document exposes one (invoice line, quote).
+  // Line total = unitPrice × qty; grand order total sums this across selected lines.
+  unitPrice?: number;
   // Present only on Mode A documents (Package Details with per-tag tally).
   tags?: SlipLineItemTag[];
 }
