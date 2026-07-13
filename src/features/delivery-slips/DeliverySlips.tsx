@@ -14,8 +14,17 @@ import {
   type SlipLineItem,
 } from "@/lib/anthropic";
 import { calcFbm } from "@/lib/fbm";
+import { useLookups } from "@/hooks/useLookups";
 
-type Stage = "upload" | "analyzing" | "detail" | "error";
+type Stage = "upload" | "analyzing" | "detail" | "error" | "confirmed";
+
+// One row on the final confirmation page — what happened to a single queued file.
+type FileResult = {
+  name: string;
+  tagCount: number;
+  status: "imported" | "skipped" | "failed";
+  error?: string;
+};
 
 // Left metadata panel width bounds (px). MIN is large enough that the 3-column
 // Total FBM / Total Pcs / Total Pkgs stat grid in the Summary Card never wraps
@@ -89,6 +98,16 @@ function lookupField(sections: SlipField[][], candidates: string[]): string {
 function groupFbm(it: SlipLineItem): number {
   if (it.tags && it.tags.length > 0) return it.tags.reduce((s, t) => s + t.fbm, 0);
   return calcFbm(it.thick, it.width, it.length, it.qty);
+}
+
+// Line total in USD when unitPrice is present: unit price × piece count.
+function lineTotal(it: SlipLineItem): number | undefined {
+  if (it.unitPrice === undefined || !Number.isFinite(it.unitPrice)) return undefined;
+  return it.unitPrice * it.qty;
+}
+
+function formatUSD(v: number): string {
+  return `$${v.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
 // ── Demo seeds ────────────────────────────────────────────────────────────────
@@ -201,18 +220,21 @@ const DEMO_B: ParsedSlip = {
       qty: 320, pkgs: 2, state: "HT", milling: "S4S",
       notes: "2×6×12 #1 S4S HT White; 2.000 PKG; 3,840 footage; $350.00/MBF",
       confidence: "high",
+      unitPrice: 4.20, // $350/MBF × 12 bf/pc ÷ 1000
     },
     {
       species: "SPF", grade: "#1", thick: 2, width: 6, length: 14,
       qty: 320, pkgs: 2, state: "HT", milling: "S4S",
       notes: "2×6×14 #1 S4S HT White; 2.000 PKG; 4,480 footage; $375.00/MBF",
       confidence: "high",
+      unitPrice: 5.25, // $375/MBF × 14 bf/pc ÷ 1000
     },
     {
       species: "SPF", grade: "#1", thick: 2, width: 6, length: 16,
       qty: 960, pkgs: 6, state: "HT", milling: "S4S",
       notes: "2×6×16 #1 S4S HT White; 6.000 PKG; 15,360 footage; $400.00/MBF",
       confidence: "medium",
+      unitPrice: 6.40, // $400/MBF × 16 bf/pc ÷ 1000
     },
   ],
   sections: {
@@ -255,6 +277,9 @@ export function DeliverySlips({ tags, setTags, onNavigateToLocator }: DeliverySl
   const [queue, setQueue] = useState<File[]>([]);
   const [queueIndex, setQueueIndex] = useState(0);
   const [createdIds, setCreatedIds] = useState<string[]>([]);
+  // Per-file outcome — populated as the queue drains, rendered on the confirmed page.
+  const [results, setResults] = useState<FileResult[]>([]);
+  const { addValue } = useLookups();
   // Editable copy of the AI-parsed line items — seeded once from the parse result,
   // then mutated in place as the user edits/selects. Confirm & Create reads from here.
   const [lineItems, setLineItems] = useState<SlipLineItem[]>([]);
@@ -330,18 +355,18 @@ export function DeliverySlips({ tags, setTags, onNavigateToLocator }: DeliverySl
     setQueue([]);
     setQueueIndex(0);
     setCreatedIds([]);
+    setResults([]);
   };
 
   // Advance past the current file: parse the next one, or — queue exhausted —
-  // jump to Stock Locator filtered to everything created this batch (or back
-  // to upload if nothing was confirmed at all).
-  const goToNext = (idsSoFar: string[]) => {
+  // land on the confirmation page (unless the whole batch was 0-touch, then upload).
+  const goToNext = (resultsSoFar: FileResult[]) => {
     const next = queueIndex + 1;
     if (next < queue.length) {
       setQueueIndex(next);
       parseAt(queue, next);
-    } else if (idsSoFar.length > 0) {
-      onNavigateToLocator({ tagIds: idsSoFar });
+    } else if (resultsSoFar.length > 0) {
+      setStage("confirmed");
     } else {
       reset();
     }
@@ -372,6 +397,13 @@ export function DeliverySlips({ tags, setTags, onNavigateToLocator }: DeliverySl
       prev.map((it, i) => {
         if (i !== idx) return it;
         const numeric = key === "thick" || key === "width" || key === "length" || key === "qty" || key === "pkgs";
+        // unitPrice: empty string clears (back to undefined = "no unit price"); non-empty parses to float.
+        if (key === "unitPrice") {
+          const trimmed = val.trim();
+          if (trimmed === "") return { ...it, unitPrice: undefined };
+          const n = Number(trimmed);
+          return Number.isFinite(n) && n > 0 ? { ...it, unitPrice: n } : it;
+        }
         return { ...it, [key]: numeric ? Number(val) : val } as SlipLineItem;
       }),
     );
@@ -479,9 +511,19 @@ export function DeliverySlips({ tags, setTags, onNavigateToLocator }: DeliverySl
       }
     }
     setTags([...tags, ...newTags]);
+    // Persist any newly-seen species/grade/state/milling from the AI-parsed rows
+    // so the same values show up as first-class dropdown options next time.
+    for (const g of groups) {
+      addValue("species", g.species, g.species);
+      addValue("grades", g.grade, g.grade);
+      addValue("states", g.state, g.state);
+      addValue("milling", g.milling, g.milling);
+    }
     const allIds = [...createdIds, ...newTags.map((t) => t.id)];
     setCreatedIds(allIds);
-    goToNext(allIds);
+    const nextResults: FileResult[] = [...results, { name: fileName, tagCount: newTags.length, status: "imported" }];
+    setResults(nextResults);
+    goToNext(nextResults);
   };
 
   // ── Derived ───────────────────────────────────────────────────────────────
@@ -513,6 +555,100 @@ export function DeliverySlips({ tags, setTags, onNavigateToLocator }: DeliverySl
   const productCount = lineItems.length;
   // Warning count: number of items with med/low confidence.
   const warningCount = lineItems.filter((it) => it.confidence !== "high").length;
+  // Sum of unitPrice × qty for the currently-selected rows — shown in the Summary
+  // Card and referenced by any invoice-style Financial block for cross-checks.
+  const orderSubtotal = useMemo(
+    () => selectedItems.reduce((s, it) => s + (lineTotal(it) ?? 0), 0),
+    [selectedItems],
+  );
+  const hasAnyUnitPrice = useMemo(
+    () => lineItems.some((it) => it.unitPrice !== undefined),
+    [lineItems],
+  );
+
+  // ── Confirmation page — batch summary + navigation ────────────────────────
+  if (stage === "confirmed") {
+    const imported = results.filter((r) => r.status === "imported");
+    const failed = results.filter((r) => r.status === "failed");
+    const skipped = results.filter((r) => r.status === "skipped");
+    const totalTags = imported.reduce((s, r) => s + r.tagCount, 0);
+    const total = results.length;
+    const partial = failed.length > 0 || skipped.length > 0;
+    const allFailed = imported.length === 0;
+
+    return (
+      <div className="p-8 bg-cream min-h-full">
+        <div className="max-w-[600px] mx-auto">
+          <div className="bg-white rounded-2xl p-8 shadow-[0_1px_8px_rgba(0,0,0,0.08)] text-center">
+            <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 ${allFailed ? "bg-coral/10" : partial ? "bg-amber-100" : "bg-emerald-100"}`}>
+              {allFailed ? (
+                <AlertTriangle size={30} className="text-coral" />
+              ) : (
+                <CheckCircle size={30} className={partial ? "text-amber-500" : "text-emerald-600"} />
+              )}
+            </div>
+            <div className="text-xl font-display font-semibold text-ink mb-1">
+              {allFailed
+                ? "Import failed"
+                : partial
+                  ? `${imported.length} of ${total} slips imported — ${failed.length + skipped.length} ${failed.length + skipped.length === 1 ? "failed" : "not imported"}`
+                  : `${imported.length} of ${total} ${imported.length === 1 ? "slip" : "slips"} imported`}
+            </div>
+            {!allFailed && (
+              <div className="text-[13px] text-text-sec mb-5">
+                {totalTags} Pending {totalTags === 1 ? "tag" : "tags"} created — ready for the floor to confirm.
+              </div>
+            )}
+
+            <div className="mt-4 flex flex-col gap-1.5 text-left max-w-[420px] mx-auto">
+              {results.map((r, i) => (
+                <div key={i} className="flex items-center gap-2 text-[12px] px-3 py-2 rounded-md bg-cream/60 border border-sage/40">
+                  {r.status === "imported" ? (
+                    <CheckCircle size={13} className="text-emerald-500 shrink-0" />
+                  ) : r.status === "failed" ? (
+                    <AlertTriangle size={13} className="text-coral shrink-0" />
+                  ) : (
+                    <X size={13} className="text-text-ter shrink-0" />
+                  )}
+                  <span className="flex-1 truncate text-ink">{r.name}</span>
+                  <span className="text-[11px] text-text-sec whitespace-nowrap">
+                    {r.status === "imported"
+                      ? `${r.tagCount} tag${r.tagCount === 1 ? "" : "s"}`
+                      : r.status === "failed"
+                        ? "Parse failed"
+                        : "Skipped"}
+                  </span>
+                </div>
+              ))}
+            </div>
+
+            <div className="flex gap-2 justify-center mt-6 flex-wrap">
+              {createdIds.length > 0 && (
+                <button
+                  onClick={() => onNavigateToLocator({ tagIds: createdIds })}
+                  className="px-4 py-2 bg-coral text-white rounded-lg text-[13px] font-semibold cursor-pointer hover:brightness-95"
+                >
+                  View created tags →
+                </button>
+              )}
+              <button
+                onClick={() => onNavigateToLocator({})}
+                className="px-4 py-2 bg-transparent border border-sage rounded-lg text-[13px] text-text-sec cursor-pointer hover:border-coral hover:text-coral"
+              >
+                View all stock
+              </button>
+              <button
+                onClick={reset}
+                className="px-4 py-2 bg-transparent border border-sage rounded-lg text-[13px] text-text-sec cursor-pointer hover:border-coral hover:text-coral"
+              >
+                Upload more
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   // ── Upload / Analyzing / Parse error ──────────────────────────────────────
   if (stage === "upload" || stage === "analyzing" || stage === "error") {
@@ -552,14 +688,16 @@ export function DeliverySlips({ tags, setTags, onNavigateToLocator }: DeliverySl
                   >
                     Retry
                   </button>
-                  {hasNextFile ? (
-                    <button
-                      onClick={() => goToNext(createdIds)}
-                      className="px-4 py-2 bg-transparent border border-sage rounded-lg text-[13px] text-text-sec cursor-pointer hover:border-coral hover:text-coral"
-                    >
-                      Skip this file →
-                    </button>
-                  ) : null}
+                  <button
+                    onClick={() => {
+                      const next: FileResult[] = [...results, { name: fileName, tagCount: 0, status: "failed", error }];
+                      setResults(next);
+                      goToNext(next);
+                    }}
+                    className="px-4 py-2 bg-transparent border border-sage rounded-lg text-[13px] text-text-sec cursor-pointer hover:border-coral hover:text-coral"
+                  >
+                    Skip this file{hasNextFile ? " →" : " · finish"}
+                  </button>
                   <button
                     onClick={reset}
                     className="px-4 py-2 bg-transparent border border-sage rounded-lg text-[13px] text-text-sec cursor-pointer hover:border-coral hover:text-coral"
@@ -688,6 +826,8 @@ export function DeliverySlips({ tags, setTags, onNavigateToLocator }: DeliverySl
             totalFbm={totalFbm}
             totalPkgs={totalPkgs}
             tagsToCreate={tagsToCreate}
+            orderSubtotal={orderSubtotal}
+            hasAnyUnitPrice={hasAnyUnitPrice}
           />
         </main>
       </div>
@@ -713,7 +853,11 @@ export function DeliverySlips({ tags, setTags, onNavigateToLocator }: DeliverySl
           </button>
           {queue.length > 1 ? (
             <button
-              onClick={() => goToNext(createdIds)}
+              onClick={() => {
+                const next: FileResult[] = [...results, { name: fileName, tagCount: 0, status: "skipped" }];
+                setResults(next);
+                goToNext(next);
+              }}
               className="px-4 py-2 bg-transparent border border-sage rounded-md text-[13px] cursor-pointer text-text-sec hover:border-coral hover:text-coral"
             >
               Skip this file{hasNextFile ? " →" : " · finish"}
@@ -1113,7 +1257,7 @@ const FIELDS: Record<string, (string | number)[]> = {
 // ── Cargo line items — card layout ──────────────────────────────────────────
 function LineItemsCards({
   mode, lineItems, selected, onToggle, onToggleAll, onUpdate,
-  totalPcs, totalFbm, totalPkgs, tagsToCreate,
+  totalPcs, totalFbm, totalPkgs, tagsToCreate, orderSubtotal, hasAnyUnitPrice,
 }: {
   mode: "A" | "B";
   lineItems: SlipLineItem[];
@@ -1125,6 +1269,8 @@ function LineItemsCards({
   totalFbm: number;
   totalPkgs: number;
   tagsToCreate: number;
+  orderSubtotal: number;
+  hasAnyUnitPrice: boolean;
 }) {
   const allSelected = lineItems.length > 0 && selected.size === lineItems.length;
   const someSelected = selected.size > 0 && selected.size < lineItems.length;
@@ -1180,6 +1326,9 @@ function LineItemsCards({
             <span><span className="text-text-ter">Pcs:</span> <span className="text-ink font-bold ml-1">{totalPcs.toLocaleString()}</span></span>
             <span><span className="text-text-ter">FBM:</span> <span className="text-coral font-bold ml-1">{totalFbm.toLocaleString()}</span></span>
             <span><span className="text-text-ter">Pkgs:</span> <span className="text-ink font-bold ml-1">{totalPkgs > 0 ? totalPkgs.toLocaleString() : "—"}</span></span>
+            {hasAnyUnitPrice ? (
+              <span><span className="text-text-ter">Total:</span> <span className="text-emerald-600 font-bold ml-1">{orderSubtotal > 0 ? formatUSD(orderSubtotal) : "—"}</span></span>
+            ) : null}
           </div>
         </div>
       ) : null}
@@ -1243,6 +1392,15 @@ function GroupCard({
                   {fbm.toLocaleString()} FBM
                 </span>
               </div>
+              {item.unitPrice !== undefined ? (
+                <div className="mt-1.5 flex items-center gap-3 text-[12px] tabular-nums">
+                  <span className="text-text-sec">Unit price:</span>
+                  <span className="text-ink font-semibold">{formatUSD(item.unitPrice)}<span className="text-text-ter font-normal"> / pc</span></span>
+                  <span className="ml-auto text-emerald-600 font-bold">
+                    {formatUSD(lineTotal(item) ?? 0)} <span className="text-text-ter font-normal text-[11px]">line total</span>
+                  </span>
+                </div>
+              ) : null}
               {item.notes ? (
                 <div className="text-[11px] text-text-ter mt-1.5">{item.notes}</div>
               ) : null}
@@ -1313,7 +1471,6 @@ function EditForm({
           ["thick", "Thick"],
           ["width", "Width"],
           ["length", "Length (ft)"],
-          ["qty", "Qty (pcs)"],
         ] as const
       ).map(([k, l]) => (
         <div key={k}>
@@ -1327,6 +1484,37 @@ function EditForm({
           </select>
         </div>
       ))}
+      {/* Qty is a free-form number — piece counts don't fit a small option list. */}
+      <div>
+        <div className="text-[10px] text-text-ter mb-1">Qty (pcs)</div>
+        <input
+          type="number"
+          min={1}
+          step={1}
+          value={item.qty}
+          onChange={(e) => onUpdate("qty", e.target.value)}
+          className={selectCls}
+        />
+      </div>
+      {/* Unit price (per piece, USD) — blank means "no unit price on this line". */}
+      <div className="col-span-2">
+        <div className="text-[10px] text-text-ter mb-1">Unit price (USD / pc)</div>
+        <input
+          type="number"
+          min={0}
+          step={0.01}
+          value={item.unitPrice ?? ""}
+          placeholder="—"
+          onChange={(e) => onUpdate("unitPrice", e.target.value)}
+          className={selectCls}
+        />
+      </div>
+      <div className="col-span-2 flex flex-col justify-end">
+        <div className="text-[10px] text-text-ter mb-1">Line total (auto)</div>
+        <div className="px-2.5 py-1.5 text-xs bg-[#F9FAFB] border border-sage/60 rounded-md text-ink font-semibold tabular-nums">
+          {item.unitPrice !== undefined ? formatUSD(item.unitPrice * item.qty) : "—"}
+        </div>
+      </div>
       <div className="col-span-4 text-xs text-coral font-semibold mt-1">
         FBM = {item.thick}×{item.width}×{item.length}×{item.qty}÷12 = {formulaFbm.toLocaleString()}
       </div>

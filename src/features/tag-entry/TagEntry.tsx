@@ -25,7 +25,7 @@ interface TagEntryProps {
 
 export function TagEntry({ tags, setTags, floorView, onViewInInventory }: TagEntryProps) {
   const { pushRecord } = useRecentRecords();
-  const { species: SPECIES, grades: GRADES, states: STATES, milling: MILLINGS, locations: YARDS } = useLookups();
+  const { species: SPECIES, grades: GRADES, states: STATES, milling: MILLINGS, locations: YARDS, addValue } = useLookups();
   const [step, setStep] = useState(1);
   const [toast, setToast] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
@@ -76,6 +76,13 @@ export function TagEntry({ tags, setTags, floorView, onViewInInventory }: TagEnt
       history: [{ e: "Tag created via Tag Entry", t: "Jun 04 2026 14:32", w: "DW" }],
     };
     setTags([...tags, newTag]);
+    // Persist any newly-typed lookup value so it's a first-class option next time.
+    // addValue no-ops on duplicates and on empty strings — safe to call blindly.
+    addValue("species", species, species);
+    addValue("grades", grade, grade);
+    addValue("states", state_, state_);
+    addValue("milling", milling, milling);
+    addValue("locations", yard, yard);
     pushRecord({ type: "tag", id: newId, label: newId });
     setDone(newId);
   };
