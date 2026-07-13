@@ -624,6 +624,36 @@ A history of every commit (push) on `main`, in chronological order, with what wa
 **Files / 改动:** `App.tsx`, `features/delivery-slips/DeliverySlips.tsx`
 
 ---
+
+## 2026-07-13
+
+### Delivery Slips 6 项升级：单价、Confirmation 页、Qty 自由输入、Lookup 自动扩容、Financial 只留钱 — Delivery Slips: unit price, confirmation page, free qty input, auto-lookups, money-only Financial
+
+**🇨🇳 中文**
+- **新 Tag 属性自动加入系统 lookup**：无论是通过 Tag Entry 保存还是 Delivery Slips 确认建 tag，如果 species / grade / state / milling / yard 里出现了原本不在系统默认或自定义 lookup 里的值（比如 AI 从 slip 里解析出的 "Stud" / "Utility"），自动写入 Manager 的自定义 lookup（`localStorage: timbridge_custom_lookups`），下次这些值就在下拉里出现，无需去 Settings 手动加。重复值静默 no-op。
+- **Delivery Slips 的 Qty 编辑改为自由数字输入框**：原来的下拉列表覆盖不到真实的 pcs 数（1080、270、320…），现在 EditForm 的 Qty 是 `<input type="number" min="1" step="1">`，可以直接键入任意数字。
+- **Financial 区只放钱**：AI prompt 明确 "MONEY ONLY"，并教它把非金额字段（FBM / footage / 总 pcs / 总 pkgs）扔进 Unrecognized；服务端再兜底一次——匹配到 `fbm|footage|board feet|totalpcs|totalpieces|totalpkg|totalpackages` 的字段自动挪出 Financial。
+- **每行 Slip 显示单价与单行总价，并累加成订单总价**：`SlipLineItem` 加了可选的 `unitPrice`（USD / piece）。AI prompt 教它从 invoice 单价列或 `$/MBF` 单位里换算；EditForm 里 Qty 旁边加了 Unit price 输入框与自动计算的 Line total；每张 slip 行下方显示 `Unit price: $4.20 / pc · $1,344.00 line total`；底栏 stats 增加 **Total** 列 = Σ (unitPrice × qty) 覆盖当前选中的所有行。
+- **Confirm & Create 后新增 Confirmation 页**：不再直接跳走。整个队列跑完后落到该页，标题按结果切换：
+  - 全部成功 → `N of N slips imported`
+  - 部分失败 → `X of Y slips imported — K failed`（列出每个文件是 imported N tags / Parse failed / Skipped 哪一种，附对应图标）
+  - 全部失败 → `Import failed`（红色警告）
+  - 下方三个按钮：**View created tags →**（Stock Locator 过滤到本批 tag）· **View all stock**（Stock Locator 全量）· **Upload more**（回上传页）。解析失败页里的 Skip 也支持在最后一个文件用（此前只在有下一份文件时可点），保证已成功导入的部分不会被 Cancel 丢弃。
+
+**🇬🇧 English**
+- **New tag property values auto-populate the lookup tables**: whenever Tag Entry saves or Delivery Slips confirms tags, any species / grade / state / milling / yard value that isn't already in the merged system+custom lookups (e.g. AI-parsed "Stud" or "Utility") is written to the Manager's custom lookups (`localStorage: timbridge_custom_lookups`) — so those values show up in dropdowns next time without a manual Settings visit. Duplicates silently no-op.
+- **Free-form qty number input in Delivery Slips edit**: the qty select had a fixed option list that couldn't cover real piece counts (1080, 270, 320…). Replaced with `<input type="number" min="1" step="1">` so users type any count.
+- **Financial section: money only, no FBM**: the parser prompt now says "MONEY ONLY" for the Financial category and explicitly routes footage / FBM / total pcs / total pkgs to Unrecognized; a server-side backstop matches `fbm|footage|board feet|totalpcs|totalpieces|totalpkg|totalpackages` and moves any offenders out of Financial.
+- **Per-line unit price + line total + order subtotal**: `SlipLineItem` gained an optional `unitPrice` (USD / piece). Prompt guidance teaches the AI to pull it from invoice unit-price columns or to convert `$/MBF` to per-piece using board-feet math. EditForm adds a Unit-price input next to Qty plus a read-only auto-computed Line total; each slip row displays `Unit price: $X.XX / pc · $Y.YY line total`; the bottom-bar stats grid gains a **Total** column summing (unitPrice × qty) over the currently-selected rows.
+- **New confirmation page after Confirm & Create**: the batch no longer jumps straight to Stock Locator. When the queue finishes it lands on a summary page whose heading adapts to outcome:
+  - All succeeded → `N of N slips imported`
+  - Partial → `X of Y slips imported — K failed` (each file listed as imported N tags / Parse failed / Skipped with the matching icon)
+  - All failed → `Import failed` (coral warning)
+  - Below: three buttons — **View created tags →** (Stock Locator filtered to this batch), **View all stock** (unfiltered), **Upload more** (returns to the upload screen). Skip on the parse-error page is now always available (previously only when another file remained), so already-successful files aren't lost by Cancel.
+
+**Files / 改动:** `api/_core.ts`, `src/lib/anthropic.ts`, `src/features/tag-entry/TagEntry.tsx`, `src/features/delivery-slips/DeliverySlips.tsx`
+
+---
 ## Pending / 未来 (not yet built — 尚未开始)
 
 - **Reports & Saved Views**（报表与保存视图）
