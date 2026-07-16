@@ -1,7 +1,7 @@
 // Shared filter primitives — extracted from StockLocator so the Available-to-Sell
-// page (and any future inventory views) can reuse the exact same Apply-Now dropdowns
-// without duplicating the popover shell, calendar, or set-equality logic.
-import { useEffect, useState, type ReactNode } from "react";
+// page (and any future inventory views) can reuse the exact same auto-apply
+// dropdowns without duplicating the popover shell, calendar, or trigger label.
+import { useState, type ReactNode } from "react";
 import { ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
 
 export const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
@@ -17,20 +17,13 @@ export function formatFilterDate(iso: string): string {
   return `${d} ${MONTHS_SHORT[m - 1]} ${y}`;
 }
 
-// Set-equality on string arrays — drives the "Apply Now" enabled state.
-export function sameSet(a: string[], b: string[]): boolean {
-  if (a.length !== b.length) return false;
-  const s = new Set(a);
-  return b.every((v) => s.has(v));
-}
-
-// Shared dropdown shell: trigger (label + count badge + chevron) → click-outside popover → Apply Now footer.
+// Shared dropdown shell: trigger (label + count badge + chevron) → click-outside popover.
+// No Apply footer — every selection inside the popover applies immediately, and the
+// popover stays open so users can keep toggling (click outside to dismiss).
 export function FilterDropdown({
   label,
   triggerLabel,
   appliedCount,
-  applyEnabled,
-  onApply,
   width = "w-[300px]",
   children,
   note,
@@ -38,17 +31,11 @@ export function FilterDropdown({
   label: string;
   triggerLabel?: string;
   appliedCount: number;
-  applyEnabled: boolean;
-  onApply: () => void;
   width?: string;
   children: ReactNode;
   note: string;
 }) {
   const [open, setOpen] = useState(false);
-  const apply = () => {
-    onApply();
-    setOpen(false);
-  };
   return (
     <div className="relative">
       <button
@@ -70,19 +57,7 @@ export function FilterDropdown({
           <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
           <div className={`absolute left-0 top-[calc(100%+6px)] ${width} bg-white rounded-xl shadow-[0_8px_30px_rgba(0,0,0,0.12)] border border-sage z-50 overflow-hidden`}>
             <div className="p-4">{children}</div>
-            <div className="px-4 pb-4 pt-1">
-              <div className="text-[11px] text-text-ter mb-3 border-t border-sage/60 pt-3">{note}</div>
-              <button
-                onClick={apply}
-                disabled={!applyEnabled}
-                className={[
-                  "w-full py-2 rounded-lg text-[13px] font-semibold transition-colors",
-                  applyEnabled ? "bg-coral text-white cursor-pointer hover:brightness-95" : "bg-sage/30 text-text-ter cursor-not-allowed",
-                ].join(" ")}
-              >
-                Apply Now
-              </button>
-            </div>
+            <div className="px-4 pb-3 text-[11px] text-text-ter border-t border-sage/60 pt-2.5">{note}</div>
           </div>
         </>
       )}
@@ -91,6 +66,8 @@ export function FilterDropdown({
 }
 
 // Multi-select pill list (Species / Status / Location / Grade / Length / etc.).
+// Each click toggles the option in `applied` immediately — the parent's filter
+// state updates on every click, so the underlying table re-filters live.
 export function PillFilter({
   label,
   options,
@@ -102,21 +79,14 @@ export function PillFilter({
   applied: string[];
   onApply: (v: string[]) => void;
 }) {
-  const [draft, setDraft] = useState<string[]>(applied);
-  useEffect(() => setDraft(applied), [applied]);
-  const toggle = (o: string) => setDraft((d) => (d.includes(o) ? d.filter((x) => x !== o) : [...d, o]));
+  const toggle = (o: string) =>
+    onApply(applied.includes(o) ? applied.filter((x) => x !== o) : [...applied, o]);
   return (
-    <FilterDropdown
-      label={label}
-      appliedCount={applied.length}
-      applyEnabled={!sameSet(draft, applied)}
-      onApply={() => onApply(draft)}
-      note="*You can choose multiple"
-    >
+    <FilterDropdown label={label} appliedCount={applied.length} note="*Click to toggle · multi-select">
       <div className="text-sm font-semibold text-ink mb-3">Select {label}</div>
       <div className="flex flex-wrap gap-2">
         {options.map((o) => {
-          const on = draft.includes(o);
+          const on = applied.includes(o);
           return (
             <button
               key={o}
@@ -135,14 +105,13 @@ export function PillFilter({
   );
 }
 
-// Multi-date calendar (Entry Date filter).
+// Multi-date calendar (Entry Date filter) — same live-apply behavior as PillFilter.
 export function DateFilter({ applied, onApply }: { applied: string[]; onApply: (v: string[]) => void }) {
-  const [draft, setDraft] = useState<string[]>(applied);
-  useEffect(() => setDraft(applied), [applied]);
   const today = new Date();
   const [view, setView] = useState({ y: today.getFullYear(), m: today.getMonth() });
 
-  const toggle = (iso: string) => setDraft((d) => (d.includes(iso) ? d.filter((x) => x !== iso) : [...d, iso]));
+  const toggle = (iso: string) =>
+    onApply(applied.includes(iso) ? applied.filter((x) => x !== iso) : [...applied, iso]);
   const shift = (delta: number) => setView((v) => {
     const m = v.m + delta;
     return { y: v.y + Math.floor(m / 12), m: ((m % 12) + 12) % 12 };
@@ -161,10 +130,8 @@ export function DateFilter({ applied, onApply }: { applied: string[]; onApply: (
       label="Date"
       triggerLabel={triggerLabel}
       appliedCount={applied.length}
-      applyEnabled={!sameSet(draft, applied)}
-      onApply={() => onApply(draft)}
       width="w-[320px]"
-      note="*You can choose multiple dates"
+      note="*Click a date to toggle · multi-select"
     >
       <div className="flex items-center justify-between mb-3">
         <div className="text-sm font-semibold text-ink">{MONTHS[view.m]} {view.y}</div>
@@ -178,7 +145,7 @@ export function DateFilter({ applied, onApply }: { applied: string[]; onApply: (
         {cells.map((d, i) => {
           if (d === null) return <div key={i} />;
           const iso = toISO(view.y, view.m, d);
-          const on = draft.includes(iso);
+          const on = applied.includes(iso);
           return (
             <div key={i} className="flex justify-center">
               <button
