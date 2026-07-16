@@ -654,6 +654,36 @@ A history of every commit (push) on `main`, in chronological order, with what wa
 **Files / 改动:** `api/_core.ts`, `src/lib/anthropic.ts`, `src/features/tag-entry/TagEntry.tsx`, `src/features/delivery-slips/DeliverySlips.tsx`
 
 ---
+
+## 2026-07-16
+
+### 筛选自动生效 + 表格分页 + 统一按钮体系 + 珊瑚色去过度使用 — Auto-apply filters + pagination + unified Button primitive + coral overuse cull
+
+**🇨🇳 中文**
+- **筛选点击即时生效，去掉 Apply Now 按钮**：Stock Locator / Available-to-Sell 用的 `FilterDropdown` / `PillFilter` / `DateFilter` 全面重构——每次点 pill 或日期就直接更新 filter 状态，表格立刻重算，popover 保持打开供多选，点外部关闭。删除了 `sameSet` 判等和 draft/apply 两态 → 底栏 Apply Now 按钮同步移除。
+- **数据表分页**：新增共享组件 [`Pagination`](src/components/shared/Pagination.tsx) + `usePagedSlice` helper，默认 25 行/页（admin 表格惯例 · Airtable / Linear / Notion），提供 **10 / 25 / 50 / 100** 选项。Stock Locator 与 Available-to-Sell 表格接入：底部显示 "Showing N–M of X · Rows / page · Page N of M · ‹ ›"；filter 变化时自动 reset 到第 1 页，`total` 缩小时 clamp。
+- **统一按钮 primitive**：新增 [`Button`](src/components/shared/Button.tsx)，四个 variant × 三个 size：
+  - `primary`（filled coral，主 CTA）· `secondary`（sage 描边，中性/取消）· `destructive`（coral 描边，删除类）· `ghost`（纯文本）
+  - `sm` / `md` / `lg`，含 `disabled` 兜底样式与 focus ring
+  - 各种散落的手写按钮（Confirm & create / Cancel / Save / Delete / Reserve / Retry / Skip 等 20+ 处）迁移到该 primitive，hover / disabled / focus 一致。
+- **珊瑚色过度使用治理**（遵循 60/30/10 rule 与 "accent = signal, not decoration"）：
+  - **保留 coral**：primary CTA、destructive 按钮、sidebar 当前项、激活的 filter chip、低库存告警（qty < 50）、Discrepancy 状态、警告图标/文本、Row 选中底色、Detail Drawer 最终 bin badge、上传页 Truck hero icon、拖拽悬停高亮、"N tags to create" 强调。
+  - **去除 coral**：Stock Locator 表格整列 Tag ID → 深灰；Detail Drawer / Floor 卡 / 删除弹窗里的所有 Tag ID → 深灰；Delivery Slips 每行 FBM 总数与展开子行 FBM → 深灰（原本每行橙字重复）；底栏 stats（Pcs/Pkgs 是 ink 而 FBM 是 coral）统一 ink；EditForm 的 FBM 公式行降为 `text-text-sec` + 结果 ink；Header "File N of M" 进度 → ink；Tag Entry 完成 CheckCircle 从 coral 换为 `emerald-500`（success 语义应为绿）；Dashboard "FBM by Species" bar chart 原本 ink/coral 交替填充（data-viz 单序列应用单色），改为纯 ink + hover opacity。
+
+**🇬🇧 English**
+- **Filters auto-apply on every click, Apply Now button removed**: `FilterDropdown` / `PillFilter` / `DateFilter` no longer keep a draft — every pill or date click updates the filter state directly and the table re-filters live. The popover stays open for multi-select; clicking outside dismisses. `sameSet` equality and the applyEnabled gate are gone.
+- **Pagination on data tables**: new shared [`Pagination`](src/components/shared/Pagination.tsx) primitive + `usePagedSlice`, default 25 rows/page (admin-table convention — Airtable / Linear / Notion) with **10 / 25 / 50 / 100** options. Stock Locator and Available-to-Sell now render "Showing N–M of X · Rows / page · Page N of M · ‹ ›" beneath the table; page auto-resets to 1 on filter change, clamps when the total shrinks.
+- **Unified Button primitive**: new [`Button`](src/components/shared/Button.tsx) with four variants × three sizes:
+  - `primary` (filled coral CTA) · `secondary` (sage outline neutral) · `destructive` (coral outline delete) · `ghost` (text-only)
+  - `sm` / `md` / `lg`, with baked-in disabled styling and a focus ring
+  - Twenty-plus ad-hoc buttons across features (Confirm & create, Cancel, Save, Delete, Reserve, Retry, Skip …) migrated to the primitive so hover / disabled / focus states match.
+- **Coral overuse cleanup** (following the 60/30/10 rule — accent belongs to signals, not decoration):
+  - **Kept coral for**: primary CTAs, destructive buttons, active sidebar item, active filter chip, low-qty warning (qty < 50), Discrepancy status, alert icons/text, selected-row background tint, DetailDrawer final-bin badge, upload-page Truck hero icon, drag-over dropzone highlight, "N tags to create" emphasis.
+  - **Removed coral from**: the whole Tag ID column in Stock Locator (a full column of orange text); Tag ID in DetailDrawer / floor cards / delete confirm modal — all now dark ink; per-row FBM totals in Delivery Slips group cards and expanded package-detail children (repeated orange numbers) — now ink; bottom-bar stats where FBM was coral while Pcs/Pkgs were ink — all unified to ink; EditForm's FBM formula readout to `text-text-sec` with the result in ink; the "File N of M" progress hint to ink. Tag Entry's completion CheckCircle went from coral to `emerald-500` (success semantically = green, not warning). The Dashboard "FBM by Species" bar chart previously alternated ink/coral fills (a data-viz single-series should be single-color) — now uniform ink with hover opacity feedback.
+
+**Files / 改动:** new `src/components/shared/Button.tsx`, `src/components/shared/Pagination.tsx`; `src/features/stock-locator/filters.tsx`, `src/features/stock-locator/StockLocator.tsx`, `src/features/available-to-sell/AvailableToSell.tsx`, `src/features/delivery-slips/DeliverySlips.tsx`, `src/features/tag-entry/TagEntry.tsx`, `src/features/dashboard/Dashboard.tsx`
+
+---
 ## Pending / 未来 (not yet built — 尚未开始)
 
 - **Reports & Saved Views**（报表与保存视图）
