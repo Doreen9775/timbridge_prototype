@@ -7,6 +7,8 @@ import { calcBoardFeet, calcLineal, calcFbm } from "@/lib/fbm";
 import { useRecentRecords } from "@/hooks/useRecentRecords";
 import { useLookups } from "@/hooks/useLookups";
 import { PillFilter, DateFilter, MONTHS_SHORT } from "./filters";
+import { Pagination, DEFAULT_PAGE_SIZE, usePagedSlice } from "@/components/shared/Pagination";
+import { Button } from "@/components/shared/Button";
 
 const STATUS_OPTIONS = ["Pending", "Received", "Available", "Reserved", "Shipped", "Discrepancy"];
 
@@ -112,6 +114,8 @@ export function StockLocator({ tags, floorView, role, openTagId, onTagOpened, on
   const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
   const [confirmTagId, setConfirmTagId] = useState<string | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<{ ids: string[] } | null>(null);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
   // Tags currently referenced by any Sales Order line item — blocked from deletion so
   // the SO doesn't dangle. Set for O(1) lookup on selection changes.
   const linkedTagIds = useMemo(
@@ -194,6 +198,13 @@ export function StockLocator({ tags, floorView, role, openTagId, onTagOpened, on
       }),
     [tags, search, dates, statusF, speciesF, gradeF, stateF, millingF, yardF, lowQty, idSet],
   );
+
+  // Clamp page so it doesn't dangle past the end when filters shrink the set.
+  // Also reset to page 1 whenever the effective filter changes.
+  useEffect(() => { setPage(1); }, [search, dates, statusF, speciesF, gradeF, stateF, millingF, yardF, lowQty, idSet, pageSize]);
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  useEffect(() => { if (page > totalPages) setPage(totalPages); }, [page, totalPages]);
+  const pageRows = usePagedSlice(filtered, page, pageSize);
 
   const totals = useMemo(
     () => ({
@@ -286,7 +297,7 @@ export function StockLocator({ tags, floorView, role, openTagId, onTagOpened, on
           {filtered.slice(0, 5).map((t) => (
             <div key={t.id} className="bg-white rounded-xl p-5 border border-sage">
               <div className="flex justify-between items-start mb-3">
-                <span className="font-mono text-[22px] font-bold text-coral">{t.id}</span>
+                <span className="font-mono text-[22px] font-bold text-ink">{t.id}</span>
                 <StatusBadge status={t.status} size="lg" />
               </div>
               <div className="text-xl text-text mb-2">📍 {t.yard} · {t.section} · {t.rack}</div>
@@ -349,33 +360,25 @@ export function StockLocator({ tags, floorView, role, openTagId, onTagOpened, on
             className="w-full py-2.5 pl-[38px] pr-3 text-sm border border-sage rounded-lg outline-none bg-white box-border"
           />
         </div>
-        <button
+        <Button
+          variant="primary"
           onClick={handleExport}
           disabled={checkedIds.size === 0}
+          leftIcon={<Download size={14} />}
           title={checkedIds.size === 0 ? "Select one or more tags to export" : `Export ${checkedIds.size} selected tag${checkedIds.size === 1 ? "" : "s"}`}
-          className={[
-            "px-3.5 py-1.5 text-[13px] rounded-md border flex items-center gap-1.5 transition-colors whitespace-nowrap",
-            checkedIds.size === 0
-              ? "border-sage bg-white text-text-ter opacity-60 cursor-not-allowed"
-              : "border-coral bg-coral text-white cursor-pointer hover:brightness-95",
-          ].join(" ")}
         >
-          <Download size={14} />Export CSV{checkedIds.size > 0 ? ` (${checkedIds.size})` : ""}
-        </button>
+          Export CSV{checkedIds.size > 0 ? ` (${checkedIds.size})` : ""}
+        </Button>
         {canDelete && (
-          <button
+          <Button
+            variant="destructive"
             onClick={() => setDeleteConfirm({ ids: Array.from(checkedIds) })}
             disabled={checkedIds.size === 0}
+            leftIcon={<Trash2 size={14} />}
             title={checkedIds.size === 0 ? "Select one or more tags to delete" : `Delete ${checkedIds.size} selected tag${checkedIds.size === 1 ? "" : "s"}`}
-            className={[
-              "px-3.5 py-1.5 text-[13px] rounded-md border flex items-center gap-1.5 transition-colors whitespace-nowrap",
-              checkedIds.size === 0
-                ? "border-sage bg-white text-text-ter opacity-60 cursor-not-allowed"
-                : "border-coral bg-white text-coral cursor-pointer hover:bg-coral/10",
-            ].join(" ")}
           >
-            <Trash2 size={14} />Delete{checkedIds.size > 0 ? ` (${checkedIds.size})` : ""}
-          </button>
+            Delete{checkedIds.size > 0 ? ` (${checkedIds.size})` : ""}
+          </Button>
         )}
         <span className="text-xs text-text-ter whitespace-nowrap">Last synced 14:32</span>
       </div>
@@ -443,7 +446,7 @@ export function StockLocator({ tags, floorView, role, openTagId, onTagOpened, on
             </tr>
           </thead>
           <tbody>
-            {filtered.map((t, i) => {
+            {pageRows.map((t, i) => {
               const hl = !!search && (t.id.toLowerCase().includes(search.toLowerCase()) || t.species.toLowerCase().includes(search.toLowerCase()));
               const isSelected = selected === t.id;
               const isChecked = checkedIds.has(t.id);
@@ -471,7 +474,7 @@ export function StockLocator({ tags, floorView, role, openTagId, onTagOpened, on
                       className="accent-coral w-4 h-4 cursor-pointer align-middle"
                     />
                   </td>
-                  <td className="px-3.5 py-[11px] font-mono text-coral font-semibold whitespace-nowrap">{t.id}</td>
+                  <td className="px-3.5 py-[11px] font-mono text-ink font-semibold whitespace-nowrap">{t.id}</td>
                   <td className="px-3.5 py-[11px]">{t.species}</td>
                   <td className="px-3.5 py-[11px]">{t.grade}</td>
                   <td className="px-3.5 py-[11px] font-mono whitespace-nowrap">{t.thick}×{t.width} × {t.length}'</td>
@@ -492,6 +495,14 @@ export function StockLocator({ tags, floorView, role, openTagId, onTagOpened, on
           </tbody>
         </table>
         </div>
+        <Pagination
+          page={page}
+          pageSize={pageSize}
+          total={filtered.length}
+          onPageChange={setPage}
+          onPageSizeChange={setPageSize}
+          label="tags"
+        />
       </div>
       </div>
 
@@ -535,7 +546,7 @@ export function StockLocator({ tags, floorView, role, openTagId, onTagOpened, on
               <div className="bg-[#F9FAFB] rounded-md px-3 py-2 mb-3 max-h-32 overflow-y-auto">
                 {deleteConfirm.ids.map((id) => (
                   <div key={id} className="flex items-center gap-2 text-[12px] py-0.5">
-                    <span className="font-mono text-coral font-semibold">{id}</span>
+                    <span className="font-mono text-ink font-semibold">{id}</span>
                     {linkedTagIds.has(id) && (
                       <span className="text-[10px] text-text-ter">linked to a sales order — will be skipped</span>
                     )}
@@ -553,19 +564,10 @@ export function StockLocator({ tags, floorView, role, openTagId, onTagOpened, on
                 </div>
               )}
               <div className="flex gap-2 justify-end">
-                <button onClick={() => setDeleteConfirm(null)} className="px-3 py-1.5 text-[13px] rounded-md border border-sage text-text-sec hover:text-coral hover:border-coral cursor-pointer">Cancel</button>
-                <button
-                  onClick={commit}
-                  disabled={deletable.length === 0}
-                  className={[
-                    "px-3.5 py-1.5 text-[13px] rounded-md font-semibold",
-                    deletable.length === 0
-                      ? "bg-sage/40 text-text-ter cursor-not-allowed"
-                      : "bg-coral text-white hover:brightness-95 cursor-pointer",
-                  ].join(" ")}
-                >
+                <Button onClick={() => setDeleteConfirm(null)}>Cancel</Button>
+                <Button variant="primary" onClick={commit} disabled={deletable.length === 0}>
                   Delete{deletable.length > 0 && deleteConfirm.ids.length > 1 ? ` (${deletable.length})` : ""}
-                </button>
+                </Button>
               </div>
             </div>
           </div>
@@ -622,7 +624,7 @@ function FloorConfirmSheet({ tag, onClose, onSave }: { tag: Tag; onClose: () => 
     <div className="fixed inset-0 z-[100] bg-ink/40 flex items-end justify-center" onClick={onClose}>
       <div className="bg-white w-full max-w-md rounded-t-2xl max-h-[85vh] overflow-y-auto p-6" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-5">
-          <span className="font-mono text-xl font-bold text-coral">{tag.id}</span>
+          <span className="font-mono text-xl font-bold text-ink">{tag.id}</span>
           <button onClick={onClose} aria-label="Close" className="min-h-[44px] min-w-[44px] flex items-center justify-center text-text-sec hover:text-coral cursor-pointer bg-transparent border-0">
             <X size={22} />
           </button>
@@ -771,14 +773,14 @@ function DetailDrawer({
   const header = (
     <div className="px-5 pt-5 pb-4 border-b border-sage flex items-center justify-between">
       <div className="flex items-center gap-2.5">
-        <span className="font-mono text-base font-bold text-coral">{tag.id}</span>
+        <span className="font-mono text-base font-bold text-ink">{tag.id}</span>
         <StatusBadge status={editing ? draft.status : tag.status} />
       </div>
       <div className="flex items-center gap-1.5">
         {editing ? (
           <>
-            <button onClick={cancelEdit} className="px-3 py-1 text-[13px] rounded-md border border-sage text-text-sec hover:text-coral hover:border-coral cursor-pointer">Cancel</button>
-            <button onClick={saveEdit} className="px-3.5 py-1 text-[13px] rounded-md bg-coral text-white font-semibold hover:brightness-95 cursor-pointer">Save</button>
+            <Button size="sm" onClick={cancelEdit}>Cancel</Button>
+            <Button size="sm" variant="primary" onClick={saveEdit}>Save</Button>
             <button
               onClick={onToggleFullscreen}
               title={fullscreen ? "Exit fullscreen" : "Fullscreen"}
@@ -791,14 +793,10 @@ function DetailDrawer({
         ) : (
           <>
             {canEdit && (
-              <button onClick={startEdit} aria-label="Edit" title="Edit" className="flex items-center gap-1 px-2.5 py-1 text-[13px] rounded-md border border-sage text-text-sec hover:text-coral hover:border-coral cursor-pointer">
-                <Pencil size={13} />Edit
-              </button>
+              <Button size="sm" onClick={startEdit} aria-label="Edit" title="Edit" leftIcon={<Pencil size={13} />}>Edit</Button>
             )}
             {onDelete && (
-              <button onClick={onDelete} aria-label="Delete" title="Delete tag" className="flex items-center gap-1 px-2.5 py-1 text-[13px] rounded-md border border-coral text-coral hover:bg-coral/10 cursor-pointer">
-                <Trash2 size={13} />Delete
-              </button>
+              <Button size="sm" variant="destructive" onClick={onDelete} aria-label="Delete" title="Delete tag" leftIcon={<Trash2 size={13} />}>Delete</Button>
             )}
             <button
               onClick={onToggleFullscreen}
@@ -1037,7 +1035,7 @@ function DetailDrawer({
             <div className="text-xs text-text-sec mb-2">Traceability</div>
             <div className="bg-sage/20 rounded-lg p-3 border border-sage">
               <div className="text-[11px] text-text-sec mb-1.5">↑ Parent Log</div>
-              <div className="font-mono text-[13px] text-coral font-semibold">{tag.parentLog}</div>
+              <div className="font-mono text-[13px] text-ink font-semibold">{tag.parentLog}</div>
               <div className="text-[11px] text-text-sec mt-2">↓ Sibling boards from same production run share this log ID</div>
             </div>
           </div>
@@ -1083,8 +1081,9 @@ function DetailDrawer({
           </div>
         )}
         <div className="flex gap-2 justify-end">
-          <button onClick={() => setStatusConfirm(null)} className="px-3 py-1.5 text-[13px] rounded-md border border-sage text-text-sec hover:text-coral hover:border-coral cursor-pointer">Cancel</button>
-          <button
+          <Button onClick={() => setStatusConfirm(null)}>Cancel</Button>
+          <Button
+            variant="primary"
             onClick={() => {
               setDraft((d) => ({ ...d, status: statusConfirm.next }));
               if (statusConfirm.next === "Reserved" && statusConfirm.soId) {
@@ -1092,10 +1091,9 @@ function DetailDrawer({
               }
               setStatusConfirm(null);
             }}
-            className="px-3.5 py-1.5 text-[13px] rounded-md bg-coral text-white font-semibold hover:brightness-95 cursor-pointer"
           >
             Confirm
-          </button>
+          </Button>
         </div>
       </div>
     </div>

@@ -6,6 +6,8 @@ import { useEffect, useMemo, useState } from "react";
 import { CheckCircle2, X } from "lucide-react";
 import type { Tag, Role, SalesOrder } from "@/lib/types";
 import { PillFilter } from "@/features/stock-locator/filters";
+import { Pagination, DEFAULT_PAGE_SIZE, usePagedSlice } from "@/components/shared/Pagination";
+import { Button } from "@/components/shared/Button";
 
 const MONTHS_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
@@ -59,6 +61,8 @@ export function AvailableToSell({ tags, role, salesOrders, onUpdateTag, onLinkSa
   const [locationF, setLocationF] = useState<string[]>([]);
   const [reserving, setReserving] = useState<Tag | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
 
   // Compute "today" once per mount — Days in Yard doesn't need live ticking.
   const todayMs = useMemo(() => new Date().setHours(0, 0, 0, 0), []);
@@ -88,6 +92,12 @@ export function AvailableToSell({ tags, role, salesOrders, onUpdateTag, onLinkSa
       }),
     [available, speciesF, gradeF, lengthF, locationF],
   );
+
+  // Reset to page 1 on any filter change; clamp if the total shrinks.
+  useEffect(() => { setPage(1); }, [speciesF, gradeF, lengthF, locationF, pageSize]);
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  useEffect(() => { if (page > totalPages) setPage(totalPages); }, [page, totalPages]);
+  const pageRows = usePagedSlice(filtered, page, pageSize);
 
   const hasActiveFilters = speciesF.length || gradeF.length || lengthF.length || locationF.length;
   const clearFilters = () => {
@@ -190,7 +200,7 @@ export function AvailableToSell({ tags, role, salesOrders, onUpdateTag, onLinkSa
                   </td>
                 </tr>
               ) : (
-                filtered.map((t) => (
+                pageRows.map((t) => (
                   <tr key={t.id} className="border-t border-sage/40 hover:bg-sage/10">
                     <td className="px-3 py-3 font-medium text-ink whitespace-nowrap">{t.id}</td>
                     <td className="px-3 py-3 whitespace-nowrap">{t.species}</td>
@@ -202,12 +212,7 @@ export function AvailableToSell({ tags, role, salesOrders, onUpdateTag, onLinkSa
                     <td className="px-3 py-3 text-right tabular-nums">{formatUSD(t.marketValue)}</td>
                     <td className="px-3 py-3 text-right tabular-nums">{daysInYard(t, todayMs)}</td>
                     <td className="px-3 py-3 whitespace-nowrap">
-                      <button
-                        onClick={() => setReserving(t)}
-                        className="px-3.5 py-1.5 rounded-md bg-coral text-white text-[12px] font-semibold cursor-pointer hover:brightness-95"
-                      >
-                        Reserve
-                      </button>
+                      <Button size="sm" variant="primary" onClick={() => setReserving(t)}>Reserve</Button>
                     </td>
                   </tr>
                 ))
@@ -215,6 +220,14 @@ export function AvailableToSell({ tags, role, salesOrders, onUpdateTag, onLinkSa
             </tbody>
           </table>
         </div>
+        <Pagination
+          page={page}
+          pageSize={pageSize}
+          total={filtered.length}
+          onPageChange={setPage}
+          onPageSizeChange={setPageSize}
+          label="tags"
+        />
       </div>
 
       {reserving ? (
@@ -302,22 +315,10 @@ function ReserveModal({
           </div>
 
           <div className="flex items-center justify-end gap-2 px-5 pb-5 pt-1">
-            <button
-              onClick={onCancel}
-              className="px-4 py-2 rounded-md border border-sage text-[13px] text-text-sec hover:border-coral hover:text-coral cursor-pointer"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={() => canConfirm && onConfirm(soId)}
-              disabled={!canConfirm}
-              className={[
-                "px-4 py-2 rounded-md text-[13px] font-semibold transition-colors",
-                canConfirm ? "bg-coral text-white cursor-pointer hover:brightness-95" : "bg-sage/30 text-text-ter cursor-not-allowed",
-              ].join(" ")}
-            >
+            <Button onClick={onCancel}>Cancel</Button>
+            <Button variant="primary" onClick={() => canConfirm && onConfirm(soId)} disabled={!canConfirm}>
               Confirm
-            </button>
+            </Button>
           </div>
         </div>
       </div>

@@ -175,8 +175,8 @@ export function Dashboard({ tags, floorView, onNavigateToLocator, onOpenTag }: D
                 {speciesData.map((d, i) => (
                   <Cell
                     key={i}
-                    fill={i % 2 === 0 ? C.ink : C.coral}
-                    fillOpacity={hoveredBar === i ? 0.85 : 1}
+                    fill={C.ink}
+                    fillOpacity={hoveredBar === i ? 0.7 : 1}
                     cursor="pointer"
                     role="button"
                     aria-label={`Filter to ${d.sp} tags`}

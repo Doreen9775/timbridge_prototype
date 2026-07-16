@@ -15,6 +15,7 @@ import {
 } from "@/lib/anthropic";
 import { calcFbm } from "@/lib/fbm";
 import { useLookups } from "@/hooks/useLookups";
+import { Button } from "@/components/shared/Button";
 
 type Stage = "upload" | "analyzing" | "detail" | "error" | "confirmed";
 
@@ -624,25 +625,12 @@ export function DeliverySlips({ tags, setTags, onNavigateToLocator }: DeliverySl
 
             <div className="flex gap-2 justify-center mt-6 flex-wrap">
               {createdIds.length > 0 && (
-                <button
-                  onClick={() => onNavigateToLocator({ tagIds: createdIds })}
-                  className="px-4 py-2 bg-coral text-white rounded-lg text-[13px] font-semibold cursor-pointer hover:brightness-95"
-                >
+                <Button variant="primary" onClick={() => onNavigateToLocator({ tagIds: createdIds })}>
                   View created tags →
-                </button>
+                </Button>
               )}
-              <button
-                onClick={() => onNavigateToLocator({})}
-                className="px-4 py-2 bg-transparent border border-sage rounded-lg text-[13px] text-text-sec cursor-pointer hover:border-coral hover:text-coral"
-              >
-                View all stock
-              </button>
-              <button
-                onClick={reset}
-                className="px-4 py-2 bg-transparent border border-sage rounded-lg text-[13px] text-text-sec cursor-pointer hover:border-coral hover:text-coral"
-              >
-                Upload more
-              </button>
+              <Button onClick={() => onNavigateToLocator({})}>View all stock</Button>
+              <Button onClick={reset}>Upload more</Button>
             </div>
           </div>
         </div>
@@ -682,28 +670,17 @@ export function DeliverySlips({ tags, setTags, onNavigateToLocator }: DeliverySl
                 <div className="text-[13px] text-coral mb-5">{error}</div>
                 {queue.length > 1 ? <QueueProgress queue={queue} current={queueIndex} /> : null}
                 <div className="flex gap-2 justify-center mt-5">
-                  <button
-                    onClick={() => parseAt(queue, queueIndex)}
-                    className="px-4 py-2 bg-coral text-white rounded-lg text-[13px] font-semibold cursor-pointer hover:brightness-95"
-                  >
-                    Retry
-                  </button>
-                  <button
+                  <Button variant="primary" onClick={() => parseAt(queue, queueIndex)}>Retry</Button>
+                  <Button
                     onClick={() => {
                       const next: FileResult[] = [...results, { name: fileName, tagCount: 0, status: "failed", error }];
                       setResults(next);
                       goToNext(next);
                     }}
-                    className="px-4 py-2 bg-transparent border border-sage rounded-lg text-[13px] text-text-sec cursor-pointer hover:border-coral hover:text-coral"
                   >
                     Skip this file{hasNextFile ? " →" : " · finish"}
-                  </button>
-                  <button
-                    onClick={reset}
-                    className="px-4 py-2 bg-transparent border border-sage rounded-lg text-[13px] text-text-sec cursor-pointer hover:border-coral hover:text-coral"
-                  >
-                    Cancel
-                  </button>
+                  </Button>
+                  <Button onClick={reset}>Cancel</Button>
                 </div>
               </div>
             ) : (
@@ -775,7 +752,7 @@ export function DeliverySlips({ tags, setTags, onNavigateToLocator }: DeliverySl
             <div className="text-[11px] text-text-ter">
               {productCount} {productCount === 1 ? "product" : "products"} · {mode === "A" ? "Two-level (Package Details)" : "Flat invoice"}
               {queue.length > 1 ? (
-                <span className="text-coral font-semibold"> · File {queueIndex + 1} of {queue.length}</span>
+                <span className="text-ink font-semibold"> · File {queueIndex + 1} of {queue.length}</span>
               ) : null}
               {createdIds.length > 0 ? ` · ${createdIds.length} tag${createdIds.length === 1 ? "" : "s"} created so far` : ""}
             </div>
@@ -845,36 +822,21 @@ export function DeliverySlips({ tags, setTags, onNavigateToLocator }: DeliverySl
           ) : null}
         </div>
         <div className="flex items-center gap-2 shrink-0">
-          <button
-            onClick={reset}
-            className="px-4 py-2 bg-transparent border border-sage rounded-md text-[13px] cursor-pointer text-text-sec hover:border-coral hover:text-coral"
-          >
-            Cancel
-          </button>
+          <Button onClick={reset}>Cancel</Button>
           {queue.length > 1 ? (
-            <button
+            <Button
               onClick={() => {
                 const next: FileResult[] = [...results, { name: fileName, tagCount: 0, status: "skipped" }];
                 setResults(next);
                 goToNext(next);
               }}
-              className="px-4 py-2 bg-transparent border border-sage rounded-md text-[13px] cursor-pointer text-text-sec hover:border-coral hover:text-coral"
             >
               Skip this file{hasNextFile ? " →" : " · finish"}
-            </button>
+            </Button>
           ) : null}
-          <button
-            onClick={confirmCreate}
-            disabled={tagsToCreate === 0}
-            className={[
-              "px-5 py-2 rounded-md text-[13px] font-semibold flex items-center gap-1.5",
-              tagsToCreate === 0
-                ? "bg-[#ccc] text-white cursor-not-allowed"
-                : "bg-coral text-white cursor-pointer hover:brightness-95",
-            ].join(" ")}
-          >
+          <Button variant="primary" size="lg" onClick={confirmCreate} disabled={tagsToCreate === 0}>
             Confirm & create {tagsToCreate} tag{tagsToCreate === 1 ? "" : "s"}{hasNextFile ? " · next file" : ""} →
-          </button>
+          </Button>
         </div>
       </div>
     </div>
@@ -1324,7 +1286,7 @@ function LineItemsCards({
           </span>
           <div className="flex gap-5 tabular-nums">
             <span><span className="text-text-ter">Pcs:</span> <span className="text-ink font-bold ml-1">{totalPcs.toLocaleString()}</span></span>
-            <span><span className="text-text-ter">FBM:</span> <span className="text-coral font-bold ml-1">{totalFbm.toLocaleString()}</span></span>
+            <span><span className="text-text-ter">FBM:</span> <span className="text-ink font-bold ml-1">{totalFbm.toLocaleString()}</span></span>
             <span><span className="text-text-ter">Pkgs:</span> <span className="text-ink font-bold ml-1">{totalPkgs > 0 ? totalPkgs.toLocaleString() : "—"}</span></span>
             {hasAnyUnitPrice ? (
               <span><span className="text-text-ter">Total:</span> <span className="text-emerald-600 font-bold ml-1">{orderSubtotal > 0 ? formatUSD(orderSubtotal) : "—"}</span></span>
@@ -1388,7 +1350,7 @@ function GroupCard({
                   <span className="text-[12px] text-text-sec">· {item.pkgs} pkg{item.pkgs === 1 ? "" : "s"}</span>
                 ) : null}
                 <ConfidenceDot level={item.confidence} />
-                <span className="ml-auto text-[14px] font-bold text-coral whitespace-nowrap tabular-nums">
+                <span className="ml-auto text-[14px] font-bold text-ink whitespace-nowrap tabular-nums">
                   {fbm.toLocaleString()} FBM
                 </span>
               </div>
@@ -1411,7 +1373,7 @@ function GroupCard({
                       <TagIcon size={11} className="text-text-ter shrink-0" />
                       <span className="font-mono text-ink">{t.tagNo}</span>
                       <span className="ml-auto tabular-nums text-text-sec">
-                        {t.pcs.toLocaleString()} pcs · <span className="text-coral font-semibold">{t.fbm.toLocaleString()} FBM</span> · 1 pkg
+                        {t.pcs.toLocaleString()} pcs · <span className="text-ink font-semibold">{t.fbm.toLocaleString()} FBM</span> · 1 pkg
                       </span>
                     </div>
                   ))}
@@ -1515,8 +1477,8 @@ function EditForm({
           {item.unitPrice !== undefined ? formatUSD(item.unitPrice * item.qty) : "—"}
         </div>
       </div>
-      <div className="col-span-4 text-xs text-coral font-semibold mt-1">
-        FBM = {item.thick}×{item.width}×{item.length}×{item.qty}÷12 = {formulaFbm.toLocaleString()}
+      <div className="col-span-4 text-xs text-text-sec font-semibold mt-1">
+        FBM = {item.thick}×{item.width}×{item.length}×{item.qty}÷12 = <span className="text-ink">{formulaFbm.toLocaleString()}</span>
       </div>
     </div>
   );

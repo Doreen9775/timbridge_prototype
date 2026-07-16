@@ -128,7 +128,7 @@ export function TagEntry({ tags, setTags, floorView, onViewInInventory }: TagEnt
           </>
         ) : (
           <div className="text-center">
-            <CheckCircle size={80} className="text-coral mb-5 mx-auto" />
+            <CheckCircle size={80} className="text-emerald-500 mb-5 mx-auto" />
             <div className="text-[28px] font-display font-bold text-ink mb-2">Tag Saved!</div>
             <div className="font-mono text-[22px] text-text mb-6">{done}</div>
             <div className="flex flex-col gap-3 w-full max-w-[300px] mx-auto">
@@ -148,7 +148,7 @@ export function TagEntry({ tags, setTags, floorView, onViewInInventory }: TagEnt
     return (
       <div className="p-10 bg-cream min-h-full flex flex-col items-center justify-center">
         <div className="bg-white rounded-2xl p-10 text-center shadow-[0_2px_16px_rgba(0,0,0,0.08)] max-w-[400px]">
-          <CheckCircle size={56} className="text-coral mb-4 mx-auto" />
+          <CheckCircle size={56} className="text-emerald-500 mb-4 mx-auto" />
           <div className="text-[22px] font-display font-semibold text-ink mb-1.5">Tag Created</div>
           <div className="font-mono text-xl font-bold text-text mb-2">{done}</div>
           <div className="text-[13px] text-text-sec mb-6">Tag is now live in Stock Locator</div>
