@@ -317,6 +317,13 @@ export function StockLocator({ tags, floorView, role, openTagId, onTagOpened, on
           {filtered.length === 0 && <div className="text-center text-text-sec text-lg py-10">No tags found</div>}
         </div>
       </div>
+      {selTag && !confirmTag && (
+        <FloorTagSheet
+          tag={selTag}
+          onClose={closeDrawer}
+          onConfirmReceipt={selTag.status === "Pending" ? () => { setConfirmTagId(selTag.id); closeDrawer(); } : undefined}
+        />
+      )}
       {confirmTag && (
         <FloorConfirmSheet
           tag={confirmTag}
@@ -683,6 +690,43 @@ function FloorConfirmSheet({ tag, onClose, onSave }: { tag: Tag; onClose: () => 
               <button onClick={flagDiscrepancy} className="flex-1 min-h-[44px] py-3 bg-coral text-white rounded-lg text-base font-semibold cursor-pointer hover:brightness-95">Save</button>
             </div>
           </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// Floor-only read-only tag lookup — entry point for tap-throughs from Recent Scans /
+// the Recent-records dropdown, which otherwise had nowhere to land in floor view.
+function FloorTagSheet({ tag, onClose, onConfirmReceipt }: { tag: Tag; onClose: () => void; onConfirmReceipt?: () => void }) {
+  return (
+    <div className="fixed inset-0 z-[100] bg-ink/40 flex items-end justify-center" onClick={onClose}>
+      <div className="bg-white w-full max-w-md rounded-t-2xl max-h-[85vh] overflow-y-auto p-6" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-4">
+          <span className="font-mono text-xl font-bold text-ink">{tag.id}</span>
+          <button onClick={onClose} aria-label="Close" className="min-h-[44px] min-w-[44px] flex items-center justify-center text-text-sec hover:text-coral cursor-pointer bg-transparent border-0">
+            <X size={22} />
+          </button>
+        </div>
+        <div className="mb-4"><StatusBadge status={tag.status} size="lg" /></div>
+        <div className="text-lg text-text mb-2">📍 {tag.yard} · {tag.section} · {tag.rack} · {tag.bin}</div>
+        <div className="text-base text-text-sec mb-5">{tag.species} · {tag.grade} · {tag.thick}×{tag.width} × {tag.length}' · {tag.qty} pcs</div>
+        <div className="text-xs text-text-ter uppercase tracking-wide mb-2">History</div>
+        <div className="flex flex-col gap-2 mb-6">
+          {tag.history.slice().reverse().map((h, i) => (
+            <div key={i} className="text-sm">
+              <div className="text-text">{h.e}</div>
+              <div className="text-text-ter text-xs">{h.t} · {h.w}</div>
+            </div>
+          ))}
+        </div>
+        {onConfirmReceipt && (
+          <button
+            onClick={onConfirmReceipt}
+            className="w-full min-h-[44px] py-3 bg-lime text-ink rounded-lg text-lg font-semibold cursor-pointer hover:brightness-95"
+          >
+            Confirm Receipt
+          </button>
         )}
       </div>
     </div>

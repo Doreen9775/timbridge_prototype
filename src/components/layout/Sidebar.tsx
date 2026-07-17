@@ -18,7 +18,7 @@ interface NavSection { label: string; items: NavItem[]; }
 
 const sections: NavSection[] = [
   { label: "OVERVIEW", items: [
-    { key: "dashboard", icon: <Home size={16} />, label: "Dashboard", allowedRoles: ["manager", "sales"] },
+    { key: "dashboard", icon: <Home size={16} />, label: "Dashboard", allowedRoles: ["manager", "sales", "floor"] },
   ] },
   { label: "INVENTORY", items: [
     { key: "locator", icon: <MapPin size={16} />, label: "Stock Locator", allowedRoles: ["manager", "sales", "floor"] },

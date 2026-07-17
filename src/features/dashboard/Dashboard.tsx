@@ -73,9 +73,9 @@ export function Dashboard({ tags, floorView, onNavigateToLocator, onOpenTag }: D
         <div className="grid grid-cols-2 gap-4">
           <div className="bg-white rounded-xl p-6 border border-sage">
             <div className="text-sm text-text-sec mb-2">My Tasks Today</div>
-            <div className="text-5xl font-display font-bold text-ink mb-4">3</div>
+            <div className="text-5xl font-display font-bold text-ink mb-4">{floorTasks.length}</div>
             {floorTasks.map((t, i) => (
-              <div key={i} className="px-4 py-3.5 bg-cream rounded-lg mb-2 cursor-pointer hover:bg-sage/20">
+              <div key={i} className="px-4 py-3.5 bg-cream rounded-lg mb-2">
                 <div className="text-lg font-semibold text-text mb-1">{t.title}</div>
                 <div className="text-sm text-text-sec">{t.loc}</div>
                 {t.priority === "High" && (
@@ -86,10 +86,18 @@ export function Dashboard({ tags, floorView, onNavigateToLocator, onOpenTag }: D
           </div>
           <div className="bg-white rounded-xl p-6 border border-sage">
             <div className="text-sm text-text-sec mb-2">Recent Scans</div>
-            <div className="text-5xl font-display font-bold text-ink mb-4">5</div>
+            <div className="text-5xl font-display font-bold text-ink mb-4">{recentActivity.length}</div>
             {recentActivity.map((a, i) => (
-              <div key={i} className={`py-3 ${i < 4 ? "border-b border-sage" : ""}`}>
-                <div className="text-base text-text font-medium">{a.msg.split(" ").slice(0, 3).join(" ")}…</div>
+              <div
+                key={i}
+                role="button"
+                tabIndex={0}
+                aria-label={`Open tag ${a.tagId}`}
+                onClick={() => onOpenTag?.(a.tagId)}
+                onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") onOpenTag?.(a.tagId); }}
+                className={`py-3 -mx-2 px-2 rounded-lg cursor-pointer hover:bg-sage/15 ${i < recentActivity.length - 1 ? "border-b border-sage" : ""}`}
+              >
+                <div className="text-base text-text font-medium">{a.msg}</div>
                 <div className="text-[13px] text-text-sec mt-0.5">{a.worker} · {a.time}</div>
               </div>
             ))}
