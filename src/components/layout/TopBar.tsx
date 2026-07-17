@@ -1,29 +1,37 @@
 import { Search, Bell, ChevronRight } from "lucide-react";
 import type { NavKey } from "./Sidebar";
-import type { RecentRecord } from "@/lib/types";
+import type { RecentRecord, Role } from "@/lib/types";
 import { RecentMenu } from "./RecentMenu";
+
+const ROLE_VIEWS: [Role, string][] = [
+  ["manager", "Manager View"],
+  ["sales", "Sales View"],
+  ["floor", "Floor View"],
+];
 
 const titles: Record<NavKey, string> = {
   dashboard: "Dashboard", locator: "Stock Locator", tagentry: "Tag Entry",
   delivery: "Delivery Slips", po: "Purchase Orders", prod: "Production", sales: "Sales",
+  shipping: "Shipping / Trucking", invoicing: "Invoicing",
   avail: "Available to Sell", clientprofile: "Client Profile", approvals: "Approvals",
   reports: "Reports", analytics: "Analytics", settings: "Settings",
 };
 
 const parents: Partial<Record<NavKey, string>> = {
   locator: "Inventory", tagentry: "Inventory", avail: "Inventory",
-  delivery: "Operations", po: "Operations", prod: "Operations", sales: "Operations", clientprofile: "Operations", approvals: "Operations",
+  delivery: "Operations", po: "Operations", prod: "Operations", sales: "Operations",
+  shipping: "Operations", invoicing: "Operations", clientprofile: "Operations", approvals: "Operations",
   reports: "Insights", analytics: "Insights", settings: "Setup",
 };
 
 interface TopBarProps {
   nav: NavKey;
-  floorView: boolean;
-  setFloorView: (floor: boolean) => void;
+  role: Role;
+  setRole: (role: Role) => void;
   onOpenRecord: (r: RecentRecord) => void;
 }
 
-export function TopBar({ nav, floorView, setFloorView, onOpenRecord }: TopBarProps) {
+export function TopBar({ nav, role, setRole, onOpenRecord }: TopBarProps) {
   return (
     <div className="bg-white h-14 flex items-center px-6 border-b border-sage sticky top-0 z-10 gap-4">
       <div className="flex-1">
@@ -39,18 +47,18 @@ export function TopBar({ nav, floorView, setFloorView, onOpenRecord }: TopBarPro
       </div>
 
       <div className="flex bg-[#F3F4F6] rounded-[20px] p-[3px] gap-[2px]">
-        {(["Manager View", "Floor View"] as const).map((v) => {
-          const active = (v === "Floor View") === floorView;
+        {ROLE_VIEWS.map(([r, label]) => {
+          const active = r === role;
           return (
             <button
-              key={v}
-              onClick={() => setFloorView(v === "Floor View")}
+              key={r}
+              onClick={() => setRole(r)}
               className={[
                 "px-3.5 py-[5px] rounded-2xl border-0 cursor-pointer text-xs font-medium",
                 active ? "bg-ink text-white" : "bg-transparent text-text-sec hover:text-text",
               ].join(" ")}
             >
-              {v}
+              {label}
             </button>
           );
         })}

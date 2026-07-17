@@ -27,7 +27,7 @@ export default function App() {
   const [entryFilter, setEntryFilter] = useState<EntryFilter | null>(null);
   const [authed, setAuthed] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
-  const { role, isFloor, setFloorView } = useRole();
+  const { role, isFloor, setRole } = useRole();
   const { tags, setTags } = useTags();
   const { salesOrders, setSalesOrders } = useSalesOrders();
 
@@ -123,7 +123,7 @@ export default function App() {
         <div className={`flex h-screen bg-cream text-text overflow-hidden animate-fade-in transition-opacity duration-500 ${loggingOut ? "opacity-0" : "opacity-100"}`}>
           <Sidebar nav={nav} setNav={handleNav} floorView={isFloor} role={role} onLogout={handleLogout} />
           <div className="flex-1 flex flex-col overflow-hidden">
-            <TopBar nav={nav} floorView={isFloor} setFloorView={setFloorView} onOpenRecord={handleOpenRecord} />
+            <TopBar nav={nav} role={role} setRole={setRole} onOpenRecord={handleOpenRecord} />
             {isFloor && <FloorBanner />}
             <div key={`${nav}:${navEpoch}`} className="flex-1 overflow-y-auto">
               {nav === "dashboard" && <Dashboard tags={tags} floorView={isFloor} onNavigateToLocator={handleNavigateToLocator} onOpenTag={handleOpenTagFromDashboard} />}

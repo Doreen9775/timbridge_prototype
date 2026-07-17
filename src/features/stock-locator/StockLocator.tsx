@@ -521,7 +521,7 @@ export function StockLocator({ tags, floorView, role, openTagId, onTagOpened, on
           role={role}
           onToggleFullscreen={() => setFullscreen((f) => !f)}
           onClose={closeDrawer}
-          onSave={onUpdateTag}
+          onSave={isManager ? onUpdateTag : undefined}
           onDelete={canDelete ? () => setDeleteConfirm({ ids: [selTag.id] }) : undefined}
           salesOrders={salesOrders}
           onLinkSalesOrder={onLinkSalesOrder}
