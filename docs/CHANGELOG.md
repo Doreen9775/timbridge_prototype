@@ -684,8 +684,35 @@ A history of every commit (push) on `main`, in chronological order, with what wa
 **Files / 改动:** new `src/components/shared/Button.tsx`, `src/components/shared/Pagination.tsx`; `src/features/stock-locator/filters.tsx`, `src/features/stock-locator/StockLocator.tsx`, `src/features/available-to-sell/AvailableToSell.tsx`, `src/features/delivery-slips/DeliverySlips.tsx`, `src/features/tag-entry/TagEntry.tsx`, `src/features/dashboard/Dashboard.tsx`
 
 ---
+
+## 2026-07-16 (2)
+
+### Floor Dashboard 修复 + Sales 角色三态入口与权限矩阵收紧 — Floor Dashboard fix + Sales role toggle & tightened permission matrix
+
+**🇨🇳 中文**
+- **Floor 视角的 Dashboard 找回入口**：侧边栏权限表里 Dashboard 之前没把 `floor` 列进去——地板工一旦切到别的功能，就再也没有入口点回 Dashboard 了。现在补上，Floor 的侧边栏随时能点回 Dashboard。
+- **Floor Dashboard 内容修正**：`My Tasks Today` / `Recent Scans` 的计数原来是写死的 `3` / `5`，改成动态算数组长度；Recent Scans 每行原来用"取前三个词 + …"的方式硬切文字，把地点、方向信息都切没了，现在显示完整消息；每行加上点击跳转到对应 Tag 详情。
+- **顺带修了一个静默失效的死点击**：点击 Recent Scans 跳到 Stock Locator 后，Floor 视角其实从来没渲染过对应 Tag 的详情（状态设了但没画面）。新增一个只读的 `FloorTagSheet`（复用现有底部弹层样式），显示 Tag 的状态/位置/规格/历史，Pending 状态还带"Confirm Receipt"直达按钮。
+- **Sales 角色补上真正的三态切换入口**：`Role` 类型早就有 `sales`，但顶栏的 Manager/Floor 二态开关一直没给它入口。现在顶栏是 Manager View / Sales View / Floor View 三态直切，Manager/Floor 原有行为不受影响。
+- **权限矩阵按"销售能看什么、不能看什么"的原则收紧**：Sales 拿掉了 Purchase Orders / Production / Reports（进货成本、排产、缺口核算属于内部运营数据）；新增 Shipping / Trucking、Invoicing 两个占位入口（对 Manager + Sales 开放，功能待建）；Approvals 对 Sales 也开放（先和 Manager 共用同一个占位页，"提交 + 我的申请"这套独立视图还没建）。
+- **Stock Locator 对 Sales 改成真正的只读**：之前 Sales 打开 Tag 详情面板其实能点 Edit 改位置/规格甚至状态——现在 Edit 按钮只在 Manager 下出现，Linked Transactions 仍可见，Pricing 仍隐藏；Available to Sell 自己的 Reserve 流程走独立路径，不受影响。
+- **Floor 的 Settings 入口顺手拿掉**：这一项本来路由层就已经拦住非 Manager 访问，侧边栏却还留着个点了没反应的死链接。
+
+**🇬🇧 English**
+- **Floor Dashboard is reachable again**: the sidebar's permission table never listed `floor` for the Dashboard entry, so once a floor worker navigated elsewhere there was no way back. Fixed — Dashboard now always shows in Floor's sidebar.
+- **Floor Dashboard content fixes**: `My Tasks Today` / `Recent Scans` counts were hardcoded (`3` / `5`) — now computed from the actual array length. Recent Scans rows used to hard-truncate to the first three words plus "…", losing the location/direction detail — now shows the full message, and each row is tappable through to that tag.
+- **Fixed a silent dead click along the way**: tapping a Recent Scans row navigated to Stock Locator, but floor view never actually rendered the opened tag (state was set with nothing drawn). Added a read-only `FloorTagSheet` (reusing the existing bottom-sheet styling) showing status/location/specs/history, with a "Confirm Receipt" shortcut when the tag is Pending.
+- **Sales gets a real three-way toggle**: `Role` already had `sales` at the type level, but the TopBar switch was Manager/Floor only. It's now a three-way Manager View / Sales View / Floor View switch; Manager and Floor behavior is unchanged.
+- **Permission matrix tightened to "what Sales needs vs. internal ops data"**: Sales loses Purchase Orders / Production / Reports (procurement cost, scheduling, and shortage/cost roll-ups are internal). Gains two new placeholder entries, Shipping / Trucking and Invoicing (Manager + Sales, feature TBD), and Approvals (shares Manager's placeholder page for now — the "submit + my requests" view is still unbuilt).
+- **Stock Locator is genuinely read-only for Sales now**: Sales could previously open a tag's detail panel and Edit its location/specs/even status. The Edit button now only renders for Manager; Linked Transactions stays visible, Pricing stays hidden. Available to Sell's own Reserve flow is a separate path and is unaffected.
+- **Dropped Floor's dead Settings link**: the route itself was already Manager-only, so this was a sidebar entry that led nowhere for Floor.
+
+**Files / 改动:** `src/components/layout/Sidebar.tsx`, `src/components/layout/TopBar.tsx`, `src/hooks/useRole.ts`, `src/App.tsx`, `src/features/dashboard/Dashboard.tsx`, `src/features/stock-locator/StockLocator.tsx`
+
+---
 ## Pending / 未来 (not yet built — 尚未开始)
 
 - **Reports & Saved Views**（报表与保存视图）
-- **Sales role UI entry point**（`Role` 类型已含 sales，但仍无角色切换入口；权限矩阵已按角色生效）
+- **Approvals 的 Sales 专属视图**（提交申请 + 我的申请列表，目前和 Manager 共用同一个占位页）
+- **Shipping/Trucking、Invoicing 实际功能**（目前只是导航占位，功能待建）
 - **Delivery Slip 持久化与列表视图**（送货单解析结果当前只在会话内存里；持久化 + Recent 下拉追踪 + 列表视图都还没建）
