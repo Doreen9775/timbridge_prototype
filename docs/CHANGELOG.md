@@ -710,9 +710,95 @@ A history of every commit (push) on `main`, in chronological order, with what wa
 **Files / 改动:** `src/components/layout/Sidebar.tsx`, `src/components/layout/TopBar.tsx`, `src/hooks/useRole.ts`, `src/App.tsx`, `src/features/dashboard/Dashboard.tsx`, `src/features/stock-locator/StockLocator.tsx`
 
 ---
+
+## 2026-07-17
+
+### Phase 3 功能落地：Sales Orders 实模块 + 部分数量 Reserve 拆分 + Approvals + 客户实体 CRM + 合并 Insights — Phase 3 feature landing: real Sales Orders + partial-qty Reserve split + Approvals + Client CRM + merged Insights
+
+**🇨🇳 中文**
+
+**1. Sales Orders 实模块**（新 [`features/sales-orders/`](src/features/sales-orders/)）
+- 从 ComingSoon 占位换成真实列表页 + 侧抽屉详情页（复用 Stock Locator 的 side drawer + fullscreen 模式）。列表列显示 SO Number / Customer / Status / Line Items / Total / Created，支持按 Status 和 Customer 筛选（复用 `PillFilter`），复用 Pagination。
+- **状态推进**：Open → Picked → Shipped 顺序前进（Cancelled 是终态无按钮）；二次确认弹窗。**Shipped 触发级联**：SO 状态和所有关联 Reserved tag 状态在同一 event handler 里连续 setState，React 18 批更新，两个 store 不会分裂到不同帧；tag movement history 追加 `Shipped via {soId}`。
+- **深链打通**：Stock Locator 的 Linked Transactions 里 SO 号从"coming soon" tooltip 换成可点击 chip 深链到 Sales Orders 页并自动打开对应抽屉；SO 详情里的 Tag ID chip 深链回 Stock Locator 并打开 Tag 抽屉。
+- **共享组件抽取**：`SOStatusPill` 从 Stock Locator 抽到 [`components/shared/SOStatusPill.tsx`](src/components/shared/SOStatusPill.tsx)，两个 feature 共用一份。
+- Sidebar label 从 "Sales" 改成 "Sales Order"（NavKey 保持 `sales`）。
+
+**2. Available to Sell 的 Reserve 弹窗加"部分数量保留"**
+- Reserve 弹窗新增 Qty 数字输入框（默认 = tag.qty，min 1，max tag.qty），实时提示"整条保留" vs "会拆分 X pcs，剩 Y pcs 保持 Available"。
+- **Qty < tag.qty 触发拆分**：生成新 tag 继承原 tag 全部字段（species/grade/dims/state/milling/supplier/location/parentLog + 原完整 history），qty 为输入值，fbm 用 `calcFbm` 按新 qty 重算（**用 `calcFbm` 而非 `calcBoardFeet`——否则拆出来的 Tag 会带小数 FBM，和表里所有其它整数 tag 不一致**），status = Reserved，`parentTagId` 指回原 tag，history 追加 `Split from {原 id} · Reserved via Available-to-Sell`；原 tag qty 扣减、fbm 重算、`splitTagIds` 追加新 id、history 追加 `Split N pcs into {newId} · ...`；SO lineItem 挂新 tag。
+- 新增 App 层 `onCreateTag` 回调（`setTags(prev => [...prev, tag])`）——之前所有 tag mutation 都是 mutate-in-place，这是第一个 create-new 的路径。
+- Stock Locator 详情面板 Traceability 下方新增 **Tag Lineage** 区块：Split from / Split into 都是可点击 chip 跳转对应 tag。
+
+**3. Approvals 实模块**（新 [`features/approvals/`](src/features/approvals/)）
+- `lib/types.ts` 加 `ApprovalRequest` 类型（id/type: discount|creditTerm|orderCancellation|other / requestedBy / relatedSoId / relatedClientId / details / status: Pending|Approved|Rejected / reviewedBy / reviewNote / createdAt / resolvedAt）。
+- 同一个 `nav === "approvals"` 入口按 role 分派：Sales → [`MyApprovals`](src/features/approvals/MyApprovals.tsx)（我的请求，全状态历史），Manager → [`ApprovalQueue`](src/features/approvals/ApprovalQueue.tsx)（Pending 队列，Approve/Reject + 可选 reviewNote，二次确认）。
+- **入口点**：Available to Sell Reserve 弹窗左下角"Need approval? Request one"（stack 在 Reserve 上不打断保留流程）；Sales Order 详情 header 加"Request approval"按钮（自动 prefill related SO）。共享 [`RequestApprovalForm`](src/features/approvals/RequestApprovalForm.tsx)。
+- **决议通知**：Manager 决定后，Sales 下次访问 MyApprovals 时顶部 ConfirmationBanner "1 of your requests has a decision" + 卡片 coral 高亮 + "NEW DECISION" 标签；点 "Got it" 或右上角 X 后 acknowledge 落到 App 层 `acknowledgedApprovalIds: Set<string>`（隔离 store，不改动 spec 的 ApprovalRequest 字段），跨 nav 往返不重现。resolved 详情（Approved by X + note）永远保留在卡片上。
+
+**4. Client Profile CRM + `SalesOrder.customer` → `SalesOrder.clientId` FK 迁移**（新 [`features/clients/`](src/features/clients/)）
+- `Client` 类型（id/name/contactName?/phone?/email?/address?/notes?/createdAt）。
+- [`useClients` hook](src/hooks/useClients.tsx) 参照 useLookups 的 Context+Provider+localStorage 模式（key `timbridge_clients`）；`load()` 首次读到空时把 [`INITIAL_CLIENTS`](src/lib/mock-data.ts) seed 落库；暴露 `clients`/`clientById`/`getClientName`/`updateClient`。
+- **一次性迁移**：mock-data.ts 新增 `INITIAL_CLIENTS`（C-0001 Coastal / C-0002 Fraser / C-0003 Island Pallet），salesOrders seed 的 `customer` 字符串全部换成对应 `clientId`。
+- Clients 列表页（搜索 + Pagination + 表格）+ Client 详情抽屉（View/Edit 内联切换，Linked Sales Orders 聚合显示 SO 计数 + 总收入 + 可点击跳转 SO 详情）。
+- **全线切换到 client resolver**：SalesOrders 表 / SalesOrderDetail / StockLocator Linked Transactions + Reserved 状态确认下拉 / AvailableToSell Reserve 弹窗 SO 选项 label 全部改走 `getClientName(so.clientId)`。SO 表和 SO 详情的客户名可点击深链回 Client Profile。孤儿 clientId 兜底显示 "Unknown"。
+- Filter by customer 用**解析后的 name**（跟现有 `PillFilter: string[]` API 保持一致），代价：rename 后 filter option 列表会自然刷新。
+
+**5. Insights 合并页**（新 [`features/insights/Insights.tsx`](src/features/insights/Insights.tsx)）
+- Sidebar 里 Reports + Analytics 两个空占位合并成一个 "Insights"（NavKey `insights` 替换 `reports`/`analytics`），默认落 Analytics tab。
+- **Analytics tab**（Manager + Sales 可见）三张图：
+  - **FBM 按周/月**（Weekly/Monthly toggle）：从 tag.date 分桶到 ISO 周（Monday）或月，柱状图
+  - **按树种销售速度**：分组柱状（Reserved lime + Shipped ink），过滤掉 0 活跃度的树种，按总量降序
+  - **Days-in-yard 分布**：Available tag 分 5 桶（0-7/8-30/31-60/61-90/91+），91+ 桶 coral 强调，有 aging tag 时挂 "Aging inventory" 徽章
+- **Reports tab**（Manager only；Sales role 下 tab 按钮不渲染 + defense-in-depth useEffect 拨回 Analytics）：**Shortage & Asset by species+grade**，按种/等级聚合 Physical / Reserved / Available FBM + Available Count + Open Demand 标记，**Shortage 判据 = hasOpenDemand ∧ availableFbm === 0**（有活跃需求但零库存），shortage 行置顶 + coral 染色。**CSV 导出**（复用 StockLocator `csvCell` RFC 4180 转义模式，文件名 `timbridge_shortage_report_YYYY-MM-DD_HHMM.csv`）。
+- TopBar 面包屑简化：Insights 现在是顶层无 parent。
+
+**🇬🇧 English**
+
+**1. Real Sales Orders module** (new [`features/sales-orders/`](src/features/sales-orders/))
+- Replaces the ComingSoon placeholder with a real list page + side-drawer detail (mirrors Stock Locator's drawer + fullscreen pattern). Columns: SO Number / Customer / Status / Line Items / Total / Created, filtered by Status and Customer (reusing `PillFilter`), Pagination applied.
+- **Status ladder**: Open → Picked → Shipped is forward-only (Cancelled is a terminal state with no advance button); two-step confirm dialog. **Shipped triggers a cascade**: the SO status update and every linked Reserved tag's status update run in the same event handler — React 18 batches both setStates into one commit so the two stores can't diverge; each tag's history gets `Shipped via {soId}`.
+- **Deep-linking wired both ways**: Stock Locator's Linked Transactions SO chip (previously a "coming soon" tooltip) becomes a real click-through that navigates to Sales Orders and opens the drawer. SO detail's Tag ID chips deep-link back to Stock Locator and open the Tag drawer.
+- **Shared component extraction**: `SOStatusPill` moves out of Stock Locator into [`components/shared/SOStatusPill.tsx`](src/components/shared/SOStatusPill.tsx) so both features render the same styling.
+- Sidebar label: "Sales" → "Sales Order" (NavKey unchanged for routing stability).
+
+**2. Partial-qty Reserve with tag split** (in Available to Sell's Reserve modal)
+- Modal gains a Qty number input (default = tag.qty, min 1, max tag.qty) with live hints: "Reserves the whole tag — no split" vs "Splits off a new tag for X pcs; Y remain Available on {id}."
+- **Qty < tag.qty triggers a split**: a new tag is created inheriting the original's species/grade/dims/state/milling/supplier/location/parentLog and the full history, with qty = input, fbm recomputed via `calcFbm` (**not `calcBoardFeet` — that would introduce decimal FBM values inconsistent with every other integer-FBM tag in the table**), status = Reserved, `parentTagId` pointing back to the source, history appended with `Split from {id} · Reserved via Available-to-Sell`. The original tag's qty is decremented, fbm recomputed, `splitTagIds` gains the new id, and its history is appended with `Split N pcs into {newId} · ...`. The SO lineItem is created against the new tag.
+- New App-level `onCreateTag` callback (`setTags(prev => [...prev, tag])`) — every prior tag mutation was mutate-in-place; this is the first create-new path.
+- Stock Locator detail drawer's Traceability section is followed by a new **Tag Lineage** block: Split from / Split into rendered as clickable chips that navigate to the linked tag.
+
+**3. Real Approvals module** (new [`features/approvals/`](src/features/approvals/))
+- `lib/types.ts` gains `ApprovalRequest` (id / type: discount|creditTerm|orderCancellation|other / requestedBy / relatedSoId / relatedClientId / details / status: Pending|Approved|Rejected / reviewedBy / reviewNote / createdAt / resolvedAt).
+- One `nav === "approvals"` entry, dispatched by role: Sales → [`MyApprovals`](src/features/approvals/MyApprovals.tsx) (own requests across all states), Manager → [`ApprovalQueue`](src/features/approvals/ApprovalQueue.tsx) (Pending-only queue, Approve / Reject with optional reviewNote, two-step confirm).
+- **Entry points**: Reserve modal's bottom-left "Need approval? Request one" link (stacks above the modal at higher z-index so the reservation-in-progress is preserved); SO detail header "Request approval" button (auto-prefills related SO). Both open the shared [`RequestApprovalForm`](src/features/approvals/RequestApprovalForm.tsx).
+- **Decision notification**: when Manager resolves, the next Sales visit to MyApprovals shows a ConfirmationBanner "1 of your requests has a decision" plus coral border + "NEW DECISION" label on the card. "Got it" or the dismiss X calls a single acknowledge callback that lands in App-level `acknowledgedApprovalIds: Set<string>` (kept separate from the `ApprovalRequest` type to preserve the spec's exact field list). Banner stays gone across nav in-session; the Approved-by-X + reviewNote block remains on the card permanently for record.
+
+**4. Client Profile CRM + `SalesOrder.customer` → `SalesOrder.clientId` FK migration** (new [`features/clients/`](src/features/clients/))
+- `Client` type (id / name / contactName? / phone? / email? / address? / notes? / createdAt).
+- [`useClients` hook](src/hooks/useClients.tsx) mirrors useLookups's Context+Provider+localStorage pattern (key `timbridge_clients`); `load()` seeds and persists on first miss; exposes `clients` / `clientById` / `getClientName` / `updateClient`.
+- **One-time migration**: mock-data.ts gains `INITIAL_CLIENTS` (C-0001 Coastal / C-0002 Fraser / C-0003 Island Pallet), and the salesOrders seed swaps every free-string `customer` for the matching `clientId`.
+- Clients list page (search + Pagination + table) + Client detail drawer (View / inline Edit toggle, Linked Sales Orders section with SO count + total revenue + click-to-open-SO chips).
+- **Every display site now resolves via useClients**: SalesOrders table / SalesOrderDetail / StockLocator Linked Transactions + Reserved status-confirm dropdown / AvailableToSell Reserve modal SO-picker option label all route through `getClientName(so.clientId)`. SO table and SO detail's customer names are clickable back into Client Profile. Orphan clientIds fall back to "Unknown" so the UI degrades gracefully.
+- Filter-by-customer uses **resolved names** (matches the existing `PillFilter: string[]` API); trade-off: renaming a client updates the pill list on next render.
+
+**5. Insights (merged Reports + Analytics)** (new [`features/insights/Insights.tsx`](src/features/insights/Insights.tsx))
+- Sidebar collapses the two INSIGHTS placeholders into one "Insights" (NavKey `insights` replaces `reports`/`analytics`), defaulting to the Analytics tab.
+- **Analytics tab** (Manager + Sales), three charts:
+  - **FBM by week / month** with a Weekly / Monthly toggle: bucketed off `tag.date` by ISO week (Monday) or month.
+  - **Species sales velocity**: grouped bars, Reserved (lime) + Shipped (ink) per species, sorted by total, empty-activity species filtered out.
+  - **Days-in-yard distribution**: Available tags bucketed into 0–7 / 8–30 / 31–60 / 61–90 / 91+d; the 91+ bucket is coral, and an "Aging inventory" badge appears when it has any tags.
+- **Reports tab** (Manager-only; the tab button doesn't render for Sales, and a defense-in-depth useEffect snaps Sales back to Analytics if role toggles mid-view): **Shortage & Asset by species+grade** — aggregated Physical / Reserved / Available FBM + Available Count + Open Demand marker, with the **shortage rule = hasOpenDemand ∧ availableFbm === 0** (active demand but zero quotable inventory). Shortage rows float to the top with coral tinting. **CSV export** reuses StockLocator's `csvCell` RFC 4180 escaper; filename `timbridge_shortage_report_YYYY-MM-DD_HHMM.csv`.
+- TopBar breadcrumb simplifies: Insights is now a top-level page with no parent.
+
+**Files / 改动:** new `src/features/sales-orders/`, `src/features/approvals/`, `src/features/clients/`, `src/features/insights/`, `src/hooks/useClients.tsx`, `src/hooks/useApprovalRequests.ts`, `src/components/shared/SOStatusPill.tsx`; `src/App.tsx`, `src/components/layout/Sidebar.tsx`, `src/components/layout/TopBar.tsx`, `src/features/available-to-sell/AvailableToSell.tsx`, `src/features/stock-locator/StockLocator.tsx`, `src/lib/mock-data.ts`, `src/lib/types.ts`
+
+---
 ## Pending / 未来 (not yet built — 尚未开始)
 
-- **Reports & Saved Views**（报表与保存视图）
-- **Approvals 的 Sales 专属视图**（提交申请 + 我的申请列表，目前和 Manager 共用同一个占位页）
+- **Approvals 里 Sales 视图看到的历史范围**（当前 MyApprovals 显示所有状态，Manager 只看 Pending；如果 Manager 需要审批历史查阅，加个 History tab）
+- **Client 的 create/delete**（当前只支持 edit；seed 后测试如需新增客户再加）
 - **Shipping/Trucking、Invoicing 实际功能**（目前只是导航占位，功能待建）
 - **Delivery Slip 持久化与列表视图**（送货单解析结果当前只在会话内存里；持久化 + Recent 下拉追踪 + 列表视图都还没建）
+- **SO 用户创建流程**（目前 SO 100% 来自 seed，Available to Sell 只从 Open SO 里挑；当真出 SO 创建 UI 时，直接用 Client 下拉/搜索即可，clientId 落库）
+- **`daysInYard` helper 公共抽取到 `lib/history.ts`**（当前 AvailableToSell 和 Insights 各一份，第三个 caller 出现时升级）
