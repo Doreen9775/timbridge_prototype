@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Search, Scan, X, Download, Maximize2, Minimize2, Filter, RotateCcw, Pencil, Trash2 } from "lucide-react";
-import type { Tag, Species, Grade, MoistureState, Milling, TagStatus, EntryFilter, Role, SalesOrder, SalesOrderStatus } from "@/lib/types";
+import type { Tag, Species, Grade, MoistureState, Milling, TagStatus, EntryFilter, Role, SalesOrder } from "@/lib/types";
 import { StatusBadge } from "@/components/shared/StatusBadge";
 import { ConfirmationBanner } from "@/components/shared/ConfirmationBanner";
 import { calcBoardFeet, calcLineal, calcFbm } from "@/lib/fbm";
@@ -9,6 +9,8 @@ import { useLookups } from "@/hooks/useLookups";
 import { PillFilter, DateFilter, MONTHS_SHORT } from "./filters";
 import { Pagination, DEFAULT_PAGE_SIZE, usePagedSlice } from "@/components/shared/Pagination";
 import { Button } from "@/components/shared/Button";
+import { SOStatusPill } from "@/components/shared/SOStatusPill";
+import { useClients } from "@/hooks/useClients";
 
 const STATUS_OPTIONS = ["Pending", "Received", "Available", "Reserved", "Shipped", "Discrepancy"];
 
@@ -49,18 +51,6 @@ function formatMargin(cost?: number, marketValue?: number): string {
   return `$${margin.toFixed(2)} (${pct})`;
 }
 
-// Linked Transactions status pill — reuses StatusBadge's exact color tokens (no new palette),
-// remapped onto SalesOrderStatus since the two status unions mostly don't overlap.
-const SO_STATUS_STYLES: Record<SalesOrderStatus, string> = {
-  Open: "bg-[#EEF0F2] text-[#6B7280]", // neutral gray, same as Tag "Pending"
-  Picked: "bg-[#EAF5D0] text-[#4E6B0E]", // lime, same as Tag "Reserved"
-  Shipped: "bg-[#D9DDE3] text-[#3B4250]", // darker gray, same as Tag "Shipped"
-  Cancelled: "bg-[#FCE0D7] text-[#B23A1A]", // coral alert, same as Tag "Discrepancy"
-};
-function SOStatusPill({ status }: { status: SalesOrderStatus }) {
-  return <span className={`whitespace-nowrap inline-block px-2.5 py-[3px] rounded-xl text-[11px] font-medium ${SO_STATUS_STYLES[status]}`}>{status}</span>;
-}
-
 // ── CSV export (no library; built from the same filtered array as the table) ──
 const CSV_HEADERS = ["Tag ID", "Species", "Grade", "Thickness", "Width", "Length", "Pieces", "Total FBM", "Location", "Status", "Received Date", "Supplier"];
 
@@ -93,9 +83,10 @@ interface StockLocatorProps {
   onClearEntryFilter?: () => void;
   salesOrders: SalesOrder[];
   onLinkSalesOrder?: (soId: string, tagId: string, qty: number, unitPrice: number) => void;
+  onOpenSo?: (id: string) => void;
 }
 
-export function StockLocator({ tags, floorView, role, openTagId, onTagOpened, onUpdateTag, onDeleteTags, entryFilter, onClearEntryFilter, salesOrders, onLinkSalesOrder }: StockLocatorProps) {
+export function StockLocator({ tags, floorView, role, openTagId, onTagOpened, onUpdateTag, onDeleteTags, entryFilter, onClearEntryFilter, salesOrders, onLinkSalesOrder, onOpenSo }: StockLocatorProps) {
   const isManager = role === "manager";
   const canDelete = isManager && !!onDeleteTags;
   const [search, setSearch] = useState("");
@@ -523,6 +514,8 @@ export function StockLocator({ tags, floorView, role, openTagId, onTagOpened, on
           onClose={closeDrawer}
           onSave={isManager ? onUpdateTag : undefined}
           onDelete={canDelete ? () => setDeleteConfirm({ ids: [selTag.id] }) : undefined}
+          onOpenTag={openTag}
+          onOpenSo={onOpenSo}
           salesOrders={salesOrders}
           onLinkSalesOrder={onLinkSalesOrder}
         />
@@ -741,6 +734,8 @@ function DetailDrawer({
   onClose,
   onSave,
   onDelete,
+  onOpenTag,
+  onOpenSo,
   salesOrders,
   onLinkSalesOrder,
 }: {
@@ -751,6 +746,8 @@ function DetailDrawer({
   onClose: () => void;
   onSave?: (tag: Tag) => void;
   onDelete?: () => void;
+  onOpenTag?: (id: string) => void;
+  onOpenSo?: (id: string) => void;
   salesOrders: SalesOrder[];
   onLinkSalesOrder?: (soId: string, tagId: string, qty: number, unitPrice: number) => void;
 }) {
@@ -760,6 +757,7 @@ function DetailDrawer({
   const [draft, setDraft] = useState<Tag>(tag);
   const canEdit = !!onSave;
   const lookups = useLookups();
+  const { getClientName } = useClients();
   const linkedSOs = useMemo(
     () => salesOrders.flatMap((so) => so.lineItems.filter((li) => li.tagId === tag.id).map((li) => ({ so, li }))),
     [salesOrders, tag.id],
@@ -1057,13 +1055,13 @@ function DetailDrawer({
               <div className="flex flex-col gap-1.5">
                 {linkedSOs.map(({ so, li }) => (
                   <div key={so.id} className="bg-[#F9FAFB] rounded-md px-3 py-2 flex items-center gap-2 text-[13px]">
-                    <span
-                      title="Sales Order detail coming soon"
-                      className="font-mono font-semibold text-coral cursor-pointer hover:underline"
+                    <button
+                      onClick={() => onOpenSo?.(so.id)}
+                      className="font-mono font-semibold text-coral cursor-pointer hover:underline bg-transparent border-0 p-0"
                     >
                       {so.id}
-                    </span>
-                    <span className="flex-1 text-text truncate">{so.customer}</span>
+                    </button>
+                    <span className="flex-1 text-text truncate">{getClientName(so.clientId)}</span>
                     <SOStatusPill status={so.status} />
                     <span className="text-text-sec whitespace-nowrap">{li.qty.toLocaleString()} pcs</span>
                     <span className="text-text-sec whitespace-nowrap">${(li.qty * li.unitPrice).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
@@ -1081,6 +1079,41 @@ function DetailDrawer({
               <div className="text-[11px] text-text-sec mb-1.5">↑ Parent Log</div>
               <div className="font-mono text-[13px] text-ink font-semibold">{tag.parentLog}</div>
               <div className="text-[11px] text-text-sec mt-2">↓ Sibling boards from same production run share this log ID</div>
+            </div>
+          </div>
+        )}
+
+        {(tag.parentTagId || (tag.splitTagIds && tag.splitTagIds.length > 0)) && (
+          <div className="mb-5">
+            <div className="text-xs text-text-sec mb-2">Tag Lineage</div>
+            <div className="bg-sage/20 rounded-lg p-3 border border-sage flex flex-col gap-2">
+              {tag.parentTagId && (
+                <div>
+                  <div className="text-[11px] text-text-sec mb-1">Split from</div>
+                  <button
+                    onClick={() => onOpenTag?.(tag.parentTagId!)}
+                    className="font-mono text-[13px] text-coral font-semibold cursor-pointer hover:underline bg-transparent border-0 p-0"
+                  >
+                    {tag.parentTagId}
+                  </button>
+                </div>
+              )}
+              {tag.splitTagIds && tag.splitTagIds.length > 0 && (
+                <div>
+                  <div className="text-[11px] text-text-sec mb-1">Split into</div>
+                  <div className="flex flex-wrap gap-2">
+                    {tag.splitTagIds.map((id) => (
+                      <button
+                        key={id}
+                        onClick={() => onOpenTag?.(id)}
+                        className="font-mono text-[13px] text-coral font-semibold cursor-pointer hover:underline bg-transparent border-0 p-0"
+                      >
+                        {id}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -1120,7 +1153,7 @@ function DetailDrawer({
               value={statusConfirm.soId}
               onChange={(e) => setStatusConfirm((c) => (c ? { ...c, soId: e.target.value } : c))}
             >
-              {eligibleSOs.map((so) => <option key={so.id} value={so.id}>{so.id} — {so.customer}</option>)}
+              {eligibleSOs.map((so) => <option key={so.id} value={so.id}>{so.id} — {getClientName(so.clientId)}</option>)}
             </select>
           </div>
         )}

@@ -54,6 +54,8 @@ export interface Tag {
   cost?: number; // per unit, USD — Manager-curated/seeded tags only; absent from Tag Entry / Delivery Slips
   marketValue?: number; // per unit, USD — same availability as cost
   history: MovementEvent[];
+  parentTagId?: string; // set on a tag created by splitting a quantity off another tag (Available-to-Sell partial reserve)
+  splitTagIds?: string[]; // ids of tags split off this one, if any
 }
 
 // ─── Sales orders (kickoff §4.5 — link Reserved tags; unblocks Available-to-Sell) ─
@@ -67,10 +69,40 @@ export interface SalesOrderLineItem {
 
 export interface SalesOrder {
   id: string; // e.g. "SO-0042"
-  customer: string;
+  clientId: string; // FK → Client.id (was a free-string `customer` field pre-CRM migration)
   status: SalesOrderStatus;
   date: string; // ISO date (YYYY-MM-DD)
   lineItems: SalesOrderLineItem[];
+}
+
+// ─── Clients (CRM MVP — replaces the pre-migration free-string customer field) ────
+export interface Client {
+  id: string;                 // e.g. "C-0001"
+  name: string;               // company / customer name — the primary display label
+  contactName?: string;       // primary contact person
+  phone?: string;
+  email?: string;
+  address?: string;
+  notes?: string;             // free-text CRM notes
+  createdAt: string;          // display-format timestamp (matches history/activity conventions)
+}
+
+// ─── Approval requests (Sales asks Manager to sign off on discounts, credit terms, etc.) ─
+export type ApprovalRequestType = "discount" | "creditTerm" | "orderCancellation" | "other";
+export type ApprovalRequestStatus = "Pending" | "Approved" | "Rejected";
+
+export interface ApprovalRequest {
+  id: string;                     // e.g. "AR-2026-0001"
+  type: ApprovalRequestType;
+  requestedBy: string;            // display name of the submitter (role identity)
+  relatedSoId?: string;           // set when originated from Reserve modal or SO detail
+  relatedClientId?: string;       // reserved for the customer-entity phase
+  details: string;                // free-text reason / justification
+  status: ApprovalRequestStatus;
+  reviewedBy?: string;            // set on resolve
+  reviewNote?: string;            // optional reviewer note
+  createdAt: string;              // display-format timestamp (matches history/activity conventions)
+  resolvedAt?: string;            // set on resolve
 }
 
 // ─── Dashboard / activity feed ───────────────────────────────────────────────────

@@ -8,6 +8,9 @@ import type { Tag, Role, SalesOrder } from "@/lib/types";
 import { PillFilter } from "@/features/stock-locator/filters";
 import { Pagination, DEFAULT_PAGE_SIZE, usePagedSlice } from "@/components/shared/Pagination";
 import { Button } from "@/components/shared/Button";
+import { calcFbm } from "@/lib/fbm";
+import { RequestApprovalForm, type ApprovalDraft } from "@/features/approvals/RequestApprovalForm";
+import { useClients } from "@/hooks/useClients";
 
 const MONTHS_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
@@ -51,10 +54,13 @@ interface AvailableToSellProps {
   role: Role;
   salesOrders: SalesOrder[];
   onUpdateTag: (tag: Tag) => void;
+  onCreateTag: (tag: Tag) => void;
   onLinkSalesOrder: (soId: string, tagId: string, qty: number, unitPrice: number) => void;
+  onCreateApproval: (draft: ApprovalDraft) => void;
+  requesterIdentity: string;
 }
 
-export function AvailableToSell({ tags, role, salesOrders, onUpdateTag, onLinkSalesOrder }: AvailableToSellProps) {
+export function AvailableToSell({ tags, role, salesOrders, onUpdateTag, onCreateTag, onLinkSalesOrder, onCreateApproval, requesterIdentity }: AvailableToSellProps) {
   const [speciesF, setSpeciesF] = useState<string[]>([]);
   const [gradeF, setGradeF] = useState<string[]>([]);
   const [lengthF, setLengthF] = useState<string[]>([]);
@@ -109,23 +115,56 @@ export function AvailableToSell({ tags, role, salesOrders, onUpdateTag, onLinkSa
 
   // Reserve = update tag status + append SO line item. Both go through props so
   // App.tsx remains the single owner of the Tag / SalesOrder stores (3B path).
-  const handleReserveConfirm = (tag: Tag, soId: string) => {
-    onLinkSalesOrder(soId, tag.id, tag.qty, tag.marketValue ?? 0);
-    onUpdateTag({
+  // Reserving fewer pieces than the tag holds splits off a new tag for the reserved
+  // qty (status can only apply to a whole Tag row) and shrinks the original in place.
+  const handleReserveConfirm = (tag: Tag, soId: string, qty: number) => {
+    const worker = role === "sales" ? "Sales" : "Admin";
+
+    if (qty >= tag.qty) {
+      onLinkSalesOrder(soId, tag.id, tag.qty, tag.marketValue ?? 0);
+      onUpdateTag({
+        ...tag,
+        status: "Reserved",
+        updated: "just now",
+        history: [
+          ...tag.history,
+          { e: `Reserved for ${soId} via Available-to-Sell`, t: nowStamp(), w: worker },
+        ],
+      });
+      setReserving(null);
+      setToast(`Tag ${tag.id} reserved to Order ${soId}`);
+      return;
+    }
+
+    const newId = `T-2026-${String(tags.length + 100 + 1).padStart(4, "0")}`;
+    const remainingQty = tag.qty - qty;
+    const splitNote = `Split from ${tag.id} · Reserved via Available-to-Sell`;
+
+    onCreateTag({
       ...tag,
+      id: newId,
+      qty,
+      fbm: calcFbm(tag.thick, tag.width, tag.length, qty),
       status: "Reserved",
       updated: "just now",
+      parentTagId: tag.id,
+      splitTagIds: undefined,
+      history: [...tag.history, { e: splitNote, t: nowStamp(), w: worker }],
+    });
+    onLinkSalesOrder(soId, newId, qty, tag.marketValue ?? 0);
+    onUpdateTag({
+      ...tag,
+      qty: remainingQty,
+      fbm: calcFbm(tag.thick, tag.width, tag.length, remainingQty),
+      updated: "just now",
+      splitTagIds: [...(tag.splitTagIds ?? []), newId],
       history: [
         ...tag.history,
-        {
-          e: `Reserved for ${soId} via Available-to-Sell`,
-          t: nowStamp(),
-          w: role === "sales" ? "Sales" : "Admin",
-        },
+        { e: `Split ${qty} pcs into ${newId} · Reserved via Available-to-Sell`, t: nowStamp(), w: worker },
       ],
     });
     setReserving(null);
-    setToast(`Tag ${tag.id} reserved to Order ${soId}`);
+    setToast(`${qty} of ${tag.qty} pcs from ${tag.id} reserved to Order ${soId} as ${newId}`);
   };
 
   // Toast auto-dismiss.
@@ -235,7 +274,15 @@ export function AvailableToSell({ tags, role, salesOrders, onUpdateTag, onLinkSa
           tag={reserving}
           salesOrders={salesOrders}
           onCancel={() => setReserving(null)}
-          onConfirm={(soId) => handleReserveConfirm(reserving, soId)}
+          onConfirm={(soId, qty) => handleReserveConfirm(reserving, soId, qty)}
+          onSubmitApproval={(draft) => {
+            onCreateApproval(draft);
+            setReserving(null);
+            setToast(
+              `Approval request submitted${draft.relatedSoId ? ` for ${draft.relatedSoId}` : ""}`,
+            );
+          }}
+          requesterIdentity={requesterIdentity}
         />
       ) : null}
 
@@ -263,15 +310,24 @@ function ReserveModal({
   salesOrders,
   onCancel,
   onConfirm,
+  onSubmitApproval,
+  requesterIdentity,
 }: {
   tag: Tag;
   salesOrders: SalesOrder[];
   onCancel: () => void;
-  onConfirm: (soId: string) => void;
+  onConfirm: (soId: string, qty: number) => void;
+  onSubmitApproval: (draft: ApprovalDraft) => void;
+  requesterIdentity: string;
 }) {
   const eligible = useMemo(() => salesOrders.filter((so) => so.status === "Open"), [salesOrders]);
   const [soId, setSoId] = useState<string>("");
-  const canConfirm = soId !== "" && eligible.some((so) => so.id === soId);
+  const [qty, setQty] = useState<number>(tag.qty);
+  const [showApproval, setShowApproval] = useState(false);
+  const { getClientName } = useClients();
+  const qtyValid = Number.isInteger(qty) && qty >= 1 && qty <= tag.qty;
+  const canConfirm = soId !== "" && eligible.some((so) => so.id === soId) && qtyValid;
+  const willSplit = qtyValid && qty < tag.qty;
 
   return (
     <>
@@ -293,6 +349,26 @@ function ReserveModal({
               <div>{tag.qty} pcs · {tag.fbm} FBM · {tag.yard} · {tag.section} · {tag.rack}</div>
             </div>
 
+            <label className="block text-[13px] font-semibold text-ink mb-2">Qty to reserve</label>
+            <input
+              type="number"
+              min={1}
+              max={tag.qty}
+              step={1}
+              value={qty}
+              onChange={(e) => setQty(e.target.value === "" ? 0 : Math.round(Number(e.target.value)))}
+              className="w-full border border-sage rounded-md px-3 py-2 text-[13px] bg-white outline-none focus:border-coral mb-1.5"
+            />
+            {!qtyValid ? (
+              <div className="text-[11px] text-coral mb-3">Enter a whole number between 1 and {tag.qty}.</div>
+            ) : willSplit ? (
+              <div className="text-[11px] text-text-ter mb-3">
+                Reserving fewer than {tag.qty} pcs splits off a new tag for {qty} pcs; the remaining {tag.qty - qty} pcs stay Available on {tag.id}.
+              </div>
+            ) : (
+              <div className="text-[11px] text-text-ter mb-3">Reserves the whole tag — no split.</div>
+            )}
+
             <label className="block text-[13px] font-semibold text-ink mb-2">Link to Sales Order</label>
             {eligible.length === 0 ? (
               <div className="text-[12px] text-text-sec bg-sage/15 rounded-md px-3 py-2.5 border border-sage/60">
@@ -307,21 +383,41 @@ function ReserveModal({
                 <option value="">— Select a sales order —</option>
                 {eligible.map((so) => (
                   <option key={so.id} value={so.id}>
-                    {so.id} — {so.customer}
+                    {so.id} — {getClientName(so.clientId)}
                   </option>
                 ))}
               </select>
             )}
           </div>
 
-          <div className="flex items-center justify-end gap-2 px-5 pb-5 pt-1">
-            <Button onClick={onCancel}>Cancel</Button>
-            <Button variant="primary" onClick={() => canConfirm && onConfirm(soId)} disabled={!canConfirm}>
-              Confirm
-            </Button>
+          <div className="flex items-center justify-between px-5 pb-5 pt-1">
+            <button
+              onClick={() => setShowApproval(true)}
+              className="text-[12px] text-coral hover:underline bg-transparent border-0 p-0 cursor-pointer"
+            >
+              Need approval? Request one
+            </button>
+            <div className="flex items-center gap-2">
+              <Button onClick={onCancel}>Cancel</Button>
+              <Button variant="primary" onClick={() => canConfirm && onConfirm(soId, qty)} disabled={!canConfirm}>
+                Confirm
+              </Button>
+            </div>
           </div>
         </div>
       </div>
+      {showApproval && (
+        <RequestApprovalForm
+          requestedBy={requesterIdentity}
+          prefillSoId={soId || undefined}
+          onCancel={() => setShowApproval(false)}
+          onSubmit={(draft) => {
+            onSubmitApproval(draft);
+            setShowApproval(false);
+          }}
+          zIndex={60}
+        />
+      )}
     </>
   );
 }

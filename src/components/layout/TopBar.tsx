@@ -11,17 +11,17 @@ const ROLE_VIEWS: [Role, string][] = [
 
 const titles: Record<NavKey, string> = {
   dashboard: "Dashboard", locator: "Stock Locator", tagentry: "Tag Entry",
-  delivery: "Delivery Slips", po: "Purchase Orders", prod: "Production", sales: "Sales",
+  delivery: "Delivery Slips", po: "Purchase Orders", prod: "Production", sales: "Sales Orders",
   shipping: "Shipping / Trucking", invoicing: "Invoicing",
   avail: "Available to Sell", clientprofile: "Client Profile", approvals: "Approvals",
-  reports: "Reports", analytics: "Analytics", settings: "Settings",
+  insights: "Insights", settings: "Settings",
 };
 
 const parents: Partial<Record<NavKey, string>> = {
   locator: "Inventory", tagentry: "Inventory", avail: "Inventory",
   delivery: "Operations", po: "Operations", prod: "Operations", sales: "Operations",
   shipping: "Operations", invoicing: "Operations", clientprofile: "Operations", approvals: "Operations",
-  reports: "Insights", analytics: "Insights", settings: "Setup",
+  settings: "Setup",
 };
 
 interface TopBarProps {

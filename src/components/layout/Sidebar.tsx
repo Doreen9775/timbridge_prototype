@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import {
   Home, MapPin, Tag, Truck, ShoppingCart, Factory,
-  FileText, BarChart2, TrendingUp, Settings, LogOut,
+  FileText, TrendingUp, Settings, LogOut,
   DollarSign, Users, ClipboardCheck, Route, Receipt,
 } from "lucide-react";
 import { TimbridgeLogo } from "@/components/shared/TimbridgeLogo";
@@ -11,7 +11,7 @@ export type NavKey =
   | "dashboard" | "locator" | "tagentry"
   | "delivery" | "po" | "prod" | "sales" | "shipping" | "invoicing"
   | "avail" | "clientprofile" | "approvals"
-  | "reports" | "analytics" | "settings";
+  | "insights" | "settings";
 
 interface NavItem { key: NavKey; icon: ReactNode; label: string; allowedRoles?: Role[]; }
 interface NavSection { label: string; items: NavItem[]; }
@@ -29,15 +29,14 @@ const sections: NavSection[] = [
     { key: "delivery", icon: <Truck size={16} />, label: "Delivery Slips", allowedRoles: ["manager"] },
     { key: "po", icon: <ShoppingCart size={16} />, label: "Purchase Orders", allowedRoles: ["manager"] },
     { key: "prod", icon: <Factory size={16} />, label: "Production", allowedRoles: ["manager"] },
-    { key: "sales", icon: <FileText size={16} />, label: "Sales", allowedRoles: ["manager", "sales"] },
+    { key: "sales", icon: <FileText size={16} />, label: "Sales Order", allowedRoles: ["manager", "sales"] },
     { key: "shipping", icon: <Route size={16} />, label: "Shipping / Trucking", allowedRoles: ["manager", "sales"] },
     { key: "invoicing", icon: <Receipt size={16} />, label: "Invoicing", allowedRoles: ["manager", "sales"] },
     { key: "clientprofile", icon: <Users size={16} />, label: "Client Profile", allowedRoles: ["manager", "sales"] },
     { key: "approvals", icon: <ClipboardCheck size={16} />, label: "Approvals", allowedRoles: ["manager", "sales"] },
   ] },
   { label: "INSIGHTS", items: [
-    { key: "reports", icon: <BarChart2 size={16} />, label: "Reports", allowedRoles: ["manager"] },
-    { key: "analytics", icon: <TrendingUp size={16} />, label: "Analytics", allowedRoles: ["manager", "sales"] },
+    { key: "insights", icon: <TrendingUp size={16} />, label: "Insights", allowedRoles: ["manager", "sales"] },
   ] },
   { label: "SETUP", items: [
     { key: "settings", icon: <Settings size={16} />, label: "Settings", allowedRoles: ["manager"] },

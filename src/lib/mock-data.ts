@@ -1,7 +1,7 @@
 // Seed data for the prototype — the single source of truth for this phase (kickoff §4.6).
 // Ported from the original artifact and migrated to the 6-state tag lifecycle (§4.5):
 //   Available (5) · Received (2) · Reserved (4) · Pending (3) · Shipped (2) · Discrepancy (2)
-import type { ActivityEvent, FloorTask, SalesOrder, Tag } from "./types";
+import type { ActivityEvent, Client, FloorTask, SalesOrder, Tag } from "./types";
 
 export const initialTags: Tag[] = [
   { id: "T-2026-0101", date: "2026-06-01", species: "SPF", grade: "#1", thick: 2, width: 4, length: 16, qty: 100, fbm: 1067, state: "KD", milling: "STD", yard: "YD-A", section: "A-1", rack: "R-03", bin: "B2", status: "Available", updated: "2h ago", parentLog: "LOG-2024-0040", supplier: "In-house production", cost: 6.19, marketValue: 9.07, history: [{ e: "Received from production", t: "Jun 01 2026 08:12", w: "JS" }, { e: "Moved to A-1/R-03", t: "Jun 02 2026 10:30", w: "MK" }, { e: "Released — available to sell", t: "Jun 02 2026 10:31", w: "System" }] },
@@ -24,14 +24,24 @@ export const initialTags: Tag[] = [
   { id: "T-2026-0118", date: "2026-05-29", species: "Hem-Fir", grade: "#2", thick: 2, width: 4, length: 14, qty: 85, fbm: 793, state: "HT", milling: "STD", yard: "YD-A", section: "A-1", rack: "R-03", bin: "B3", status: "Reserved", updated: "2h ago", parentLog: null, supplier: "Fraser Mills Lumber", cost: 4.1, marketValue: 5.97, history: [{ e: "Received", t: "May 29 2026 14:00", w: "MK" }, { e: "Released — available to sell", t: "May 29 2026 14:30", w: "System" }, { e: "Reserved for order #460", t: "Jun 03 2026 08:00", w: "Admin" }] },
 ];
 
+// Client entities (CRM MVP). Ids are fixed so the salesOrders seed below can reference
+// them at parse time; the useClients hook picks these up on first load and persists to
+// localStorage for edit-through-reload durability. Order mirrors first-appearance in the
+// pre-migration free-string customer field on salesOrders.
+export const INITIAL_CLIENTS: Client[] = [
+  { id: "C-0001", name: "Coastal Builders Supply", createdAt: "May 15 2026 09:00" },
+  { id: "C-0002", name: "Fraser Valley Truss", createdAt: "May 15 2026 09:00" },
+  { id: "C-0003", name: "Island Pallet Co.", createdAt: "May 15 2026 09:00" },
+];
+
 // Sales orders linked to the Reserved tags above (kickoff §4.5 — unblocks Available-to-Sell).
 // unitPrice mirrors each linked tag's marketValue so the Linked Transactions panel stays
-// consistent with the Pricing block on the same tag.
+// consistent with the Pricing block on the same tag. `clientId` is the FK to INITIAL_CLIENTS.
 export const salesOrders: SalesOrder[] = [
-  { id: "SO-0042", customer: "Coastal Builders Supply", status: "Picked", date: "2026-06-01", lineItems: [{ tagId: "T-2026-0103", qty: 40, unitPrice: 21.60 }] },
-  { id: "SO-0043", customer: "Fraser Valley Truss", status: "Open", date: "2026-06-03", lineItems: [{ tagId: "T-2026-0113", qty: 25, unitPrice: 28.80 }] },
-  { id: "SO-0044", customer: "Coastal Builders Supply", status: "Shipped", date: "2026-05-20", lineItems: [{ tagId: "T-2026-0106", qty: 45, unitPrice: 20.91 }] },
-  { id: "SO-0045", customer: "Island Pallet Co.", status: "Open", date: "2026-06-03", lineItems: [{ tagId: "T-2026-0118", qty: 60, unitPrice: 5.97 }] },
+  { id: "SO-0042", clientId: "C-0001", status: "Picked", date: "2026-06-01", lineItems: [{ tagId: "T-2026-0103", qty: 40, unitPrice: 21.60 }] },
+  { id: "SO-0043", clientId: "C-0002", status: "Open", date: "2026-06-03", lineItems: [{ tagId: "T-2026-0113", qty: 25, unitPrice: 28.80 }] },
+  { id: "SO-0044", clientId: "C-0001", status: "Shipped", date: "2026-05-20", lineItems: [{ tagId: "T-2026-0106", qty: 45, unitPrice: 20.91 }] },
+  { id: "SO-0045", clientId: "C-0003", status: "Open", date: "2026-06-03", lineItems: [{ tagId: "T-2026-0118", qty: 60, unitPrice: 5.97 }] },
 ];
 
 export const recentActivity: ActivityEvent[] = [
