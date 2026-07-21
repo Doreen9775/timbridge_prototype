@@ -18,7 +18,7 @@ import { Insights } from "@/features/insights/Insights";
 import { RecentRecordsProvider } from "@/hooks/useRecentRecords";
 import { LookupsProvider } from "@/hooks/useLookups";
 import { ClientsProvider } from "@/hooks/useClients";
-import type { ApprovalRequest, ApprovalRequestType, EntryFilter, RecentRecord, SalesOrderStatus, Tag } from "@/lib/types";
+import type { ApprovalRequest, ApprovalRequestType, EntryFilter, RecentRecord, SalesOrder, SalesOrderStatus, Tag } from "@/lib/types";
 import { useRole } from "@/hooks/useRole";
 import { useTags } from "@/hooks/useTags";
 import { useSalesOrders } from "@/hooks/useSalesOrders";
@@ -126,6 +126,75 @@ export default function App() {
       prev.map((so) => (so.id === soId ? { ...so, lineItems: [...so.lineItems, { tagId, qty, unitPrice }] } : so)),
     );
   }, [setSalesOrders]);
+
+  // Multi-tag SO creation from Available-to-Sell. `confirm=false` saves as Draft
+  // (tags stay Available); `confirm=true` creates an Open SO and batch-transitions
+  // every linked tag Available → Reserved in the same commit. Returns the created
+  // SO id on success, or a list of tag ids that were no longer Available on failure.
+  const handleCreateSalesOrder = useCallback(
+    (
+      clientId: string,
+      lineItems: { tagId: string; qty: number; unitPrice: number }[],
+      confirm: boolean,
+    ): { ok: true; soId: string } | { ok: false; unavailableIds: string[] } => {
+      if (confirm) {
+        // Defensive check: every referenced tag must still be Available at commit time.
+        const tagById = new Map(tags.map((t) => [t.id, t]));
+        const unavailable = lineItems
+          .filter((li) => tagById.get(li.tagId)?.status !== "Available")
+          .map((li) => li.tagId);
+        if (unavailable.length > 0) return { ok: false, unavailableIds: unavailable };
+      }
+
+      const newId = `SO-${String(salesOrders.length + 42).padStart(4, "0")}`;
+      const today = new Date();
+      const iso = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+      const newSo: SalesOrder = {
+        id: newId,
+        clientId,
+        status: confirm ? "Open" : "Draft",
+        date: iso,
+        lineItems,
+      };
+      setSalesOrders((prev) => [...prev, newSo]);
+
+      if (confirm) {
+        const idSet = new Set(lineItems.map((li) => li.tagId));
+        const worker = identityFor(role);
+        const stamp = nowStamp();
+        setTags((prev) =>
+          prev.map((t) =>
+            idSet.has(t.id)
+              ? {
+                  ...t,
+                  status: "Reserved",
+                  updated: "just now",
+                  history: [...t.history, { e: `Reserved for ${newId} via Available-to-Sell`, t: stamp, w: worker }],
+                }
+              : t,
+          ),
+        );
+      }
+      return { ok: true, soId: newId };
+    },
+    [tags, salesOrders.length, role, setSalesOrders, setTags],
+  );
+
+  // Append multiple line items to an existing Draft SO (Open/Picked/Shipped SOs
+  // are frozen per the guardrail — tags only transition on Confirm). Draft target
+  // means tags stay Available; the caller (AddToOrderPicker) filters to Draft-only.
+  const handleAppendToDraftOrder = useCallback(
+    (soId: string, lineItems: { tagId: string; qty: number; unitPrice: number }[]) => {
+      setSalesOrders((prev) =>
+        prev.map((so) =>
+          so.id === soId && so.status === "Draft"
+            ? { ...so, lineItems: [...so.lineItems, ...lineItems] }
+            : so,
+        ),
+      );
+    },
+    [setSalesOrders],
+  );
 
   // Forward-only SO status transition (Open→Picked→Shipped). Shipped cascades every
   // linked Reserved tag to Shipped in the same commit so the two stores can't diverge.
@@ -273,6 +342,8 @@ export default function App() {
                   onUpdateTag={handleUpdateTag}
                   onCreateTag={handleCreateTag}
                   onLinkSalesOrder={handleLinkSalesOrder}
+                  onCreateSalesOrder={handleCreateSalesOrder}
+                  onAppendToDraftOrder={handleAppendToDraftOrder}
                   onCreateApproval={handleCreateApproval}
                   requesterIdentity={identityFor(role)}
                 />

@@ -4,6 +4,9 @@ import type { SalesOrderStatus } from "@/lib/types";
 // SalesOrderStatus union. Shared across Stock Locator's Linked Transactions and
 // the Sales Orders list/detail.
 const SO_STATUS_STYLES: Record<SalesOrderStatus, string> = {
+  // Draft — dashed sage border on off-white to visually flag "unconfirmed" without
+  // borrowing the neutral gray of Open (which means "committed, tags Reserved").
+  Draft: "bg-[#F9FAF8] text-text-sec border border-dashed border-sage",
   Open: "bg-[#EEF0F2] text-[#6B7280]",
   Picked: "bg-[#EAF5D0] text-[#4E6B0E]",
   Shipped: "bg-[#D9DDE3] text-[#3B4250]",

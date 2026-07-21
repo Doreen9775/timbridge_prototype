@@ -59,7 +59,12 @@ export interface Tag {
 }
 
 // ─── Sales orders (kickoff §4.5 — link Reserved tags; unblocks Available-to-Sell) ─
-export type SalesOrderStatus = "Open" | "Picked" | "Shipped" | "Cancelled";
+// "Draft" was added when Available-to-Sell gained a multi-select SO creation flow:
+// Save-as-Draft lands here (tags stay Available), Confirm-Order transitions to Open
+// and batch-reserves the linked tags. The existing forward ladder Open → Picked →
+// Shipped is unchanged; Draft → Open is currently only reachable via the creation
+// panel (detail-view Draft → Open wiring is deferred to the next prompt).
+export type SalesOrderStatus = "Draft" | "Open" | "Picked" | "Shipped" | "Cancelled";
 
 export interface SalesOrderLineItem {
   tagId: string; // links to a Tag — typically one with status Reserved while the order is active
