@@ -15,6 +15,8 @@ const TYPE_OPTIONS: ApprovalRequestType[] = ["discount", "creditTerm", "orderCan
 export interface ApprovalDraft {
   type: ApprovalRequestType;
   relatedSoId?: string;
+  discountRate?: number;    // 0–100. Set by the Request Discount quick-entry form; this
+                             // generic free-text form never sets it.
   details: string;
 }
 

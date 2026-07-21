@@ -1,7 +1,7 @@
 // Seed data for the prototype — the single source of truth for this phase (kickoff §4.6).
 // Ported from the original artifact and migrated to the 6-state tag lifecycle (§4.5):
 //   Available (5) · Received (2) · Reserved (4) · Pending (3) · Shipped (2) · Discrepancy (2)
-import type { ActivityEvent, Client, FloorTask, SalesOrder, Tag } from "./types";
+import type { ActivityEvent, ApprovalRequest, Client, FloorTask, SalesOrder, Tag } from "./types";
 
 export const initialTags: Tag[] = [
   { id: "T-2026-0101", date: "2026-06-01", species: "SPF", grade: "#1", thick: 2, width: 4, length: 16, qty: 100, fbm: 1067, state: "KD", milling: "STD", yard: "YD-A", section: "A-1", rack: "R-03", bin: "B2", status: "Available", updated: "2h ago", parentLog: "LOG-2024-0040", supplier: "In-house production", cost: 6.19, marketValue: 9.07, history: [{ e: "Received from production", t: "Jun 01 2026 08:12", w: "JS" }, { e: "Moved to A-1/R-03", t: "Jun 02 2026 10:30", w: "MK" }, { e: "Released — available to sell", t: "Jun 02 2026 10:31", w: "System" }] },
@@ -42,6 +42,47 @@ export const salesOrders: SalesOrder[] = [
   { id: "SO-0043", clientId: "C-0002", status: "Open", date: "2026-06-03", lineItems: [{ tagId: "T-2026-0113", qty: 25, unitPrice: 28.80 }], expectedShipDate: "2026-06-15" },
   { id: "SO-0044", clientId: "C-0001", status: "Shipped", date: "2026-05-20", lineItems: [{ tagId: "T-2026-0106", qty: 45, unitPrice: 20.91 }], expectedShipDate: "2026-05-24", notes: "Delivered to site — PO #4471." },
   { id: "SO-0045", clientId: "C-0003", status: "Open", date: "2026-06-03", lineItems: [{ tagId: "T-2026-0118", qty: 60, unitPrice: 5.97 }] },
+  // Round numbers on purpose — this order backs the Approval Queue's discount-calc demo
+  // (see INITIAL_APPROVAL_REQUESTS below): 1000 pcs × $10.00 = a clean $10,000.00 original price.
+  { id: "SO-0046", clientId: "C-0001", status: "Open", date: "2026-06-05", lineItems: [{ tagId: "T-2026-0111", qty: 1000, unitPrice: 10.00 }] },
+];
+
+// Seeds the Approval Queue with a couple of Pending discount requests so the
+// original-price/rate/calculated-price display (kickoff: Approval Queue prompt) has
+// something to render out of the box. `discountRate` is optional on ApprovalRequest —
+// today's Request Approval form is free-text only and doesn't capture it, so any
+// request submitted through the live UI won't have one; the Approval Queue skips the
+// calculated-price block in that case rather than guessing from the free text.
+export const INITIAL_APPROVAL_REQUESTS: ApprovalRequest[] = [
+  {
+    id: "AR-2026-0001",
+    type: "discount",
+    requestedBy: "Sales",
+    relatedSoId: "SO-0046",
+    discountRate: 5,
+    details: "Requesting a 5% loyalty discount for repeat customer on this order.",
+    status: "Pending",
+    createdAt: "Jun 05 2026 10:15",
+  },
+  {
+    id: "AR-2026-0002",
+    type: "discount",
+    requestedBy: "Sales",
+    relatedSoId: "SO-0043",
+    discountRate: 10,
+    details: "10% discount in exchange for early payment commitment.",
+    status: "Pending",
+    createdAt: "Jun 04 2026 09:30",
+  },
+  {
+    id: "AR-2026-0003",
+    type: "creditTerm",
+    requestedBy: "Sales",
+    relatedSoId: "SO-0045",
+    details: "Requesting Net 60 terms instead of standard Net 30 for this account.",
+    status: "Pending",
+    createdAt: "Jun 03 2026 15:00",
+  },
 ];
 
 export const recentActivity: ActivityEvent[] = [

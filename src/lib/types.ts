@@ -108,6 +108,9 @@ export interface ApprovalRequest {
   relatedSoId?: string;           // set when originated from Reserve modal or SO detail
   relatedClientId?: string;       // reserved for the customer-entity phase
   details: string;                // free-text reason / justification
+  discountRate?: number;          // 0–100. Only meaningful for type "discount"; the current
+                                   // creation form is free-text only, so this is unset unless
+                                   // seeded — Approval Queue skips the price calc when absent.
   status: ApprovalRequestStatus;
   reviewedBy?: string;            // set on resolve
   reviewNote?: string;            // optional reviewer note

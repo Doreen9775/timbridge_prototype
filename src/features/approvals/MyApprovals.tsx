@@ -1,7 +1,11 @@
-import { useMemo } from "react";
-import type { ApprovalRequest, ApprovalRequestStatus } from "@/lib/types";
+import { useEffect, useMemo, useState } from "react";
+import { CheckCircle2, Percent } from "lucide-react";
+import type { ApprovalRequest, ApprovalRequestStatus, SalesOrder } from "@/lib/types";
+import { Button } from "@/components/shared/Button";
 import { ConfirmationBanner } from "@/components/shared/ConfirmationBanner";
-import { APPROVAL_TYPE_LABELS } from "./RequestApprovalForm";
+import { useClients } from "@/hooks/useClients";
+import { APPROVAL_TYPE_LABELS, type ApprovalDraft } from "./RequestApprovalForm";
+import { RequestDiscountForm } from "./RequestDiscountForm";
 
 const STATUS_STYLES: Record<ApprovalRequestStatus, string> = {
   Pending: "bg-[#EEF0F2] text-[#6B7280]",
@@ -11,19 +15,39 @@ const STATUS_STYLES: Record<ApprovalRequestStatus, string> = {
 
 interface MyApprovalsProps {
   approvalRequests: ApprovalRequest[];
+  salesOrders: SalesOrder[];
   identity: string;                                // current user's display name for the filter
   acknowledgedIds: Set<string>;
   onAcknowledgeResolved: (ids: string[]) => void;
+  onCreateApproval: (draft: ApprovalDraft) => void;
   onOpenSo?: (id: string) => void;
 }
 
 export function MyApprovals({
   approvalRequests,
+  salesOrders,
   identity,
   acknowledgedIds,
   onAcknowledgeResolved,
+  onCreateApproval,
   onOpenSo,
 }: MyApprovalsProps) {
+  const { getClientName } = useClients();
+  const [showRequestDiscount, setShowRequestDiscount] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!toast) return;
+    const id = window.setTimeout(() => setToast(null), 3000);
+    return () => window.clearTimeout(id);
+  }, [toast]);
+
+  const handleSubmitDiscount = (draft: ApprovalDraft) => {
+    onCreateApproval(draft);
+    setShowRequestDiscount(false);
+    setToast(`Discount request submitted for ${draft.relatedSoId}`);
+  };
+
   const mine = useMemo(
     () =>
       approvalRequests
@@ -52,19 +76,24 @@ export function MyApprovals({
         />
       )}
       <div className="p-6 max-w-[1000px] mx-auto">
-        <div className="mb-5">
-          <h1 className="text-[26px] font-bold text-ink leading-tight" style={{ fontFamily: "Montserrat, sans-serif" }}>
-            My Approval Requests
-          </h1>
-          <p className="text-sm text-text-sec mt-1">
-            Requests you've submitted and the manager's decisions.
-          </p>
+        <div className="mb-5 flex items-start justify-between gap-4">
+          <div>
+            <h1 className="text-[26px] font-bold text-ink leading-tight" style={{ fontFamily: "Montserrat, sans-serif" }}>
+              My Approval Requests
+            </h1>
+            <p className="text-sm text-text-sec mt-1">
+              Requests you've submitted and the manager's decisions.
+            </p>
+          </div>
+          <Button variant="primary" onClick={() => setShowRequestDiscount(true)} leftIcon={<Percent size={14} />}>
+            Request Discount
+          </Button>
         </div>
 
         {mine.length === 0 ? (
           <div className="bg-white rounded-xl border border-sage p-10 text-center text-text-sec">
             <div className="text-[15px] font-semibold text-ink mb-1">Nothing to show yet</div>
-            <div className="text-[13px]">Submit a request from the Reserve modal or a Sales Order.</div>
+            <div className="text-[13px]">Submit a request from the Reserve modal, a Sales Order, or Request Discount above.</div>
           </div>
         ) : (
           <div className="flex flex-col gap-3">
@@ -130,6 +159,22 @@ export function MyApprovals({
           </div>
         )}
       </div>
+
+      {showRequestDiscount && (
+        <RequestDiscountForm
+          salesOrders={salesOrders}
+          getClientName={getClientName}
+          onCancel={() => setShowRequestDiscount(false)}
+          onSubmit={handleSubmitDiscount}
+        />
+      )}
+
+      {toast && (
+        <div className="fixed bottom-6 right-6 z-50 flex items-center gap-2.5 bg-sage text-ink rounded-lg shadow-lg pl-4 pr-4 py-3 border border-sage min-w-[240px]">
+          <CheckCircle2 size={18} className="text-ink shrink-0" />
+          <span className="text-[13px] font-medium flex-1">{toast}</span>
+        </div>
+      )}
     </div>
   );
 }

@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { X, Maximize2, Minimize2, ArrowRight, ShieldCheck, Plus, Trash2, AlertTriangle, Lock } from "lucide-react";
+import { X, Maximize2, Minimize2, ArrowRight, ShieldCheck, Plus, Trash2, AlertTriangle, Lock, ExternalLink } from "lucide-react";
 import type { SalesOrder, SalesOrderLineItem, SalesOrderStatus, Tag } from "@/lib/types";
 import { Button } from "@/components/shared/Button";
 import { SOStatusPill } from "@/components/shared/SOStatusPill";
@@ -7,6 +7,7 @@ import { RequestApprovalForm, type ApprovalDraft } from "@/features/approvals/Re
 import { ClientSelector } from "@/features/available-to-sell/ClientSelector";
 import { useClients } from "@/hooks/useClients";
 import { getSalesOrderEditMode, LOCK_TOOLTIP, type SOEditMode } from "./permissions";
+import { calcExtendedPrice } from "@/lib/pricing";
 
 // Unified Sales Order panel — replaces the earlier CreateSalesOrderPanel + SalesOrderDetail.
 // One component, three faces:
@@ -41,9 +42,7 @@ function formatDate(iso: string): string {
   return `${MONTHS[m - 1]} ${String(d).padStart(2, "0")}, ${y}`;
 }
 function lineExtended(li: DraftLineItem | SalesOrderLineItem): number {
-  const gross = li.qty * li.unitPrice;
-  const pct = li.discountPct ?? 0;
-  return gross * (1 - pct / 100);
+  return calcExtendedPrice(li.qty, li.unitPrice, li.discountPct);
 }
 
 interface CreateModeProps {
@@ -283,7 +282,7 @@ function ViewPanel({
         editMode={editMode}
         clientId={clientId}
         onClientChange={setClientId}
-        onOpenClient={canEditCustomer ? undefined : onOpenClient}
+        onOpenClient={onOpenClient}
         lines={lines}
         onLinesChange={setLines}
         onOpenTag={onOpenTag}
@@ -420,7 +419,7 @@ function PanelBody({
   const canEditCustomer = editMode === "edit-all";
   const canEditLineItems = editMode === "edit-all";
   const canEditMeta = editMode === "edit-all" || editMode === "meta-only";
-  const { getClientName } = useClients();
+  const { getClientName, clientById } = useClients();
 
   const orderTotal = useMemo(() => lines.reduce((s, li) => s + lineExtended(li), 0), [lines]);
   const totalPieces = useMemo(() => lines.reduce((s, li) => s + li.qty, 0), [lines]);
@@ -452,7 +451,21 @@ function PanelBody({
       <div>
         <div className="text-xs text-text-sec mb-2">Customer</div>
         {canEditCustomer ? (
-          <ClientSelector value={clientId} onChange={onClientChange} />
+          <div className="flex items-center gap-2">
+            <div className="flex-1 min-w-0">
+              <ClientSelector value={clientId} onChange={onClientChange} />
+            </div>
+            {onOpenClient && clientId && clientById.has(clientId) && (
+              <button
+                onClick={() => onOpenClient(clientId)}
+                title="View client profile"
+                aria-label="View client profile"
+                className="shrink-0 p-2 rounded-md border border-sage text-text-sec hover:text-coral hover:border-coral cursor-pointer bg-white"
+              >
+                <ExternalLink size={14} />
+              </button>
+            )}
+          </div>
         ) : (
           <LockedField tooltip={editMode === "meta-only" ? LOCK_TOOLTIP : undefined}>
             {clientKnown === false ? (

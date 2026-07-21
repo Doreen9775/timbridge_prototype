@@ -294,15 +294,18 @@ export default function App() {
   }, []);
   const handleClientOpened = useCallback(() => setPendingClientId(null), []);
 
-  // Submit a new approval request from Reserve modal / SO detail. Auto-assigns id +
-  // createdAt + Pending status; requester identity is stamped from the current role.
+  // Submit a new approval request from Reserve modal / SO detail / Request Discount
+  // quick-entry form. Auto-assigns id + createdAt + Pending status; requester identity
+  // is stamped from the current role. discountRate passes through untouched when the
+  // draft sets one (Request Discount form) and stays undefined otherwise (generic form).
   const handleCreateApproval = useCallback(
-    (draft: { type: ApprovalRequestType; relatedSoId?: string; details: string }) => {
+    (draft: { type: ApprovalRequestType; relatedSoId?: string; discountRate?: number; details: string }) => {
       const newReq: ApprovalRequest = {
         id: `AR-2026-${String(approvalRequests.length + 1).padStart(4, "0")}`,
         type: draft.type,
         requestedBy: identityFor(role),
         relatedSoId: draft.relatedSoId,
+        discountRate: draft.discountRate,
         details: draft.details,
         status: "Pending",
         createdAt: nowStamp(),
@@ -422,17 +425,27 @@ export default function App() {
               {nav === "approvals" && role === "sales" && (
                 <MyApprovals
                   approvalRequests={approvalRequests}
+                  salesOrders={salesOrders}
                   identity={identityFor(role)}
                   acknowledgedIds={acknowledgedApprovalIds}
                   onAcknowledgeResolved={handleAcknowledgeApprovals}
+                  onCreateApproval={handleCreateApproval}
                   onOpenSo={handleOpenSoFromLocator}
                 />
               )}
               {nav === "approvals" && role === "manager" && (
                 <ApprovalQueue
                   approvalRequests={approvalRequests}
+                  salesOrders={salesOrders}
+                  tags={tags}
                   onResolve={handleResolveApproval}
-                  onOpenSo={handleOpenSoFromLocator}
+                  onUpdateSalesOrder={handleUpdateSalesOrder}
+                  onConfirmDraft={handleConfirmDraftOrder}
+                  onAdvanceStatus={handleAdvanceSoStatus}
+                  onOpenTag={handleOpenTagFromSo}
+                  onOpenClient={handleOpenClient}
+                  onCreateApproval={handleCreateApproval}
+                  requesterIdentity={identityFor(role)}
                 />
               )}
               {!["dashboard", "locator", "tagentry", "delivery", "settings", "avail", "sales", "approvals", "clientprofile", "insights"].includes(nav) && <ComingSoon name={nav} />}
