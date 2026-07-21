@@ -873,9 +873,50 @@ A history of every commit (push) on `main`, in chronological order, with what wa
 
 **Files / 改动:** new `src/features/sales-orders/SalesOrderPanel.tsx`, `src/features/sales-orders/permissions.ts`, `src/features/clients/ClientCreate.tsx`; deleted `src/features/available-to-sell/CreateSalesOrderPanel.tsx`, `src/features/sales-orders/SalesOrderDetail.tsx`; modified `src/App.tsx`, `src/features/available-to-sell/AvailableToSell.tsx`, `src/features/sales-orders/SalesOrders.tsx`, `src/features/clients/Clients.tsx`, `src/features/clients/ClientDetail.tsx`, `src/hooks/useClients.tsx`, `src/lib/types.ts`, `src/lib/mock-data.ts`
 
+## 2026-07-21
+
+### `632a6d6` · 11:02 · Approval Queue discount pricing + accordion review + Sales quick-entry — 审批队列折扣算价 + 手风琴式审批 + 销售快速发起
+
+**🇨🇳 中文**
+
+**1. 折扣类审批请求自动算价**（新 [`lib/pricing.ts`](src/lib/pricing.ts)）
+- `ApprovalRequest` 新增可选 `discountRate`（0–100）。折扣请求现在关联一个真实 Sales Order（`relatedSoId`）+ 一个数值折扣率，不再是纯自由文本。
+- 新增共享公式 `calcExtendedPrice(qty, unitPrice, discountPct?)`，从 Sales Order line items 原有的私有 `lineExtended` 里抽出来——两处（Sales Order 明细价、审批算价）现在共用同一套价格公式，不是两份。
+- Approval Queue 对折扣类请求实时展示「原价 × 折扣率 = 折后价」，折扣率变了就跟着重算，不需要手动算。
+
+**2. Manager 的 Approval Queue 改成手风琴式行内展开**（重写 [`ApprovalQueue.tsx`](src/features/approvals/ApprovalQueue.tsx)）
+- 点一行请求，行内直接展开：客户、关联 line items、折扣算价、申请人备注全部原地显示；Approve / Reject + 可选审核备注也挪到展开区里——不再跳到 Sales Order 页面，也不再弹一个脱离上下文的二次确认框。
+- 同一时间只能展开一行，展开新的自动收起旧的。
+- 展开区里加了「View full order」链接，需要看完整订单时把已有的 Sales Order 面板当本地浮层直接打开（不换页），关掉就精确回到刚才展开的审批行。
+- Approve/Reject 后该行立刻从队列里消失（因为队列只显示 Pending），配一个右下角 toast 确认操作已生效——全程停留在 Approval Queue，不发生任何页面跳转。
+
+**3. Sales 侧新增「Request Discount」快速发起入口**（新 [`RequestDiscountForm.tsx`](src/features/approvals/RequestDiscountForm.tsx)）
+- My Approval Requests 页顶部新按钮，打开一个小表单：可搜索的 Open 订单选择器（仿 ClientSelector 的输入即筛选交互）、折扣率、必填理由，实时预览「原价 × 折扣率 = 折后价」。
+- 提交后直接写入跟 Approval Queue 读的同一个 `ApprovalRequest` store，Manager 那边立刻能看到，全程不需要先打开 Sales Order 手动改价。
+
+**🇬🇧 English**
+
+**1. Auto-calculated pricing for discount requests** (new [`lib/pricing.ts`](src/lib/pricing.ts))
+- `ApprovalRequest` gains an optional `discountRate` (0–100). Discount requests now tie to a real Sales Order (`relatedSoId`) plus a numeric rate, instead of being pure free text.
+- New shared `calcExtendedPrice(qty, unitPrice, discountPct?)`, extracted from Sales Order line items' previously-private `lineExtended` — one pricing formula shared by both Sales Order pricing and the Approval Queue's calc, not two.
+- The Approval Queue shows Original × Discount = Discounted Price live for discount-type requests, recalculating immediately if the rate changes.
+
+**2. Manager's Approval Queue rebuilt as an inline accordion** (rewrote [`ApprovalQueue.tsx`](src/features/approvals/ApprovalQueue.tsx))
+- Clicking a request expands it in place: customer, related line items, the discount calc, and the requester's note render inline; Approve/Reject plus an optional reviewer note moved into that same expanded panel — no more jumping to Sales Order or a disconnected confirm modal.
+- Only one row expands at a time; opening another collapses the current one.
+- A "View full order" link inside the expanded panel opens the existing Sales Order panel as a local overlay (not a nav change) when more context is needed; closing it returns to the exact same expanded queue row.
+- Approve/Reject removes the row immediately (the queue only lists Pending) with a bottom-right toast confirming the action — the whole flow never leaves the Approval Queue.
+
+**3. Sales-side "Request Discount" quick-entry form** (new [`RequestDiscountForm.tsx`](src/features/approvals/RequestDiscountForm.tsx))
+- New button on My Approval Requests opens a small form: a searchable Open-order picker (modeled on ClientSelector's type-to-filter pattern), a discount rate field, and a required reason, with the same live Original × Rate = Discounted preview.
+- Submitting writes straight into the same `ApprovalRequest` store the queue already reads — Manager sees it immediately, with no detour through Sales Order to hand-edit a price field first.
+
+**Files / 改动:** new `src/lib/pricing.ts`, `src/features/approvals/RequestDiscountForm.tsx`; modified `src/App.tsx`, `src/features/approvals/ApprovalQueue.tsx`, `src/features/approvals/MyApprovals.tsx`, `src/features/approvals/RequestApprovalForm.tsx`, `src/features/sales-orders/SalesOrderPanel.tsx`, `src/hooks/useApprovalRequests.ts`, `src/lib/mock-data.ts`, `src/lib/types.ts`
+
 ---
 ## Pending / 未来 (not yet built — 尚未开始)
 
+- **Insights → Pulse 改名**（sidebar 分类 "INSIGHTS" 与页面名 "Insights" 撞名；已提出改名方案，等待确认后实施——只改页面名，不改 sidebar 分类标签）
 - **Approvals 里 Sales 视图看到的历史范围**（当前 MyApprovals 显示所有状态，Manager 只看 Pending；如果 Manager 需要审批历史查阅，加个 History tab）
 - **Client 的 delete**（create/edit 都已支持；delete 尚未建）
 - **Client Profile 的 Linked Sales Orders 之外的 CRM 活动记录**（通话/拜访/会议日志——按当前批次要求是 backlog，不在这一轮）
