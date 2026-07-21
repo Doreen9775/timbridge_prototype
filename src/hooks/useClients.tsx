@@ -2,6 +2,13 @@ import { createContext, useCallback, useContext, useMemo, useState, type ReactNo
 import { INITIAL_CLIENTS } from "@/lib/mock-data";
 import type { Client } from "@/lib/types";
 
+const MONTHS_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+function nowStamp(): string {
+  const d = new Date();
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${MONTHS_SHORT[d.getMonth()]} ${p(d.getDate())} ${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+
 // CRM store — mirrors the useLookups localStorage-backed Provider pattern. First load
 // seeds from INITIAL_CLIENTS (the customer strings deduped out of the legacy salesOrders
 // seed); subsequent loads read what's persisted, so edits survive page reloads.
@@ -37,6 +44,8 @@ interface ClientsContextValue {
   // UI doesn't blank out if a client is edited/deleted while an SO still references it.
   getClientName: (id: string) => string;
   updateClient: (id: string, patch: Partial<Omit<Client, "id" | "createdAt">>) => void;
+  // Mints a new client id + createdAt. Returns the id so callers can deep-link/open the drawer.
+  createClient: (draft: Omit<Client, "id" | "createdAt">) => string;
 }
 
 const ClientsContext = createContext<ClientsContextValue | null>(null);
@@ -52,6 +61,23 @@ export function ClientsProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
+  const createClient = useCallback((draft: Omit<Client, "id" | "createdAt">): string => {
+    let newId = "";
+    setClients((prev) => {
+      // Numeric-suffix id, gap-tolerant: max existing numeric suffix + 1. Handles the
+      // legacy "C-0001..C-0003" seed and any prior deletions without id collision.
+      const maxN = prev.reduce((m, c) => {
+        const n = Number(c.id.replace(/^C-/, ""));
+        return Number.isFinite(n) && n > m ? n : m;
+      }, 0);
+      newId = `C-${String(maxN + 1).padStart(4, "0")}`;
+      const next = [...prev, { ...draft, id: newId, createdAt: nowStamp() }];
+      save(next);
+      return next;
+    });
+    return newId;
+  }, []);
+
   const value = useMemo<ClientsContextValue>(() => {
     const map = new Map(clients.map((c) => [c.id, c]));
     return {
@@ -59,8 +85,9 @@ export function ClientsProvider({ children }: { children: ReactNode }) {
       clientById: map,
       getClientName: (id: string) => map.get(id)?.name ?? "Unknown",
       updateClient,
+      createClient,
     };
-  }, [clients, updateClient]);
+  }, [clients, updateClient, createClient]);
 
   return <ClientsContext.Provider value={value}>{children}</ClientsContext.Provider>;
 }

@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { X, Maximize2, Minimize2, Pencil, Mail, Phone, MapPin } from "lucide-react";
+import { X, Maximize2, Minimize2, Pencil, Mail, Phone, MapPin, Map, CreditCard } from "lucide-react";
 import type { Client, SalesOrder } from "@/lib/types";
 import { Button } from "@/components/shared/Button";
 import { SOStatusPill } from "@/components/shared/SOStatusPill";
@@ -52,6 +52,8 @@ export function ClientDetail({
       phone: draft.phone?.trim() || undefined,
       email: draft.email?.trim() || undefined,
       address: draft.address?.trim() || undefined,
+      territory: draft.territory?.trim() || undefined,
+      paymentTerms: draft.paymentTerms?.trim() || undefined,
       notes: draft.notes?.trim() || undefined,
     });
     setEditing(false);
@@ -134,6 +136,14 @@ export function ClientDetail({
       {field("Address", (
         <input className={inputCls} value={draft.address ?? ""} onChange={(e) => setDraft((d) => ({ ...d, address: e.target.value }))} />
       ))}
+      <div className="grid grid-cols-2 gap-3">
+        {field("Territory", (
+          <input className={inputCls} value={draft.territory ?? ""} onChange={(e) => setDraft((d) => ({ ...d, territory: e.target.value }))} placeholder="e.g. BC Coast" />
+        ))}
+        {field("Payment terms", (
+          <input className={inputCls} value={draft.paymentTerms ?? ""} onChange={(e) => setDraft((d) => ({ ...d, paymentTerms: e.target.value }))} placeholder="e.g. Net 30" />
+        ))}
+      </div>
       {field("Notes", (
         <textarea
           className={`${inputCls} resize-none`}
@@ -167,6 +177,8 @@ export function ClientDetail({
           {viewRow(Phone, "Phone", client.phone)}
           {viewRow(Mail, "Email", client.email)}
           {viewRow(MapPin, "Address", client.address)}
+          {viewRow(Map, "Territory", client.territory)}
+          {viewRow(CreditCard, "Payment terms", client.paymentTerms)}
         </div>
         <div className="text-[11px] text-text-ter mt-2">Created {client.createdAt}</div>
       </div>
