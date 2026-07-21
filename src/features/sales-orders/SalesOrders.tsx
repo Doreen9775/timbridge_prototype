@@ -4,7 +4,7 @@ import { PillFilter } from "@/features/stock-locator/filters";
 import { Pagination, DEFAULT_PAGE_SIZE, usePagedSlice } from "@/components/shared/Pagination";
 import { SOStatusPill } from "@/components/shared/SOStatusPill";
 import { FilterBar } from "@/components/shared/FilterBar";
-import { SalesOrderDetail } from "./SalesOrderDetail";
+import { SalesOrderPanel, type DraftLineItem } from "./SalesOrderPanel";
 import type { ApprovalDraft } from "@/features/approvals/RequestApprovalForm";
 import { useClients } from "@/hooks/useClients";
 
@@ -26,13 +26,15 @@ interface SalesOrdersProps {
   openSoId?: string | null;
   onSoOpened?: () => void;
   onAdvanceStatus: (soId: string, next: SalesOrderStatus) => void;
+  onUpdateSalesOrder: (so: SalesOrder) => void;
+  onConfirmDraft: (soId: string, lineItems: DraftLineItem[]) => { ok: true } | { ok: false; unavailableIds: string[] };
   onOpenTag: (id: string) => void;
   onOpenClient: (id: string) => void;
   onCreateApproval: (draft: ApprovalDraft) => void;
   requesterIdentity: string;
 }
 
-export function SalesOrders({ salesOrders, tags, openSoId, onSoOpened, onAdvanceStatus, onOpenTag, onOpenClient, onCreateApproval, requesterIdentity }: SalesOrdersProps) {
+export function SalesOrders({ salesOrders, tags, openSoId, onSoOpened, onAdvanceStatus, onUpdateSalesOrder, onConfirmDraft, onOpenTag, onOpenClient, onCreateApproval, requesterIdentity }: SalesOrdersProps) {
   const { clientById, getClientName } = useClients();
   const [statusF, setStatusF] = useState<string[]>([]);
   const [customerF, setCustomerF] = useState<string[]>([]);
@@ -198,13 +200,16 @@ export function SalesOrders({ salesOrders, tags, openSoId, onSoOpened, onAdvance
       </div>
 
       {selectedSo && (
-        <SalesOrderDetail
+        <SalesOrderPanel
           key={selectedSo.id}
+          mode="view"
           so={selectedSo}
-          tags={tags}
+          allTags={tags}
           fullscreen={fullscreen}
           onToggleFullscreen={() => setFullscreen((f) => !f)}
           onClose={closeDrawer}
+          onUpdateSalesOrder={onUpdateSalesOrder}
+          onConfirmDraft={onConfirmDraft}
           onAdvanceStatus={onAdvanceStatus}
           onOpenTag={handleOpenTag}
           onOpenClient={(id) => { onOpenClient(id); closeDrawer(); }}

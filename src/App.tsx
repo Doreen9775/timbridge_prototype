@@ -180,6 +180,51 @@ export default function App() {
     [tags, salesOrders.length, role, setSalesOrders, setTags],
   );
 
+  // Persist an edited Sales Order back into the store. The panel enforces which
+  // fields it's allowed to touch based on status (see permissions.ts); this handler
+  // is dumb — it just writes whatever the panel hands back. Tags aren't touched
+  // here because line-item edits are only permitted on Draft (tags stay Available).
+  const handleUpdateSalesOrder = useCallback((updated: SalesOrder) => {
+    setSalesOrders((prev) => prev.map((so) => (so.id === updated.id ? updated : so)));
+  }, [setSalesOrders]);
+
+  // Draft → Open transition from the Sales Order view panel. Same double-book
+  // check + Available→Reserved batch cascade as handleCreateSalesOrder — but
+  // against an existing SO id rather than minting a new one.
+  const handleConfirmDraftOrder = useCallback(
+    (
+      soId: string,
+      lineItems: { tagId: string; qty: number; unitPrice: number; discountPct?: number }[],
+    ): { ok: true } | { ok: false; unavailableIds: string[] } => {
+      const tagById = new Map(tags.map((t) => [t.id, t]));
+      const unavailable = lineItems
+        .filter((li) => tagById.get(li.tagId)?.status !== "Available")
+        .map((li) => li.tagId);
+      if (unavailable.length > 0) return { ok: false, unavailableIds: unavailable };
+
+      const idSet = new Set(lineItems.map((li) => li.tagId));
+      const worker = identityFor(role);
+      const stamp = nowStamp();
+      setSalesOrders((prev) =>
+        prev.map((so) => (so.id === soId ? { ...so, status: "Open", lineItems } : so)),
+      );
+      setTags((prev) =>
+        prev.map((t) =>
+          idSet.has(t.id)
+            ? {
+                ...t,
+                status: "Reserved",
+                updated: "just now",
+                history: [...t.history, { e: `Reserved for ${soId} via Sales Orders`, t: stamp, w: worker }],
+              }
+            : t,
+        ),
+      );
+      return { ok: true };
+    },
+    [tags, role, setSalesOrders, setTags],
+  );
+
   // Append multiple line items to an existing Draft SO (Open/Picked/Shipped SOs
   // are frozen per the guardrail — tags only transition on Confirm). Draft target
   // means tags stay Available; the caller (AddToOrderPicker) filters to Draft-only.
@@ -355,6 +400,8 @@ export default function App() {
                   openSoId={pendingSoId}
                   onSoOpened={handleSoOpened}
                   onAdvanceStatus={handleAdvanceSoStatus}
+                  onUpdateSalesOrder={handleUpdateSalesOrder}
+                  onConfirmDraft={handleConfirmDraftOrder}
                   onOpenTag={handleOpenTagFromSo}
                   onOpenClient={handleOpenClient}
                   onCreateApproval={handleCreateApproval}

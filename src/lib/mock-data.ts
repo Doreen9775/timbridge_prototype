@@ -29,18 +29,18 @@ export const initialTags: Tag[] = [
 // localStorage for edit-through-reload durability. Order mirrors first-appearance in the
 // pre-migration free-string customer field on salesOrders.
 export const INITIAL_CLIENTS: Client[] = [
-  { id: "C-0001", name: "Coastal Builders Supply", createdAt: "May 15 2026 09:00" },
-  { id: "C-0002", name: "Fraser Valley Truss", createdAt: "May 15 2026 09:00" },
-  { id: "C-0003", name: "Island Pallet Co.", createdAt: "May 15 2026 09:00" },
+  { id: "C-0001", name: "Coastal Builders Supply", contactName: "Alex Chen", phone: "604-555-0142", email: "alex@coastalbuilders.ca", territory: "BC Coast", paymentTerms: "Net 30", createdAt: "May 15 2026 09:00" },
+  { id: "C-0002", name: "Fraser Valley Truss", contactName: "Priya Sharma", phone: "604-555-0187", email: "priya@fvtruss.com", territory: "Fraser Valley", paymentTerms: "Net 45", createdAt: "May 15 2026 09:00" },
+  { id: "C-0003", name: "Island Pallet Co.", contactName: "Morgan Reid", phone: "250-555-0119", email: "orders@islandpallet.ca", territory: "Vancouver Island", paymentTerms: "COD", createdAt: "May 15 2026 09:00" },
 ];
 
 // Sales orders linked to the Reserved tags above (kickoff §4.5 — unblocks Available-to-Sell).
 // unitPrice mirrors each linked tag's marketValue so the Linked Transactions panel stays
 // consistent with the Pricing block on the same tag. `clientId` is the FK to INITIAL_CLIENTS.
 export const salesOrders: SalesOrder[] = [
-  { id: "SO-0042", clientId: "C-0001", status: "Picked", date: "2026-06-01", lineItems: [{ tagId: "T-2026-0103", qty: 40, unitPrice: 21.60 }] },
-  { id: "SO-0043", clientId: "C-0002", status: "Open", date: "2026-06-03", lineItems: [{ tagId: "T-2026-0113", qty: 25, unitPrice: 28.80 }] },
-  { id: "SO-0044", clientId: "C-0001", status: "Shipped", date: "2026-05-20", lineItems: [{ tagId: "T-2026-0106", qty: 45, unitPrice: 20.91 }] },
+  { id: "SO-0042", clientId: "C-0001", status: "Picked", date: "2026-06-01", lineItems: [{ tagId: "T-2026-0103", qty: 40, unitPrice: 21.60 }], expectedShipDate: "2026-06-10", notes: "Ship-to yard gate B — call driver on arrival." },
+  { id: "SO-0043", clientId: "C-0002", status: "Open", date: "2026-06-03", lineItems: [{ tagId: "T-2026-0113", qty: 25, unitPrice: 28.80 }], expectedShipDate: "2026-06-15" },
+  { id: "SO-0044", clientId: "C-0001", status: "Shipped", date: "2026-05-20", lineItems: [{ tagId: "T-2026-0106", qty: 45, unitPrice: 20.91 }], expectedShipDate: "2026-05-24", notes: "Delivered to site — PO #4471." },
   { id: "SO-0045", clientId: "C-0003", status: "Open", date: "2026-06-03", lineItems: [{ tagId: "T-2026-0118", qty: 60, unitPrice: 5.97 }] },
 ];
 

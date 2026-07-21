@@ -12,7 +12,7 @@ import { FilterBar } from "@/components/shared/FilterBar";
 import { calcFbm } from "@/lib/fbm";
 import { RequestApprovalForm, type ApprovalDraft } from "@/features/approvals/RequestApprovalForm";
 import { useClients } from "@/hooks/useClients";
-import { CreateSalesOrderPanel } from "./CreateSalesOrderPanel";
+import { SalesOrderPanel } from "@/features/sales-orders/SalesOrderPanel";
 import { AddToOrderPicker } from "./AddToOrderPicker";
 
 const MONTHS_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -413,8 +413,10 @@ export function AvailableToSell({ tags, role, salesOrders, onUpdateTag, onCreate
       ) : null}
 
       {creatingSo && (
-        <CreateSalesOrderPanel
-          tags={selectedTags}
+        <SalesOrderPanel
+          mode="create"
+          initialTags={selectedTags}
+          allTags={tags}
           onCancel={() => setCreatingSo(false)}
           onSaveDraft={handlePanelSaveDraft}
           onConfirm={handlePanelConfirm}

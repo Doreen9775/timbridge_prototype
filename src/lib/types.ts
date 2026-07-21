@@ -70,6 +70,7 @@ export interface SalesOrderLineItem {
   tagId: string; // links to a Tag — typically one with status Reserved while the order is active
   qty: number; // pieces drawn from this tag, may be less than the tag's full qty
   unitPrice: number; // USD per piece
+  discountPct?: number; // 0–100, applied to (qty × unitPrice). Absent = no discount.
 }
 
 export interface SalesOrder {
@@ -78,6 +79,8 @@ export interface SalesOrder {
   status: SalesOrderStatus;
   date: string; // ISO date (YYYY-MM-DD)
   lineItems: SalesOrderLineItem[];
+  notes?: string; // Free-text order notes. Editable on Draft (whole order) and on Open/Picked (meta-only).
+  expectedShipDate?: string; // ISO date (YYYY-MM-DD). Editable on Draft and Open/Picked.
 }
 
 // ─── Clients (CRM MVP — replaces the pre-migration free-string customer field) ────
@@ -88,6 +91,8 @@ export interface Client {
   phone?: string;
   email?: string;
   address?: string;
+  territory?: string;         // sales territory / region (e.g. "BC Coast", "Interior BC")
+  paymentTerms?: string;      // free-form terms label (e.g. "Net 30", "COD", "Net 45 + 2%")
   notes?: string;             // free-text CRM notes
   createdAt: string;          // display-format timestamp (matches history/activity conventions)
 }
