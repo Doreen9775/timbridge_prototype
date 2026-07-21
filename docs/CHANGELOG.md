@@ -835,12 +835,50 @@ A history of every commit (push) on `main`, in chronological order, with what wa
 
 **Files / 改动:** new `src/components/shared/FilterBar.tsx`, `src/features/available-to-sell/CreateSalesOrderPanel.tsx`, `src/features/available-to-sell/AddToOrderPicker.tsx`, `src/features/available-to-sell/ClientSelector.tsx`; `src/features/stock-locator/StockLocator.tsx`, `src/features/sales-orders/SalesOrders.tsx`, `src/features/clients/Clients.tsx`, `src/features/available-to-sell/AvailableToSell.tsx`, `src/components/shared/SOStatusPill.tsx`, `src/lib/types.ts`, `src/App.tsx`
 
+## 2026-07-20
+
+### `386fd40`..`006b2fd` · 21:44 · Sales Order view/edit + Client Profile module — 销售单查看编辑 + 客户档案模块
+
+**🇨🇳 中文**
+
+**1. Sales Orders 支持查看/编辑已有订单，按状态门控可编辑字段**（合并 [`CreateSalesOrderPanel.tsx`](src/features/available-to-sell/CreateSalesOrderPanel.tsx) + [`SalesOrderDetail.tsx`](src/features/sales-orders/SalesOrderDetail.tsx) 为统一的新 [`SalesOrderPanel.tsx`](src/features/sales-orders/SalesOrderPanel.tsx)）
+- 一个面板三种形态：`create`（新建）、`view` 下的 `edit-all`（Draft）、`meta-only`（Open/Picked）、`readonly`（Shipped/Cancelled）。状态判定逻辑集中在新文件 [`permissions.ts`](src/features/sales-orders/permissions.ts) 的单一函数 `getSalesOrderEditMode()`，面板顶部只算一次，不再散落在各字段里判断。
+- **Draft**：customer、line items（增删 tag、改数量/单价/折扣）、notes、预计发货日期全部可编辑；面板内直接 **Confirm Order**（Draft → Open，批量把关联 tag 转 Reserved，带防御性复查）。
+- **Open / Picked**：仅 notes + 预计发货日期可改；customer 和 line items 显示虚线锁定框，hover 提示"Cancel the reservation to modify line items."——按设计不做"静默改单"，要改 line items 必须先取消预约。
+- **Shipped / Cancelled**：整个面板只读，不渲染任何编辑控件。
+- `SalesOrder` 模型新增 `notes`、`expectedShipDate`；`SalesOrderLineItem` 新增可选 `discountPct`。
+
+**2. 新增 Client Profile 客户档案模块**（新 [`ClientCreate.tsx`](src/features/clients/ClientCreate.tsx)）
+- **New Client** 按钮打开右侧 slide-in 创建表单——沿用 ClientDetail/Stock Locator 同款面板外壳（backdrop、宽度、关闭动画完全一致，不是新造的面板模式）；字段：客户名、联系人、电话、邮箱、片区（territory）、付款条款、备注。
+- `useClients` 新增 `createClient()`，自动分配下一个 `C-####` id 并写入 localStorage；创建成功后自动跳转打开新客户的详情面板。
+- 列表新增 **Territory**（片区）筛选 pill（复用 FilterBar）、**Open Orders**（Draft/Open/Picked 计数，Shipped/Cancelled 不算）、**Last Activity**（最近一次 SO 日期，无订单则回退到建档时间）列。
+- 详情面板 view/edit 模式都加上 Territory + Payment Terms 展示与编辑。
+- **验收要点**：面板是 fixed 定位的浮层，列表 DOM 全程留在原地——打开客户详情再关闭，滚动位置和已生效的筛选/搜索条件原样保留，全程没有一次页面跳转。
+
+**🇬🇧 English**
+
+**1. Sales Orders: view/edit existing orders, editability gated by status** (merged [`CreateSalesOrderPanel.tsx`](src/features/available-to-sell/CreateSalesOrderPanel.tsx) + [`SalesOrderDetail.tsx`](src/features/sales-orders/SalesOrderDetail.tsx) into a single new [`SalesOrderPanel.tsx`](src/features/sales-orders/SalesOrderPanel.tsx))
+- One panel, three faces: `create`, `view` with `edit-all` (Draft), `meta-only` (Open/Picked), `readonly` (Shipped/Cancelled). The status → editability mapping lives in one place, a new `getSalesOrderEditMode()` in [`permissions.ts`](src/features/sales-orders/permissions.ts) — the panel derives it once at the top instead of checking status per field.
+- **Draft**: customer, line items (add/remove tags, edit qty/unit price/discount), notes, and expected ship date are all editable; **Confirm Order** is available right from the panel (Draft → Open, batch-reserves linked tags with the same defensive re-check used elsewhere).
+- **Open / Picked**: only notes + expected ship date are editable; customer and line items render inside a dashed lock border with a hover tooltip — "Cancel the reservation to modify line items." No silent line-item edits on a reserved order by design.
+- **Shipped / Cancelled**: fully read-only, no edit controls render at all.
+- `SalesOrder` gains `notes` and `expectedShipDate`; `SalesOrderLineItem` gains optional `discountPct`.
+
+**2. New Client Profile module** (new [`ClientCreate.tsx`](src/features/clients/ClientCreate.tsx))
+- **New Client** button opens a right-side slide-in creation form, reusing the same panel shell as ClientDetail/Stock Locator (identical backdrop, width, close animation — not a new panel pattern). Fields: name, contact, phone, email, territory, payment terms, notes.
+- `useClients` gains `createClient()`, which mints the next `C-####` id and persists to localStorage; on success the new client's detail panel opens automatically.
+- The list gains a **Territory** pill filter (via the shared FilterBar), an **Open Orders** count (Draft/Open/Picked only — Shipped/Cancelled don't count), and a **Last Activity** column (latest linked SO date, falling back to the client's created date).
+- Both view and edit modes on the detail panel now surface Territory + Payment Terms.
+- **Acceptance verified**: the panel is a fixed-position overlay, so the list underneath stays mounted the whole time — opening a client's detail and closing it restores the exact scroll position and active filters/search, with zero page navigation.
+
+**Files / 改动:** new `src/features/sales-orders/SalesOrderPanel.tsx`, `src/features/sales-orders/permissions.ts`, `src/features/clients/ClientCreate.tsx`; deleted `src/features/available-to-sell/CreateSalesOrderPanel.tsx`, `src/features/sales-orders/SalesOrderDetail.tsx`; modified `src/App.tsx`, `src/features/available-to-sell/AvailableToSell.tsx`, `src/features/sales-orders/SalesOrders.tsx`, `src/features/clients/Clients.tsx`, `src/features/clients/ClientDetail.tsx`, `src/hooks/useClients.tsx`, `src/lib/types.ts`, `src/lib/mock-data.ts`
+
 ---
 ## Pending / 未来 (not yet built — 尚未开始)
 
 - **Approvals 里 Sales 视图看到的历史范围**（当前 MyApprovals 显示所有状态，Manager 只看 Pending；如果 Manager 需要审批历史查阅，加个 History tab）
-- **Client 的 create/delete**（当前只支持 edit；seed 后测试如需新增客户再加）
+- **Client 的 delete**（create/edit 都已支持；delete 尚未建）
+- **Client Profile 的 Linked Sales Orders 之外的 CRM 活动记录**（通话/拜访/会议日志——按当前批次要求是 backlog，不在这一轮）
 - **Shipping/Trucking、Invoicing 实际功能**（目前只是导航占位，功能待建）
 - **Delivery Slip 持久化与列表视图**（送货单解析结果当前只在会话内存里；持久化 + Recent 下拉追踪 + 列表视图都还没建）
-- **Draft Sales Order 在详情页里还是只读死角**（SalesOrderDetail 现有的状态推进梯子里没有 Draft → Open 这一段，从 Sales Orders 列表点开一个 Draft 单能看但不能 Confirm/删除——下一步要把这段接上）
 - **`daysInYard` helper 公共抽取到 `lib/history.ts`**（当前 AvailableToSell 和 Insights 各一份，第三个 caller 出现时升级）
