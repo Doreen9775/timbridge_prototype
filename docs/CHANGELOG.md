@@ -794,11 +794,53 @@ A history of every commit (push) on `main`, in chronological order, with what wa
 **Files / 改动:** new `src/features/sales-orders/`, `src/features/approvals/`, `src/features/clients/`, `src/features/insights/`, `src/hooks/useClients.tsx`, `src/hooks/useApprovalRequests.ts`, `src/components/shared/SOStatusPill.tsx`; `src/App.tsx`, `src/components/layout/Sidebar.tsx`, `src/components/layout/TopBar.tsx`, `src/features/available-to-sell/AvailableToSell.tsx`, `src/features/stock-locator/StockLocator.tsx`, `src/lib/mock-data.ts`, `src/lib/types.ts`
 
 ---
+
+## 2026-07-20
+
+### 抽取共享 FilterBar 组件 + Available-to-Sell 多选建 Sales Order — Extracted shared FilterBar + multi-select Create Sales Order from Available-to-Sell
+
+**🇨🇳 中文**
+
+**1. FilterBar 组件抽取重构**（新 [`components/shared/FilterBar.tsx`](src/components/shared/FilterBar.tsx)）
+- 把 Stock Locator 的筛选条（leader、filter pills、Reset 按钮——含它的位置/样式/空状态行为）抽成独立组件，Available-to-Sell / Sales Orders / Client Profile 三处复用。
+- **Stock Locator 视觉零变化**：先抽取重连 Stock Locator、逐项核对 Reset 按钮的 class、点击行为、disabled/隐藏逻辑与重构前完全一致，确认 pixel-parity 之后才动其它三处。
+- **Available-to-Sell、Sales Orders 的 Reset 换样式**：原本是纯文字 underline 链接，现在统一成 Stock Locator 那种描边 pill + RotateCcw 图标（这是明确要求的风格统一，不是意外差异）；筛选条也加上了 `<Filter>` icon + "Filter By" 文字 leader。
+- **Client Profile 的独立搜索框改用 FilterBar 的 search 插槽**：FilterBar 新增可选 `search` prop（无 pill 时自动隐藏 leader），搜索逻辑本身没有变。
+- 右侧的计数文案（"5 tags available" / "4 orders" / "3 clients"）都改成 caller 传入的 `rightSlot`，跟筛选逻辑解耦。
+
+**2. Available-to-Sell 支持多选建 Sales Order**（新 [`CreateSalesOrderPanel.tsx`](src/features/available-to-sell/CreateSalesOrderPanel.tsx) / [`AddToOrderPicker.tsx`](src/features/available-to-sell/AddToOrderPicker.tsx) / [`ClientSelector.tsx`](src/features/available-to-sell/ClientSelector.tsx)）
+- 表格加了勾选框（含全选），勾选 1 个以上 tag 后表格上方弹出 action bar：**Create Sales Order** 和 **Add to Existing Order**。
+- **Create Sales Order** 打开右侧 slide-in（沿用 Stock Locator DetailDrawer 的位置/宽度/backdrop 规范），面板里：可搜索的 Client 选择器（打字过滤 name/contact/email）、line items 表格（每行 tag 的品种/等级/尺寸/件数/FBM + 可编辑单价 + 算出的小计）、订单总额、**Save as Draft** 和 **Confirm Order** 两个动作。
+- **Add to Existing Order** 打开一个 picker，**只列 Draft 状态的 SO**（Open/Picked/Shipped 已经"冻结"，不能再往里加——这是为了不违反"tag 只能在 Confirm 时才转 Reserved"这条护栏）。
+- **新增 `SalesOrderStatus` 里的 "Draft"** 状态：Draft 阶段 tag 保持 Available 不动；点 **Confirm Order** 才会把 SO 状态从 Draft/新建直接置为 Open，并在同一次 commit 里把所有关联 tag 批量从 Available 转成 Reserved（history 追加 `Reserved for {soId} via Available-to-Sell`）。**Confirm 前有一道防御性复查**：任何一个 tag 如果在选中之后已经被别的动作抢先 Reserve 了，Confirm 会失败并在面板里高亮报错，不会静默提交一个坏订单。
+- `SOStatusPill` 新增 Draft 样式——虚线 sage 边框，和 Open 的实心灰区分开。
+- **本批次的一个已知偏离**：按你的要求，Manager 这次也能建单（不是只读），后续如果要收紧回"Manager 只读"，把 action bar 和面板的渲染条件加一个 role 判断即可。
+
+**🇬🇧 English**
+
+**1. Extracted shared FilterBar component** (new [`components/shared/FilterBar.tsx`](src/components/shared/FilterBar.tsx))
+- Stock Locator's filter bar (leader, filter pills, Reset button — including position, styling, and empty-state behavior) is now a standalone component reused by Available-to-Sell, Sales Orders, and Client Profile.
+- **Stock Locator verified pixel-identical first**: re-wired Stock Locator alone and confirmed the Reset button's class, click behavior, and show/hide logic matched pre-refactor exactly before touching the other three surfaces.
+- **Available-to-Sell and Sales Orders pick up the bordered-pill Reset** (previously a plain underlined text link) plus the `<Filter>` icon + "Filter By" leader — an explicit style-unification call, not an accidental drift.
+- **Client Profile's standalone search input now uses FilterBar's optional `search` slot** (the "Filter By" leader auto-hides when there are no pill children); the search logic itself is unchanged.
+- Right-side counters ("5 tags available" / "4 orders" / "3 clients") move to a caller-supplied `rightSlot`, decoupled from the filter logic.
+
+**2. Available-to-Sell: create a Sales Order from a multi-tag selection** (new [`CreateSalesOrderPanel.tsx`](src/features/available-to-sell/CreateSalesOrderPanel.tsx) / [`AddToOrderPicker.tsx`](src/features/available-to-sell/AddToOrderPicker.tsx) / [`ClientSelector.tsx`](src/features/available-to-sell/ClientSelector.tsx))
+- The tag table gains row checkboxes (+ select-all); checking one or more tags surfaces an action bar above the table with **Create Sales Order** and **Add to Existing Order**.
+- **Create Sales Order** opens a right-side slide-in (matching Stock Locator's DetailDrawer position/width/backdrop convention) pre-populated with the selected tags: a searchable Client selector (type-filters by name/contact/email), a line-items table (species/grade/dims/pieces/FBM per tag, editable unit price, computed extended price), a running order total, and **Save as Draft** / **Confirm Order**.
+- **Add to Existing Order** opens a picker scoped to **Draft orders only** (Open/Picked/Shipped are frozen — adding to them would require reserving tags outside of Confirm, which breaks the guardrail that tags only transition on Confirm).
+- **New `"Draft"` value on `SalesOrderStatus`**: while Draft, every linked tag stays Available. Hitting **Confirm Order** sets the SO to Open and, in the same commit, batch-transitions every linked tag Available → Reserved (history: `Reserved for {soId} via Available-to-Sell`). A **defensive re-check on Confirm** catches the case where a selected tag got Reserved by something else in the meantime — it fails inline with the offending rows highlighted instead of silently committing a bad reservation.
+- `SOStatusPill` gains a dashed-border Draft style, visually distinct from Open's solid neutral.
+- **Known deviation for this batch**: per your instruction, Manager can create orders here too (not read-only) — if that needs tightening back to view-only later, gate the action bar and panel render on `role`.
+
+**Files / 改动:** new `src/components/shared/FilterBar.tsx`, `src/features/available-to-sell/CreateSalesOrderPanel.tsx`, `src/features/available-to-sell/AddToOrderPicker.tsx`, `src/features/available-to-sell/ClientSelector.tsx`; `src/features/stock-locator/StockLocator.tsx`, `src/features/sales-orders/SalesOrders.tsx`, `src/features/clients/Clients.tsx`, `src/features/available-to-sell/AvailableToSell.tsx`, `src/components/shared/SOStatusPill.tsx`, `src/lib/types.ts`, `src/App.tsx`
+
+---
 ## Pending / 未来 (not yet built — 尚未开始)
 
 - **Approvals 里 Sales 视图看到的历史范围**（当前 MyApprovals 显示所有状态，Manager 只看 Pending；如果 Manager 需要审批历史查阅，加个 History tab）
 - **Client 的 create/delete**（当前只支持 edit；seed 后测试如需新增客户再加）
 - **Shipping/Trucking、Invoicing 实际功能**（目前只是导航占位，功能待建）
 - **Delivery Slip 持久化与列表视图**（送货单解析结果当前只在会话内存里；持久化 + Recent 下拉追踪 + 列表视图都还没建）
-- **SO 用户创建流程**（目前 SO 100% 来自 seed，Available to Sell 只从 Open SO 里挑；当真出 SO 创建 UI 时，直接用 Client 下拉/搜索即可，clientId 落库）
+- **Draft Sales Order 在详情页里还是只读死角**（SalesOrderDetail 现有的状态推进梯子里没有 Draft → Open 这一段，从 Sales Orders 列表点开一个 Draft 单能看但不能 Confirm/删除——下一步要把这段接上）
 - **`daysInYard` helper 公共抽取到 `lib/history.ts`**（当前 AvailableToSell 和 Insights 各一份，第三个 caller 出现时升级）
