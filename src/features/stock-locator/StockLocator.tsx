@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { Search, Scan, X, Download, Maximize2, Minimize2, Filter, RotateCcw, Pencil, Trash2 } from "lucide-react";
+import { Search, Scan, X, Download, Maximize2, Minimize2, Pencil, Trash2 } from "lucide-react";
 import type { Tag, Species, Grade, MoistureState, Milling, TagStatus, EntryFilter, Role, SalesOrder } from "@/lib/types";
 import { StatusBadge } from "@/components/shared/StatusBadge";
 import { ConfirmationBanner } from "@/components/shared/ConfirmationBanner";
@@ -10,6 +10,7 @@ import { PillFilter, DateFilter, MONTHS_SHORT } from "./filters";
 import { Pagination, DEFAULT_PAGE_SIZE, usePagedSlice } from "@/components/shared/Pagination";
 import { Button } from "@/components/shared/Button";
 import { SOStatusPill } from "@/components/shared/SOStatusPill";
+import { FilterBar } from "@/components/shared/FilterBar";
 import { useClients } from "@/hooks/useClients";
 
 const STATUS_OPTIONS = ["Pending", "Received", "Available", "Reserved", "Shipped", "Discrepancy"];
@@ -381,10 +382,7 @@ export function StockLocator({ tags, floorView, role, openTagId, onTagOpened, on
         <span className="text-xs text-text-ter whitespace-nowrap">Last synced 14:32</span>
       </div>
 
-      <div className="flex gap-2.5 mb-4 flex-wrap items-center">
-        <span className="flex items-center gap-1.5 text-[13px] text-text-sec font-medium pr-1">
-          <Filter size={15} />Filter By
-        </span>
+      <FilterBar filtersActive={filtersActive} onReset={resetFilters}>
         <DateFilter applied={dates} onApply={setDates} />
         <PillFilter label="Species" options={lookups.species.map((v) => v.code)} applied={speciesF} onApply={setSpeciesF} />
         <PillFilter label="Grade" options={lookups.grades.map((v) => v.code)} applied={gradeF} onApply={setGradeF} />
@@ -401,15 +399,7 @@ export function StockLocator({ tags, floorView, role, openTagId, onTagOpened, on
         >
           Low Qty
         </button>
-        {filtersActive && (
-          <button
-            onClick={resetFilters}
-            className="px-3.5 py-1.5 text-[13px] rounded-md cursor-pointer border border-sage bg-transparent text-text-sec flex items-center gap-1 hover:text-coral hover:border-coral"
-          >
-            <RotateCcw size={13} />Reset Filter
-          </button>
-        )}
-      </div>
+      </FilterBar>
 
       <div className="grid grid-cols-4 gap-3 mb-5">
         {summaryCards.map(([label, value], i) => {

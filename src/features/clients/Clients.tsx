@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Search } from "lucide-react";
 import type { Client, SalesOrder } from "@/lib/types";
 import { Pagination, DEFAULT_PAGE_SIZE, usePagedSlice } from "@/components/shared/Pagination";
+import { FilterBar } from "@/components/shared/FilterBar";
 import { useClients } from "@/hooks/useClients";
 import { ClientDetail } from "./ClientDetail";
 
@@ -95,20 +95,21 @@ export function Clients({ salesOrders, openClientId, onClientOpened, onOpenSo }:
           </p>
         </div>
 
-        <div className="flex items-center gap-3 mb-4">
-          <div className="relative flex-1 max-w-[420px]">
-            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-sec" />
-            <input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search by name, contact, phone, email…"
-              className="w-full py-2.5 pl-[38px] pr-3 text-sm border border-sage rounded-lg outline-none bg-white box-border"
-            />
-          </div>
-          <div className="ml-auto text-[12px] text-text-ter">
-            {filtered.length} {filtered.length === 1 ? "client" : "clients"}
-          </div>
-        </div>
+        <FilterBar
+          filtersActive={false}
+          onReset={() => setSearch("")}
+          search={{
+            value: search,
+            onChange: setSearch,
+            placeholder: "Search by name, contact, phone, email…",
+            maxWidth: "420px",
+          }}
+          rightSlot={
+            <div className="text-[12px] text-text-ter">
+              {filtered.length} {filtered.length === 1 ? "client" : "clients"}
+            </div>
+          }
+        />
 
         <div className="bg-white rounded-[10px] overflow-hidden shadow-[0_1px_4px_rgba(0,0,0,0.07)]">
           <div className="overflow-x-auto">

@@ -3,6 +3,7 @@ import type { SalesOrder, SalesOrderStatus, Tag } from "@/lib/types";
 import { PillFilter } from "@/features/stock-locator/filters";
 import { Pagination, DEFAULT_PAGE_SIZE, usePagedSlice } from "@/components/shared/Pagination";
 import { SOStatusPill } from "@/components/shared/SOStatusPill";
+import { FilterBar } from "@/components/shared/FilterBar";
 import { SalesOrderDetail } from "./SalesOrderDetail";
 import type { ApprovalDraft } from "@/features/approvals/RequestApprovalForm";
 import { useClients } from "@/hooks/useClients";
@@ -108,22 +109,18 @@ export function SalesOrders({ salesOrders, tags, openSoId, onSoOpened, onAdvance
           </p>
         </div>
 
-        <div className="flex items-center flex-wrap gap-2 mb-4">
-          <span className="text-[13px] text-text-sec mr-1">Filter By:</span>
+        <FilterBar
+          filtersActive={filtersActive}
+          onReset={resetFilters}
+          rightSlot={
+            <div className="text-[12px] text-text-ter">
+              {filtered.length} {filtered.length === 1 ? "order" : "orders"}
+            </div>
+          }
+        >
           <PillFilter label="Status" options={STATUS_OPTIONS} applied={statusF} onApply={setStatusF} />
           <PillFilter label="Customer" options={customerOpts} applied={customerF} onApply={setCustomerF} />
-          {filtersActive && (
-            <button
-              onClick={resetFilters}
-              className="ml-1 text-[12px] text-text-sec hover:text-coral underline-offset-2 hover:underline cursor-pointer"
-            >
-              Reset Filter
-            </button>
-          )}
-          <div className="ml-auto text-[12px] text-text-ter">
-            {filtered.length} {filtered.length === 1 ? "order" : "orders"}
-          </div>
-        </div>
+        </FilterBar>
 
         <div className="bg-white rounded-[10px] overflow-hidden shadow-[0_1px_4px_rgba(0,0,0,0.07)]">
           <div className="overflow-x-auto">
