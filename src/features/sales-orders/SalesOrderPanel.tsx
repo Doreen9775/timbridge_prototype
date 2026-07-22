@@ -59,15 +59,21 @@ interface ViewModeProps {
   so: SalesOrder;
   allTags: Tag[];
   fullscreen: boolean;
+  // readOnly forces a purely informational view regardless of status: every field is
+  // locked, no action buttons render, and cross-nav links are omitted. Used by Sales'
+  // "View full order" (they're requesting a discount, not managing the order).
+  readOnly?: boolean;
   onToggleFullscreen: () => void;
   onClose: () => void;
-  onUpdateSalesOrder: (so: SalesOrder) => void;
-  onConfirmDraft: (soId: string, lineItems: DraftLineItem[]) => { ok: true } | { ok: false; unavailableIds: string[] };
-  onAdvanceStatus: (soId: string, next: SalesOrderStatus) => void;
-  onOpenTag: (id: string) => void;
-  onOpenClient: (id: string) => void;
-  onCreateApproval: (draft: ApprovalDraft) => void;
-  requesterIdentity: string;
+  // Order-management handlers — only invoked from action buttons that are hidden in
+  // readOnly mode, so they're optional (readOnly callers can omit them).
+  onUpdateSalesOrder?: (so: SalesOrder) => void;
+  onConfirmDraft?: (soId: string, lineItems: DraftLineItem[]) => { ok: true } | { ok: false; unavailableIds: string[] };
+  onAdvanceStatus?: (soId: string, next: SalesOrderStatus) => void;
+  onOpenTag?: (id: string) => void;
+  onOpenClient?: (id: string) => void;
+  onCreateApproval?: (draft: ApprovalDraft) => void;
+  requesterIdentity?: string;
 }
 
 type SalesOrderPanelProps = CreateModeProps | ViewModeProps;
@@ -157,11 +163,15 @@ function CreatePanel({ initialTags, allTags, onCancel, onSaveDraft, onConfirm }:
 
 // ── View / edit mode ────────────────────────────────────────────────────────────
 function ViewPanel({
-  so, allTags, fullscreen, onToggleFullscreen, onClose,
+  so, allTags, fullscreen, readOnly, onToggleFullscreen, onClose,
   onUpdateSalesOrder, onConfirmDraft, onAdvanceStatus,
   onOpenTag, onOpenClient, onCreateApproval, requesterIdentity,
 }: ViewModeProps) {
-  const editMode = getSalesOrderEditMode(so.status);
+  // readOnly (Sales' informational view) collapses every mode to readonly. statusReadonly
+  // tracks whether the order is *actually* terminal (Shipped/Cancelled) so the status
+  // banner only shows in that case, not for a forced read-only view of an Open order.
+  const statusReadonly = getSalesOrderEditMode(so.status) === "readonly";
+  const editMode = readOnly ? "readonly" : getSalesOrderEditMode(so.status);
   const canEditCustomer = editMode === "edit-all";
   const canEditLineItems = editMode === "edit-all";
   const canEditMeta = editMode === "edit-all" || editMode === "meta-only";
@@ -203,7 +213,7 @@ function ViewPanel({
 
   const handleSave = () => {
     if (!canSave) return;
-    onUpdateSalesOrder({
+    onUpdateSalesOrder?.({
       ...so,
       clientId: canEditCustomer ? clientId! : so.clientId,
       lineItems: canEditLineItems ? lines : so.lineItems,
@@ -217,49 +227,55 @@ function ViewPanel({
     // Persist any edits first so a rejected confirm still keeps the user's changes.
     if (dirty) handleSave();
     setConfirmDraftError(null);
-    const result = onConfirmDraft(so.id, lines);
-    if (!result.ok) setConfirmDraftError(result.unavailableIds);
+    const result = onConfirmDraft?.(so.id, lines);
+    if (result && !result.ok) setConfirmDraftError(result.unavailableIds);
   };
 
+  // Two-row header: row 1 is the identifier + status (plus the window controls, which stay
+  // top-right); row 2 holds the action buttons on their own line so nothing overflows the
+  // panel edge. The action row is omitted entirely in readOnly mode (no actions to show).
+  const hasActions = !isReadonly;
   const header = (
-    <div className="px-5 pt-5 pb-4 border-b border-sage flex items-center justify-between">
-      <div className="flex items-center gap-2.5">
-        <span className="font-mono text-base font-bold text-ink">{so.id}</span>
-        <SOStatusPill status={so.status} />
+    <div className="px-5 pt-5 pb-4 border-b border-sage">
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <span className="font-mono text-base font-bold text-ink whitespace-nowrap">{so.id}</span>
+          <SOStatusPill status={so.status} />
+        </div>
+        <div className="flex items-center gap-1.5 shrink-0">
+          <button
+            onClick={onToggleFullscreen}
+            title={fullscreen ? "Exit fullscreen" : "Fullscreen"}
+            aria-label={fullscreen ? "Exit fullscreen" : "Fullscreen"}
+            className="bg-transparent border-0 cursor-pointer text-text-sec p-1 hover:text-coral"
+          >
+            {fullscreen ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
+          </button>
+          <button onClick={onClose} aria-label="Close" className="bg-transparent border-0 cursor-pointer text-text-sec p-1 hover:text-coral">
+            <X size={18} />
+          </button>
+        </div>
       </div>
-      <div className="flex items-center gap-1.5">
-        {!isReadonly && (
+      {hasActions && (
+        <div className="flex items-center gap-1.5 mt-3 flex-wrap">
           <Button size="sm" onClick={() => setShowApproval(true)} leftIcon={<ShieldCheck size={13} />}>
             Request approval
           </Button>
-        )}
-        {editMode === "edit-all" && (
-          <Button size="sm" variant="primary" onClick={handleConfirmDraft} disabled={!clientId || lines.length === 0} rightIcon={<ArrowRight size={13} />}>
-            Confirm Order
-          </Button>
-        )}
-        {editMode === "meta-only" && next && (
-          <Button size="sm" variant="primary" onClick={() => setPendingAdvance(next)} rightIcon={<ArrowRight size={13} />}>
-            Mark {next}
-          </Button>
-        )}
-        {!isReadonly && (
+          {editMode === "edit-all" && (
+            <Button size="sm" variant="primary" onClick={handleConfirmDraft} disabled={!clientId || lines.length === 0} rightIcon={<ArrowRight size={13} />}>
+              Confirm Order
+            </Button>
+          )}
+          {editMode === "meta-only" && next && (
+            <Button size="sm" variant="primary" onClick={() => setPendingAdvance(next)} rightIcon={<ArrowRight size={13} />}>
+              Mark {next}
+            </Button>
+          )}
           <Button size="sm" variant="primary" onClick={handleSave} disabled={!canSave}>
             Save changes
           </Button>
-        )}
-        <button
-          onClick={onToggleFullscreen}
-          title={fullscreen ? "Exit fullscreen" : "Fullscreen"}
-          aria-label={fullscreen ? "Exit fullscreen" : "Fullscreen"}
-          className="bg-transparent border-0 cursor-pointer text-text-sec p-1 hover:text-coral"
-        >
-          {fullscreen ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
-        </button>
-        <button onClick={onClose} aria-label="Close" className="bg-transparent border-0 cursor-pointer text-text-sec p-1 hover:text-coral">
-          <X size={18} />
-        </button>
-      </div>
+        </div>
+      )}
     </div>
   );
 
@@ -271,7 +287,7 @@ function ViewPanel({
           <span>Customer and line items are locked while tags are reserved. {LOCK_TOOLTIP}</span>
         </div>
       )}
-      {editMode === "readonly" && (
+      {editMode === "readonly" && statusReadonly && (
         <div className="flex items-center gap-2 bg-[#F9FAFB] border border-sage/60 rounded-md px-3 py-2 text-[12px] text-text-sec">
           <Lock size={13} className="text-text-sec shrink-0" />
           <span>This order is {so.status.toLowerCase()} and can no longer be edited.</span>
@@ -328,7 +344,7 @@ function ViewPanel({
           <Button
             variant="primary"
             onClick={() => {
-              onAdvanceStatus(so.id, pendingAdvance);
+              onAdvanceStatus?.(so.id, pendingAdvance);
               setPendingAdvance(null);
             }}
           >
@@ -341,11 +357,11 @@ function ViewPanel({
 
   const approvalForm = showApproval && (
     <RequestApprovalForm
-      requestedBy={requesterIdentity}
+      requestedBy={requesterIdentity ?? "Unknown"}
       prefillSoId={so.id}
       onCancel={() => setShowApproval(false)}
       onSubmit={(draft) => {
-        onCreateApproval(draft);
+        onCreateApproval?.(draft);
         setShowApproval(false);
         setApprovalToast(`Approval request submitted for ${so.id}`);
         window.setTimeout(() => setApprovalToast(null), 3000);
@@ -361,16 +377,26 @@ function ViewPanel({
   );
 
   if (fullscreen) {
+    // Dim-backdrop lightbox (mirrors Stock Locator's tag-detail fullscreen) rather than
+    // an opaque takeover — whatever list opened this panel (Sales Orders, or the Approval
+    // Queue via "View full order") stays visible behind it, so fullscreen never reads as a
+    // blank new page. Dialogs/toast live outside the backdrop so their clicks don't bubble
+    // up to onClose.
     return (
-      <div className="fixed inset-0 z-[100] bg-cream flex flex-col">
-        <div className="w-full max-w-[900px] mx-auto flex-1 flex flex-col bg-white shadow-[0_8px_30px_rgba(0,0,0,0.08)] my-6 rounded-2xl overflow-hidden">
-          {header}
-          <div className="flex-1 overflow-y-auto">{body}</div>
+      <>
+        <div className="fixed inset-0 z-[100] bg-ink/40 flex items-center justify-center p-6" onClick={onClose}>
+          <div
+            className="bg-white w-full max-w-3xl max-h-[90vh] rounded-xl overflow-y-auto shadow-[0_10px_40px_rgba(0,0,0,0.25)] flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {header}
+            <div className="flex-1 overflow-y-auto">{body}</div>
+          </div>
         </div>
         {advanceDialog}
         {approvalForm}
         {approvalToastEl}
-      </div>
+      </>
     );
   }
 

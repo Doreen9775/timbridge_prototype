@@ -2,25 +2,22 @@ import { useEffect, useMemo, useState } from "react";
 import { CheckCircle2, ChevronDown, ExternalLink } from "lucide-react";
 import type { ApprovalRequest, SalesOrder, SalesOrderStatus, Tag } from "@/lib/types";
 import { Button } from "@/components/shared/Button";
-import { calcExtendedPrice } from "@/lib/pricing";
+import { FilterBar } from "@/components/shared/FilterBar";
 import { useClients } from "@/hooks/useClients";
-import { APPROVAL_TYPE_LABELS } from "./RequestApprovalForm";
+import { APPROVAL_TYPE_LABELS, type ApprovalDraft } from "./RequestApprovalForm";
 import { SalesOrderPanel, type DraftLineItem } from "@/features/sales-orders/SalesOrderPanel";
-import type { ApprovalDraft } from "./RequestApprovalForm";
+import { DiscountCalc, LineItemsList } from "./discountParts";
 
-function formatUSD(v: number): string {
-  return `$${v.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-}
-
-// Original price = the related order's line items, gross (no discount) — reuses the
-// same calcExtendedPrice used for Sales Order line items, just called with no discount
-// arg per line. Returns null when there's nothing to compute against (no related order,
-// or the order isn't found), so the caller can skip rendering the calc block entirely.
-function originalPriceFor(req: ApprovalRequest, salesOrders: SalesOrder[]): number | null {
-  if (!req.relatedSoId) return null;
-  const so = salesOrders.find((s) => s.id === req.relatedSoId);
-  if (!so) return null;
-  return so.lineItems.reduce((sum, li) => sum + calcExtendedPrice(li.qty, li.unitPrice), 0);
+// Shared search predicate for approval rows — matches approval #, related SO #, and the
+// resolved client name (case-insensitive substring). Kept here so Manager's queue and
+// Sales' MyApprovals filter identically.
+export function matchesApprovalSearch(
+  r: { id: string; relatedSoId?: string },
+  clientName: string,
+  q: string,
+): boolean {
+  if (!q) return true;
+  return [r.id, r.relatedSoId ?? "", clientName].join(" ").toLowerCase().includes(q);
 }
 
 interface ApprovalQueueProps {
@@ -35,64 +32,6 @@ interface ApprovalQueueProps {
   onOpenClient: (id: string) => void;
   onCreateApproval: (draft: ApprovalDraft) => void;
   requesterIdentity: string;
-}
-
-// Discount calc block — original price, requested rate, and the live-computed
-// discounted price (Original × (1 − rate)). Only renders for discount-type requests
-// that have both a related order and a discount rate; today's Request Approval form
-// is free-text only and doesn't capture a rate, so requests submitted through it
-// simply won't show this block (nothing to compute, not a bug).
-function DiscountCalc({ req, salesOrders }: { req: ApprovalRequest; salesOrders: SalesOrder[] }) {
-  if (req.type !== "discount" || req.discountRate === undefined) return null;
-  const original = originalPriceFor(req, salesOrders);
-  if (original === null) return null;
-  const calculated = calcExtendedPrice(1, original, req.discountRate);
-
-  return (
-    <div className="bg-[#F9FAFB] rounded-md px-3 py-2.5 flex items-center gap-5">
-      <div>
-        <div className="text-[10px] text-text-ter uppercase tracking-wide">Original</div>
-        <div className="text-[13px] font-semibold text-text">{formatUSD(original)}</div>
-      </div>
-      <div className="text-text-ter">×</div>
-      <div>
-        <div className="text-[10px] text-text-ter uppercase tracking-wide">Discount</div>
-        <div className="text-[13px] font-semibold text-text">{req.discountRate}%</div>
-      </div>
-      <div className="text-text-ter">=</div>
-      <div>
-        <div className="text-[10px] text-text-ter uppercase tracking-wide">Discounted price</div>
-        <div className="text-[15px] font-bold text-coral">{formatUSD(calculated)}</div>
-      </div>
-    </div>
-  );
-}
-
-// Read-only line-item list for the affected order — mirrors SalesOrderPanel's locked
-// line-item rows visually, kept local since it's a small compact rendering rather than
-// something else needs to share.
-function LineItemsList({ so, tags }: { so: SalesOrder; tags: Tag[] }) {
-  const tagById = useMemo(() => new Map(tags.map((t) => [t.id, t])), [tags]);
-  return (
-    <div className="flex flex-col gap-1.5">
-      {so.lineItems.map((li) => {
-        const t = tagById.get(li.tagId);
-        return (
-          <div key={li.tagId} className="bg-[#F9FAFB] rounded-md px-3 py-2 flex items-center gap-2 text-[13px]">
-            <span className="font-mono font-semibold text-ink whitespace-nowrap">{li.tagId}</span>
-            <span className="flex-1 text-text truncate">
-              {t ? `${t.species} · ${t.grade} · ${t.thick}×${t.width}×${t.length}'` : <span className="text-text-ter italic">tag not found</span>}
-            </span>
-            <span className="text-text-sec whitespace-nowrap">{li.qty.toLocaleString()} pcs</span>
-            <span className="text-text-sec whitespace-nowrap">@ {formatUSD(li.unitPrice)}</span>
-            <span className="text-ink font-semibold whitespace-nowrap w-[90px] text-right">
-              {formatUSD(calcExtendedPrice(li.qty, li.unitPrice, li.discountPct))}
-            </span>
-          </div>
-        );
-      })}
-    </div>
-  );
 }
 
 export function ApprovalQueue({
@@ -123,7 +62,20 @@ export function ApprovalQueue({
   // Accordion — only one row expanded at a time.
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [note, setNote] = useState("");
+  const [search, setSearch] = useState("");
   const [toast, setToast] = useState<string | null>(null);
+
+  const clientNameForReq = (r: ApprovalRequest): string => {
+    const so = r.relatedSoId ? salesOrders.find((s) => s.id === r.relatedSoId) : null;
+    return so && clientById.has(so.clientId) ? getClientName(so.clientId) : "";
+  };
+
+  const q = search.trim().toLowerCase();
+  const filteredPending = useMemo(
+    () => pending.filter((r) => matchesApprovalSearch(r, clientNameForReq(r), q)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [pending, q, salesOrders, clientById],
+  );
   // "View full order" — a local overlay, independent of nav, so leaving the queue is
   // never required for the primary Approve/Reject flow.
   const [viewingSoId, setViewingSoId] = useState<string | null>(null);
@@ -166,14 +118,39 @@ export function ApprovalQueue({
           </div>
         </div>
 
+        {pending.length > 0 && (
+          <FilterBar
+            filtersActive={q.length > 0}
+            onReset={() => setSearch("")}
+            search={{
+              value: search,
+              onChange: setSearch,
+              placeholder: "Search by approval #, SO #, or customer…",
+              maxWidth: "360px",
+            }}
+            rightSlot={
+              q.length > 0 ? (
+                <div className="text-[12px] text-text-ter">
+                  {filteredPending.length} {filteredPending.length === 1 ? "match" : "matches"}
+                </div>
+              ) : undefined
+            }
+          />
+        )}
+
         {pending.length === 0 ? (
           <div className="bg-white rounded-xl border border-sage p-10 text-center text-text-sec">
             <div className="text-[15px] font-semibold text-ink mb-1">No pending requests</div>
             <div className="text-[13px]">Nothing needs your review right now.</div>
           </div>
+        ) : filteredPending.length === 0 ? (
+          <div className="bg-white rounded-xl border border-sage p-10 text-center text-text-sec">
+            <div className="text-[15px] font-semibold text-ink mb-1">No matching requests</div>
+            <div className="text-[13px]">No pending request matches "{search}".</div>
+          </div>
         ) : (
           <div className="flex flex-col gap-3">
-            {pending.map((r) => {
+            {filteredPending.map((r) => {
               const isOpen = expandedId === r.id;
               const so = r.relatedSoId ? salesOrders.find((s) => s.id === r.relatedSoId) ?? null : null;
               const clientName = so && clientById.has(so.clientId) ? getClientName(so.clientId) : null;
@@ -239,7 +216,9 @@ export function ApprovalQueue({
 
                       <div>
                         <div className="text-[11px] text-text-ter uppercase tracking-wide mb-1.5">Requester's note</div>
-                        <div className="text-[13px] text-text bg-[#F9FAFB] rounded-md px-3 py-2">{r.details}</div>
+                        <div className="text-[13px] text-text bg-[#F9FAFB] rounded-md px-3 py-2">
+                          {r.details || <span className="text-text-ter italic">No note provided</span>}
+                        </div>
                       </div>
 
                       <div>

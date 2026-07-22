@@ -14,22 +14,44 @@ interface RequestDiscountFormProps {
   getClientName: (id: string) => string;
   onCancel: () => void;
   onSubmit: (draft: ApprovalDraft) => void;
+  // Present when editing an existing pending request rather than creating a new one:
+  // pre-fills the fields and swaps the title / submit label.
+  initial?: { relatedSoId?: string; discountRate?: number; details?: string };
+  title?: string;
+  submitLabel?: string;
 }
 
 // Fast-path discount request — a standalone quick-entry form (no need to open the
 // Sales Order panel and edit a price field first). Always submits type: "discount"
 // into the same ApprovalDraft/ApprovalRequest shape the Approval Queue already reads,
-// so it shows up there immediately with the live-calculated discounted price.
-export function RequestDiscountForm({ salesOrders, getClientName, onCancel, onSubmit }: RequestDiscountFormProps) {
-  const [soId, setSoId] = useState<string | null>(null);
-  const [rate, setRate] = useState<number | "">("");
-  const [details, setDetails] = useState("");
+// so it shows up there immediately with the live-calculated discounted price. The same
+// form is reused for editing a pending request (see `initial`).
+export function RequestDiscountForm({
+  salesOrders,
+  getClientName,
+  onCancel,
+  onSubmit,
+  initial,
+  title = "Request Discount",
+  submitLabel = "Submit request",
+}: RequestDiscountFormProps) {
+  const [soId, setSoId] = useState<string | null>(initial?.relatedSoId ?? null);
+  const [rate, setRate] = useState<number | "">(initial?.discountRate ?? "");
+  const [details, setDetails] = useState(initial?.details ?? "");
 
   // Only Open orders are eligible — mirrors the Reserve modal's existing "still open
   // to action" scoping convention. SalesOrder has no per-rep owner field, so this
   // isn't filtered to "this Sales user's" orders specifically — every Sales-role user
-  // sees the same open-order pool.
-  const eligible = useMemo(() => salesOrders.filter((so) => so.status === "Open"), [salesOrders]);
+  // sees the same open-order pool. When editing, the request's current order is always
+  // included even if it has since advanced past Open, so the pre-fill still resolves.
+  const eligible = useMemo(() => {
+    const open = salesOrders.filter((so) => so.status === "Open");
+    if (initial?.relatedSoId && !open.some((so) => so.id === initial.relatedSoId)) {
+      const cur = salesOrders.find((so) => so.id === initial.relatedSoId);
+      if (cur) return [cur, ...open];
+    }
+    return open;
+  }, [salesOrders, initial]);
 
   const selectedSo = soId ? eligible.find((so) => so.id === soId) ?? null : null;
   const originalPrice = useMemo(
@@ -39,7 +61,8 @@ export function RequestDiscountForm({ salesOrders, getClientName, onCancel, onSu
   const rateNum = typeof rate === "number" ? rate : 0;
   const calculated = originalPrice !== null ? calcExtendedPrice(1, originalPrice, rateNum) : null;
 
-  const canSubmit = soId !== null && typeof rate === "number" && rate > 0 && rate <= 100 && details.trim().length > 0;
+  // Reason is optional — an order + a valid rate is enough to submit.
+  const canSubmit = soId !== null && typeof rate === "number" && rate > 0 && rate <= 100;
 
   const handleSubmit = () => {
     if (!canSubmit || !soId || typeof rate !== "number") return;
@@ -58,7 +81,7 @@ export function RequestDiscountForm({ salesOrders, getClientName, onCancel, onSu
         <div className="bg-white rounded-2xl shadow-[0_24px_60px_rgba(0,0,0,0.18)] w-full max-w-[460px] pointer-events-auto">
           <div className="flex items-center justify-between px-5 pt-5 pb-3 border-b border-sage/60">
             <h2 className="text-[17px] font-bold text-ink" style={{ fontFamily: "Montserrat, sans-serif" }}>
-              Request Discount
+              {title}
             </h2>
             <button onClick={onCancel} aria-label="Close" className="p-1 rounded hover:bg-sage/30 cursor-pointer">
               <X size={16} />
@@ -110,7 +133,9 @@ export function RequestDiscountForm({ salesOrders, getClientName, onCancel, onSu
             )}
 
             <div>
-              <label className="block text-[13px] font-semibold text-ink mb-2">Reason</label>
+              <label className="block text-[13px] font-semibold text-ink mb-2">
+                Reason <span className="text-text-ter font-normal">(optional)</span>
+              </label>
               <textarea
                 value={details}
                 onChange={(e) => setDetails(e.target.value)}
@@ -124,7 +149,7 @@ export function RequestDiscountForm({ salesOrders, getClientName, onCancel, onSu
           <div className="flex items-center justify-end gap-2 px-5 pb-5 pt-1">
             <Button onClick={onCancel}>Cancel</Button>
             <Button variant="primary" onClick={handleSubmit} disabled={!canSubmit}>
-              Submit request
+              {submitLabel}
             </Button>
           </div>
         </div>

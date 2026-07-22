@@ -802,46 +802,48 @@ function DetailDrawer({
     </label>
   );
 
+  // Two-row header: identifier + status on top (with the window controls top-right), and
+  // the action buttons on their own row below so nothing overflows the narrow panel edge.
   const header = (
-    <div className="px-5 pt-5 pb-4 border-b border-sage flex items-center justify-between">
-      <div className="flex items-center gap-2.5">
-        <span className="font-mono text-base font-bold text-ink">{tag.id}</span>
-        <StatusBadge status={editing ? draft.status : tag.status} />
-      </div>
-      <div className="flex items-center gap-1.5">
-        {editing ? (
-          <>
-            <Button size="sm" onClick={cancelEdit}>Cancel</Button>
-            <Button size="sm" variant="primary" onClick={saveEdit}>Save</Button>
-            <button
-              onClick={onToggleFullscreen}
-              title={fullscreen ? "Exit fullscreen" : "Fullscreen"}
-              aria-label={fullscreen ? "Exit fullscreen" : "Fullscreen"}
-              className="bg-transparent border-0 cursor-pointer text-text-sec p-1 hover:text-coral"
-            >
-              {fullscreen ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
-            </button>
-          </>
-        ) : (
-          <>
-            {canEdit && (
-              <Button size="sm" onClick={startEdit} aria-label="Edit" title="Edit" leftIcon={<Pencil size={13} />}>Edit</Button>
-            )}
-            {onDelete && (
-              <Button size="sm" variant="destructive" onClick={onDelete} aria-label="Delete" title="Delete tag" leftIcon={<Trash2 size={13} />}>Delete</Button>
-            )}
-            <button
-              onClick={onToggleFullscreen}
-              title={fullscreen ? "Exit fullscreen" : "Fullscreen"}
-              aria-label={fullscreen ? "Exit fullscreen" : "Fullscreen"}
-              className="bg-transparent border-0 cursor-pointer text-text-sec p-1 hover:text-coral"
-            >
-              {fullscreen ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
-            </button>
+    <div className="px-5 pt-5 pb-4 border-b border-sage">
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <span className="font-mono text-base font-bold text-ink whitespace-nowrap">{tag.id}</span>
+          <StatusBadge status={editing ? draft.status : tag.status} />
+        </div>
+        <div className="flex items-center gap-1.5 shrink-0">
+          <button
+            onClick={onToggleFullscreen}
+            title={fullscreen ? "Exit fullscreen" : "Fullscreen"}
+            aria-label={fullscreen ? "Exit fullscreen" : "Fullscreen"}
+            className="bg-transparent border-0 cursor-pointer text-text-sec p-1 hover:text-coral"
+          >
+            {fullscreen ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
+          </button>
+          {!editing && (
             <button onClick={onClose} aria-label="Close" className="bg-transparent border-0 cursor-pointer text-text-sec p-1 hover:text-coral"><X size={18} /></button>
-          </>
-        )}
+          )}
+        </div>
       </div>
+      {(editing || canEdit || onDelete) && (
+        <div className="flex items-center gap-1.5 mt-3">
+          {editing ? (
+            <>
+              <Button size="sm" onClick={cancelEdit}>Cancel</Button>
+              <Button size="sm" variant="primary" onClick={saveEdit}>Save</Button>
+            </>
+          ) : (
+            <>
+              {canEdit && (
+                <Button size="sm" onClick={startEdit} aria-label="Edit" title="Edit" leftIcon={<Pencil size={13} />}>Edit</Button>
+              )}
+              {onDelete && (
+                <Button size="sm" variant="destructive" onClick={onDelete} aria-label="Delete" title="Delete tag" leftIcon={<Trash2 size={13} />}>Delete</Button>
+              )}
+            </>
+          )}
+        </div>
+      )}
     </div>
   );
 

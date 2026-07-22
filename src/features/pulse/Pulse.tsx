@@ -76,7 +76,7 @@ function shortMonth(key: string): string {
   return `${MONTHS_SHORT[Number(mStr) - 1]} ${yStr.slice(2)}`;
 }
 
-interface InsightsProps {
+interface PulseProps {
   tags: Tag[];
   salesOrders: SalesOrder[];
   role: Role;
@@ -84,7 +84,7 @@ interface InsightsProps {
 
 type TabKey = "analytics" | "reports";
 
-export function Insights({ tags, salesOrders, role }: InsightsProps) {
+export function Pulse({ tags, salesOrders, role }: PulseProps) {
   const canSeeReports = role === "manager";
   const [tab, setTab] = useState<TabKey>("analytics");
 
@@ -98,7 +98,7 @@ export function Insights({ tags, salesOrders, role }: InsightsProps) {
       <div className="max-w-[1600px] mx-auto">
         <div className="mb-5">
           <h1 className="text-[26px] font-bold text-ink leading-tight" style={{ fontFamily: "Montserrat, sans-serif" }}>
-            Insights
+            Pulse
           </h1>
           <p className="text-sm text-text-sec mt-1">
             {tab === "analytics"

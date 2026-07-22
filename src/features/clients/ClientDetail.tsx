@@ -81,12 +81,27 @@ export function ClientDetail({
   const inputCls = "w-full border border-sage rounded-md px-2.5 py-1.5 text-[13px] bg-white text-text outline-none focus:border-coral";
 
   const header = (
-    <div className="px-5 pt-5 pb-4 border-b border-sage flex items-center justify-between">
-      <div className="flex items-center gap-2.5 min-w-0">
-        <span className="font-mono text-[13px] text-text-sec">{client.id}</span>
-        <span className="text-base font-bold text-ink truncate">{editing ? draft.name : client.name}</span>
+    <div className="px-5 pt-5 pb-4 border-b border-sage">
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <span className="font-mono text-[13px] text-text-sec shrink-0">{client.id}</span>
+          <span className="text-base font-bold text-ink truncate">{editing ? draft.name : client.name}</span>
+        </div>
+        <div className="flex items-center gap-1.5 shrink-0">
+          <button
+            onClick={onToggleFullscreen}
+            title={fullscreen ? "Exit fullscreen" : "Fullscreen"}
+            aria-label={fullscreen ? "Exit fullscreen" : "Fullscreen"}
+            className="bg-transparent border-0 cursor-pointer text-text-sec p-1 hover:text-coral"
+          >
+            {fullscreen ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
+          </button>
+          <button onClick={onClose} aria-label="Close" className="bg-transparent border-0 cursor-pointer text-text-sec p-1 hover:text-coral">
+            <X size={18} />
+          </button>
+        </div>
       </div>
-      <div className="flex items-center gap-1.5">
+      <div className="flex items-center gap-1.5 mt-3">
         {editing ? (
           <>
             <Button size="sm" onClick={cancelEdit}>Cancel</Button>
@@ -95,17 +110,6 @@ export function ClientDetail({
         ) : (
           <Button size="sm" onClick={startEdit} leftIcon={<Pencil size={13} />}>Edit</Button>
         )}
-        <button
-          onClick={onToggleFullscreen}
-          title={fullscreen ? "Exit fullscreen" : "Fullscreen"}
-          aria-label={fullscreen ? "Exit fullscreen" : "Fullscreen"}
-          className="bg-transparent border-0 cursor-pointer text-text-sec p-1 hover:text-coral"
-        >
-          {fullscreen ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
-        </button>
-        <button onClick={onClose} aria-label="Close" className="bg-transparent border-0 cursor-pointer text-text-sec p-1 hover:text-coral">
-          <X size={18} />
-        </button>
       </div>
     </div>
   );

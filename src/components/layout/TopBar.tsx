@@ -14,7 +14,7 @@ const titles: Record<NavKey, string> = {
   delivery: "Delivery Slips", po: "Purchase Orders", prod: "Production", sales: "Sales Orders",
   shipping: "Shipping / Trucking", invoicing: "Invoicing",
   avail: "Available to Sell", clientprofile: "Client Profile", approvals: "Approvals",
-  insights: "Insights", settings: "Settings",
+  pulse: "Pulse", settings: "Settings",
 };
 
 const parents: Partial<Record<NavKey, string>> = {

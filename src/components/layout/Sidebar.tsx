@@ -11,7 +11,7 @@ export type NavKey =
   | "dashboard" | "locator" | "tagentry"
   | "delivery" | "po" | "prod" | "sales" | "shipping" | "invoicing"
   | "avail" | "clientprofile" | "approvals"
-  | "insights" | "settings";
+  | "pulse" | "settings";
 
 interface NavItem { key: NavKey; icon: ReactNode; label: string; allowedRoles?: Role[]; }
 interface NavSection { label: string; items: NavItem[]; }
@@ -36,7 +36,7 @@ const sections: NavSection[] = [
     { key: "approvals", icon: <ClipboardCheck size={16} />, label: "Approvals", allowedRoles: ["manager", "sales"] },
   ] },
   { label: "INSIGHTS", items: [
-    { key: "insights", icon: <TrendingUp size={16} />, label: "Insights", allowedRoles: ["manager", "sales"] },
+    { key: "pulse", icon: <TrendingUp size={16} />, label: "Pulse", allowedRoles: ["manager", "sales"] },
   ] },
   { label: "SETUP", items: [
     { key: "settings", icon: <Settings size={16} />, label: "Settings", allowedRoles: ["manager"] },

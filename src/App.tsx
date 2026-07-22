@@ -14,7 +14,7 @@ import { SalesOrders } from "@/features/sales-orders/SalesOrders";
 import { MyApprovals } from "@/features/approvals/MyApprovals";
 import { ApprovalQueue } from "@/features/approvals/ApprovalQueue";
 import { Clients } from "@/features/clients/Clients";
-import { Insights } from "@/features/insights/Insights";
+import { Pulse } from "@/features/pulse/Pulse";
 import { RecentRecordsProvider } from "@/hooks/useRecentRecords";
 import { LookupsProvider } from "@/hooks/useLookups";
 import { ClientsProvider } from "@/hooks/useClients";
@@ -60,11 +60,11 @@ export default function App() {
     if (nav === "settings" && role !== "manager") setNav("dashboard");
   }, [nav, role]);
 
-  // Available to Sell, Sales Orders, Approvals, Client Profile and Insights are
+  // Available to Sell, Sales Orders, Approvals, Client Profile and Pulse are
   // Manager + Sales only; bounce Floor to Stock Locator (sidebar hides them for
   // Floor; this is defense-in-depth).
   useEffect(() => {
-    if ((nav === "avail" || nav === "sales" || nav === "approvals" || nav === "clientprofile" || nav === "insights") && role === "floor") setNav("locator");
+    if ((nav === "avail" || nav === "sales" || nav === "approvals" || nav === "clientprofile" || nav === "pulse") && role === "floor") setNav("locator");
   }, [nav, role]);
 
   // Sidebar click: navigate, or — already on that item — reset the feature to its
@@ -315,6 +315,22 @@ export default function App() {
     [approvalRequests.length, role, setApprovalRequests],
   );
 
+  // Sales edits one of their own still-Pending requests (Request Discount → Edit). Patches
+  // the related order / rate / reason in place; status stays Pending and the id is unchanged,
+  // so Manager's queue simply re-renders with the updated values + recalculated price.
+  const handleUpdateApproval = useCallback(
+    (id: string, patch: { relatedSoId?: string; discountRate?: number; details: string }) => {
+      setApprovalRequests((prev) =>
+        prev.map((r) =>
+          r.id === id
+            ? { ...r, relatedSoId: patch.relatedSoId, discountRate: patch.discountRate, details: patch.details }
+            : r,
+        ),
+      );
+    },
+    [setApprovalRequests],
+  );
+
   // Manager Approve / Reject — stamps reviewer + resolvedAt + optional note.
   const handleResolveApproval = useCallback(
     (id: string, decision: "Approved" | "Rejected", note: string) => {
@@ -419,18 +435,19 @@ export default function App() {
                   onOpenSo={handleOpenSoFromLocator}
                 />
               )}
-              {nav === "insights" && role !== "floor" && (
-                <Insights tags={tags} salesOrders={salesOrders} role={role} />
+              {nav === "pulse" && role !== "floor" && (
+                <Pulse tags={tags} salesOrders={salesOrders} role={role} />
               )}
               {nav === "approvals" && role === "sales" && (
                 <MyApprovals
                   approvalRequests={approvalRequests}
                   salesOrders={salesOrders}
+                  tags={tags}
                   identity={identityFor(role)}
                   acknowledgedIds={acknowledgedApprovalIds}
                   onAcknowledgeResolved={handleAcknowledgeApprovals}
                   onCreateApproval={handleCreateApproval}
-                  onOpenSo={handleOpenSoFromLocator}
+                  onUpdateApproval={handleUpdateApproval}
                 />
               )}
               {nav === "approvals" && role === "manager" && (
@@ -448,7 +465,7 @@ export default function App() {
                   requesterIdentity={identityFor(role)}
                 />
               )}
-              {!["dashboard", "locator", "tagentry", "delivery", "settings", "avail", "sales", "approvals", "clientprofile", "insights"].includes(nav) && <ComingSoon name={nav} />}
+              {!["dashboard", "locator", "tagentry", "delivery", "settings", "avail", "sales", "approvals", "clientprofile", "pulse"].includes(nav) && <ComingSoon name={nav} />}
             </div>
           </div>
         </div>
