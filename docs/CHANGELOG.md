@@ -913,10 +913,45 @@ A history of every commit (push) on `main`, in chronological order, with what wa
 
 **Files / 改动:** new `src/lib/pricing.ts`, `src/features/approvals/RequestDiscountForm.tsx`; modified `src/App.tsx`, `src/features/approvals/ApprovalQueue.tsx`, `src/features/approvals/MyApprovals.tsx`, `src/features/approvals/RequestApprovalForm.tsx`, `src/features/sales-orders/SalesOrderPanel.tsx`, `src/hooks/useApprovalRequests.ts`, `src/lib/mock-data.ts`, `src/lib/types.ts`
 
+## 2026-07-21
+
+### `d48ed0b` · 22:50 · 审批 UX 精修 + Sales 只读订单视图 + 审批搜索 + Insights→Pulse 改名 — Approval UX refinements + read-only Sales order view + approval search + Insights→Pulse rename
+
+**🇨🇳 中文**
+
+**1. 审批交互精修**
+- **Request Discount 按钮去掉图标**；折扣申请表单的 **Reason 改成选填**（不写也能提交，空备注在卡片里显示灰色斜体 "No note provided"）。
+- **SalesOrderPanel 全屏从"整屏奶油底铺满"改成半透明暗底 lightbox**（对齐 Stock Locator）——全屏时背后的列表/审批队列还看得见（变暗），不再像是跳到一个空白新页面。
+- **右侧详情面板 header 拆成两行**（SalesOrderPanel、ClientDetail、Stock Locator 标签抽屉）：第一行放标识符（SO 号 / 标签号 / 客户号）+ 状态，第二行放功能按钮——解决按钮多时关闭(X)按钮被挤出面板边界的问题。
+- **Sales 的 MyApprovals 重写成手风琴式**（对齐 Manager 队列）：展开显示客户、line items、原价 × 折扣率 = 折后价。Pending 折扣申请新增 **Edit 编辑**（App 新增 `handleUpdateApproval`，改完仍是 Pending、id 不变，Manager 侧同步更新）。**"View full order" 打开的是只读版 SalesOrderPanel**（新增 `readOnly` prop）——纯浮层、不跳转、内部客户/标签也不再是可点链接，Sales 全程不离开审批界面。
+- 把 `DiscountCalc` / `LineItemsList` 抽到共享的 [`discountParts.tsx`](src/features/approvals/discountParts.tsx)，Manager 和 Sales 两侧共用。
+
+**2. 审批搜索**
+- Manager 和 Sales 的审批界面都加了搜索框（复用共享 [`FilterBar`](src/components/shared/FilterBar.tsx)），可按**审批号 / SO 号 / 客户名**过滤，带实时命中计数和"无匹配"空态。共享匹配函数 `matchesApprovalSearch`，两侧行为一致。
+
+**3. Insights → Pulse 改名**
+- 合并后的 Reports + Analytics 模块从 **"Insights" 改名为 "Pulse"**（侧边栏项、页面标题、breadcrumb、组件名、nav 路由 key `insights`→`pulse`），避免与侧边栏分类 "INSIGHTS" 撞名。**分类标签 "INSIGHTS" 保留不动**（撞名问题靠改页面名已解决）。文件 `features/insights/Insights.tsx` → `features/pulse/Pulse.tsx`（git rename，保留历史）。
+
+**🇬🇧 English**
+
+**1. Approval UX refinements**
+- **Request Discount button drops its icon**; the discount form's **Reason is now optional** (submittable when blank; empty notes render a muted italic "No note provided" on the card).
+- **SalesOrderPanel fullscreen switches from an opaque cream takeover to a dim-backdrop lightbox** (matching Stock Locator) — the list/queue behind stays visible (dimmed) instead of reading as a blank new page.
+- **Right-side detail-panel headers split into two rows** (SalesOrderPanel, ClientDetail, Stock Locator tag drawer): identifier (SO / tag / client id) + status on top, action buttons below — so the close (X) no longer overflows the panel edge on crowded headers.
+- **Sales' MyApprovals rebuilt as an accordion** mirroring the Manager queue: expands to show customer, line items, and Original × Discount = Discounted price. Pending discount requests gain an **Edit** action (new `handleUpdateApproval`; stays Pending, same id, Manager sees the update). **"View full order" opens a read-only SalesOrderPanel** (new `readOnly` prop) — a pure overlay, no navigation, with its internal customer/tag links suppressed, so Sales never leaves the approval view.
+- Extracted `DiscountCalc` / `LineItemsList` into shared [`discountParts.tsx`](src/features/approvals/discountParts.tsx), used by both queues.
+
+**2. Approval search**
+- Both the Manager and Sales approval views gain a search box (reusing the shared [`FilterBar`](src/components/shared/FilterBar.tsx)) matching **approval # / SO # / client name**, with a live match count and a no-match empty state. Shared `matchesApprovalSearch` keeps both sides identical.
+
+**3. Insights → Pulse rename**
+- The merged Reports + Analytics module is renamed from **"Insights" to "Pulse"** (sidebar label, page title, breadcrumb, component name, nav route key `insights`→`pulse`) so it no longer collides with the sidebar's **INSIGHTS** category. The **category header "INSIGHTS" is left unchanged** (renaming the page resolves the collision). File `features/insights/Insights.tsx` → `features/pulse/Pulse.tsx` (git rename, history preserved).
+
+**Files / 改动:** new `src/features/approvals/discountParts.tsx`; renamed `src/features/insights/Insights.tsx` → `src/features/pulse/Pulse.tsx`; modified `src/App.tsx`, `src/components/layout/Sidebar.tsx`, `src/components/layout/TopBar.tsx`, `src/features/approvals/ApprovalQueue.tsx`, `src/features/approvals/MyApprovals.tsx`, `src/features/approvals/RequestDiscountForm.tsx`, `src/features/sales-orders/SalesOrderPanel.tsx`, `src/features/clients/ClientDetail.tsx`, `src/features/stock-locator/StockLocator.tsx`
+
 ---
 ## Pending / 未来 (not yet built — 尚未开始)
 
-- **Insights → Pulse 改名**（sidebar 分类 "INSIGHTS" 与页面名 "Insights" 撞名；已提出改名方案，等待确认后实施——只改页面名，不改 sidebar 分类标签）
 - **Approvals 里 Sales 视图看到的历史范围**（当前 MyApprovals 显示所有状态，Manager 只看 Pending；如果 Manager 需要审批历史查阅，加个 History tab）
 - **Client 的 delete**（create/edit 都已支持；delete 尚未建）
 - **Client Profile 的 Linked Sales Orders 之外的 CRM 活动记录**（通话/拜访/会议日志——按当前批次要求是 backlog，不在这一轮）
