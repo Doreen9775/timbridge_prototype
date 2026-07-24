@@ -12,7 +12,13 @@ function nowStamp(): string {
 // CRM store — mirrors the useLookups localStorage-backed Provider pattern. First load
 // seeds from INITIAL_CLIENTS (the customer strings deduped out of the legacy salesOrders
 // seed); subsequent loads read what's persisted, so edits survive page reloads.
-const STORAGE_KEY = "timbridge_clients";
+//
+// The key is versioned: because load() persists the seed once and then never reconciles
+// it, a device that first loaded the app under an older INITIAL_CLIENTS shape would stay
+// stuck with stale records (e.g. missing territory/contact). Bump this suffix whenever the
+// seed shape changes so every device re-seeds from the current INITIAL_CLIENTS. Prototype
+// tradeoff: bumping drops clients created via "New Client" on that device.
+const STORAGE_KEY = "timbridge_clients_v2";
 
 function load(): Client[] {
   try {

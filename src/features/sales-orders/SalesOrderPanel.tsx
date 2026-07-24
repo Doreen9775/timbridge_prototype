@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { X, Maximize2, Minimize2, ArrowRight, ShieldCheck, Plus, Trash2, AlertTriangle, Lock, ExternalLink } from "lucide-react";
+import { X, Maximize2, Minimize2, ArrowRight, ShieldCheck, Plus, Trash2, AlertTriangle, Lock, ExternalLink, CheckCircle2 } from "lucide-react";
 import type { SalesOrder, SalesOrderLineItem, SalesOrderStatus, Tag } from "@/lib/types";
 import { Button } from "@/components/shared/Button";
 import { SOStatusPill } from "@/components/shared/SOStatusPill";
@@ -49,9 +49,22 @@ interface CreateModeProps {
   mode: "create";
   initialTags: Tag[];
   allTags: Tag[];
+  // When set, the customer is pre-filled to this client and locked (read-only) — used by
+  // the Client Profile "New Sales Order" entry point, where the order is explicitly for
+  // one client. Omitted from Available-to-Sell, where the customer is picked freely.
+  lockedClientId?: string;
   onCancel: () => void;
-  onSaveDraft: (clientId: string, lineItems: DraftLineItem[]) => void;
-  onConfirm: (clientId: string, lineItems: DraftLineItem[]) => { ok: true; soId: string } | { ok: false; unavailableIds: string[] };
+  onSaveDraft: (clientId: string, lineItems: DraftLineItem[], meta?: NewOrderMeta) => void;
+  onConfirm: (clientId: string, lineItems: DraftLineItem[], meta?: NewOrderMeta) => { ok: true; soId: string } | { ok: false; unavailableIds: string[] };
+  // Navigate to the Sales Orders surface from the post-confirm success screen —
+  // with an id to open that order, or without to just land on the list.
+  onViewOrders?: (soId?: string) => void;
+}
+
+// Order-level metadata collected on the create form (notes + expected ship date).
+export interface NewOrderMeta {
+  notes?: string;
+  expectedShipDate?: string;
 }
 
 interface ViewModeProps {
@@ -83,81 +96,145 @@ export function SalesOrderPanel(props: SalesOrderPanelProps) {
 }
 
 // ── Create mode ─────────────────────────────────────────────────────────────────
-function CreatePanel({ initialTags, allTags, onCancel, onSaveDraft, onConfirm }: CreateModeProps) {
-  const [clientId, setClientId] = useState<string | null>(null);
+// Opens as a centered expanded lightbox (not a right-side drawer) from every entry
+// point. On Confirm it swaps to an in-place success screen (mirrors Delivery Slips'
+// confirmation stage) with links to view the new order or the full Sales Orders list.
+function CreatePanel({ initialTags, allTags, lockedClientId, onCancel, onSaveDraft, onConfirm, onViewOrders }: CreateModeProps) {
+  const { getClientName } = useClients();
+  const [clientId, setClientId] = useState<string | null>(lockedClientId ?? null);
   const [lines, setLines] = useState<DraftLineItem[]>(
     () => initialTags.map((t) => ({ tagId: t.id, qty: t.qty, unitPrice: t.marketValue ?? 0 })),
   );
+  const [notes, setNotes] = useState("");
+  const [expectedShipDate, setExpectedShipDate] = useState("");
   const [confirmError, setConfirmError] = useState<string[] | null>(null);
   const [showTagPicker, setShowTagPicker] = useState(false);
+  // Set once Confirm succeeds — flips the panel to its success stage.
+  const [successSoId, setSuccessSoId] = useState<string | null>(null);
 
   const canSave = clientId !== null && lines.length > 0;
+  const meta: NewOrderMeta = { notes: notes.trim() || undefined, expectedShipDate: expectedShipDate || undefined };
+  const hasDiscount = lines.some((li) => (li.discountPct ?? 0) > 0);
+  const orderTotal = lines.reduce((s, li) => s + lineExtended(li), 0);
 
   const handleSaveDraft = () => {
     if (!canSave) return;
-    onSaveDraft(clientId!, lines);
+    onSaveDraft(clientId!, lines, meta);
   };
   const handleConfirm = () => {
     if (!canSave) return;
     setConfirmError(null);
-    const result = onConfirm(clientId!, lines);
-    if (!result.ok) setConfirmError(result.unavailableIds);
+    const result = onConfirm(clientId!, lines, meta);
+    if (!result.ok) { setConfirmError(result.unavailableIds); return; }
+    setSuccessSoId(result.soId);
+  };
+  // "Create another" — reset to a fresh form (keeps a locked client, clears a free one).
+  const resetForm = () => {
+    setClientId(lockedClientId ?? null);
+    setLines([]);
+    setNotes("");
+    setExpectedShipDate("");
+    setConfirmError(null);
+    setSuccessSoId(null);
   };
 
-  return (
-    <>
-      <div className="fixed inset-0 z-[90] bg-ink/40" onClick={onCancel} />
-      <div className="fixed top-0 right-0 bottom-0 z-[100] w-full max-w-[560px] bg-white shadow-[-10px_0_40px_rgba(0,0,0,0.12)] flex flex-col">
-        <div className="px-5 pt-5 pb-4 border-b border-sage flex items-center justify-between">
-          <div>
-            <div className="text-[11px] text-text-ter uppercase tracking-wide">New order</div>
-            <div className="text-base font-bold text-ink" style={{ fontFamily: "Montserrat, sans-serif" }}>
-              Create Sales Order
-            </div>
+  const shellClose = (
+    <button onClick={onCancel} aria-label="Close" className="bg-transparent border-0 cursor-pointer text-text-sec p-1 hover:text-coral">
+      <X size={18} />
+    </button>
+  );
+
+  const successStage = successSoId && (
+    <div className="flex-1 overflow-y-auto">
+      <div className="flex justify-end px-4 pt-4">{shellClose}</div>
+      <div className="px-8 pb-10 pt-2 text-center">
+        <div className="w-16 h-16 rounded-full bg-emerald-100 flex items-center justify-center mx-auto mb-4">
+          <CheckCircle2 size={30} className="text-emerald-600" />
+        </div>
+        <div className="text-xl font-bold text-ink mb-1" style={{ fontFamily: "Montserrat, sans-serif" }}>
+          Order {successSoId} created
+        </div>
+        <div className="text-[13px] text-text-sec">
+          {clientId ? getClientName(clientId) : ""} · {lines.length} line{lines.length === 1 ? "" : "s"} · {formatUSD(orderTotal)}
+        </div>
+        {hasDiscount && (
+          <div className="text-[12px] text-text-ter mt-2">
+            A discount approval request was submitted for manager review.
           </div>
-          <button onClick={onCancel} aria-label="Close" className="bg-transparent border-0 cursor-pointer text-text-sec p-1 hover:text-coral">
-            <X size={18} />
-          </button>
-        </div>
-
-        <div className="flex-1 overflow-y-auto p-5 space-y-5">
-          <PanelBody
-            editMode="edit-all"
-            clientId={clientId}
-            onClientChange={setClientId}
-            lines={lines}
-            onLinesChange={setLines}
-            allTags={allTags}
-            unavailableIds={confirmError}
-            notes={undefined}
-            onNotesChange={() => {}}
-            expectedShipDate={undefined}
-            onExpectedShipDateChange={() => {}}
-            showTagPicker={showTagPicker}
-            setShowTagPicker={setShowTagPicker}
-            createdDate={undefined}
-          />
-
-          {confirmError && (
-            <div className="bg-coral/[0.08] border border-coral/40 rounded-md px-3 py-2.5 text-[12px] text-text">
-              <div className="flex items-center gap-1.5 font-semibold text-coral mb-1">
-                <AlertTriangle size={13} />
-                Can't confirm — {confirmError.length} tag{confirmError.length === 1 ? "" : "s"} no longer Available
-              </div>
-              <div>
-                The highlighted row{confirmError.length === 1 ? " was" : "s were"} reserved by another action since selection. Remove {confirmError.length === 1 ? "it" : "them"} from the panel and try again, or Save as Draft to keep this order and reconcile later.
-              </div>
-            </div>
-          )}
-        </div>
-
-        <div className="px-5 py-4 border-t border-sage flex items-center justify-end gap-2">
-          <Button onClick={onCancel}>Cancel</Button>
-          <Button onClick={handleSaveDraft} disabled={!canSave}>Save as Draft</Button>
-          <Button variant="primary" onClick={handleConfirm} disabled={!canSave}>Confirm Order</Button>
+        )}
+        <div className="flex gap-2 justify-center mt-7 flex-wrap">
+          <Button variant="primary" onClick={() => { onViewOrders?.(successSoId); onCancel(); }} rightIcon={<ArrowRight size={13} />}>
+            View this order
+          </Button>
+          <Button onClick={() => { onViewOrders?.(); onCancel(); }}>View all Sales Orders</Button>
+          <Button onClick={resetForm}>Create another</Button>
         </div>
       </div>
+    </div>
+  );
+
+  const formStage = !successSoId && (
+    <>
+      <div className="px-5 pt-5 pb-4 border-b border-sage flex items-center justify-between shrink-0">
+        <div>
+          <div className="text-[11px] text-text-ter uppercase tracking-wide">New order</div>
+          <div className="text-base font-bold text-ink" style={{ fontFamily: "Montserrat, sans-serif" }}>
+            Create Sales Order
+          </div>
+        </div>
+        {shellClose}
+      </div>
+
+      <div className="flex-1 overflow-y-auto p-5 space-y-5">
+        <PanelBody
+          editMode="edit-all"
+          customerLocked={!!lockedClientId}
+          clientId={clientId}
+          onClientChange={setClientId}
+          lines={lines}
+          onLinesChange={setLines}
+          allTags={allTags}
+          unavailableIds={confirmError}
+          notes={notes}
+          onNotesChange={setNotes}
+          expectedShipDate={expectedShipDate}
+          onExpectedShipDateChange={setExpectedShipDate}
+          showTagPicker={showTagPicker}
+          setShowTagPicker={setShowTagPicker}
+          createdDate={undefined}
+        />
+
+        {confirmError && (
+          <div className="bg-coral/[0.08] border border-coral/40 rounded-md px-3 py-2.5 text-[12px] text-text">
+            <div className="flex items-center gap-1.5 font-semibold text-coral mb-1">
+              <AlertTriangle size={13} />
+              Can't confirm — {confirmError.length} tag{confirmError.length === 1 ? "" : "s"} no longer Available
+            </div>
+            <div>
+              The highlighted row{confirmError.length === 1 ? " was" : "s were"} reserved by another action since selection. Remove {confirmError.length === 1 ? "it" : "them"} from the panel and try again, or Save as Draft to keep this order and reconcile later.
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div className="px-5 py-4 border-t border-sage flex items-center justify-end gap-2 shrink-0">
+        <Button onClick={onCancel}>Cancel</Button>
+        <Button onClick={handleSaveDraft} disabled={!canSave}>Save as Draft</Button>
+        <Button variant="primary" onClick={handleConfirm} disabled={!canSave}>Confirm Order</Button>
+      </div>
     </>
+  );
+
+  return (
+    <div className="fixed inset-0 z-[100] bg-ink/40 flex items-center justify-center p-6" onClick={onCancel}>
+      <div
+        className="bg-white w-full max-w-3xl max-h-[90vh] rounded-xl overflow-hidden shadow-[0_10px_40px_rgba(0,0,0,0.25)] flex flex-col"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {successStage}
+        {formStage}
+      </div>
+    </div>
   );
 }
 
@@ -358,7 +435,7 @@ function ViewPanel({
   const approvalForm = showApproval && (
     <RequestApprovalForm
       requestedBy={requesterIdentity ?? "Unknown"}
-      prefillSoId={so.id}
+      relatedSoId={so.id}
       onCancel={() => setShowApproval(false)}
       onSubmit={(draft) => {
         onCreateApproval?.(draft);
@@ -417,6 +494,9 @@ function ViewPanel({
 // ── Shared body (customer + summary + meta + line items) ────────────────────────
 interface PanelBodyProps {
   editMode: SOEditMode;
+  // Create-mode override: lock the customer field even though editMode is "edit-all"
+  // (the client was chosen by the entry point, e.g. Client Profile's New Sales Order).
+  customerLocked?: boolean;
   clientId: string | null;
   onClientChange: (id: string | null) => void;
   onOpenClient?: (id: string) => void;
@@ -437,12 +517,12 @@ interface PanelBodyProps {
 }
 
 function PanelBody({
-  editMode, clientId, onClientChange, onOpenClient,
+  editMode, customerLocked, clientId, onClientChange, onOpenClient,
   lines, onLinesChange, onOpenTag, allTags,
   unavailableIds, notes, onNotesChange, expectedShipDate, onExpectedShipDateChange,
   showTagPicker, setShowTagPicker, createdDate, clientKnown, clientNameFallback,
 }: PanelBodyProps) {
-  const canEditCustomer = editMode === "edit-all";
+  const canEditCustomer = editMode === "edit-all" && !customerLocked;
   const canEditLineItems = editMode === "edit-all";
   const canEditMeta = editMode === "edit-all" || editMode === "meta-only";
   const { getClientName, clientById } = useClients();
@@ -596,7 +676,7 @@ function PanelBody({
                 <tr className="bg-[#F9FAFB] border-b border-sage">
                   <th className="px-2.5 py-2 text-left text-text-sec font-medium whitespace-nowrap">Tag</th>
                   <th className="px-2 py-2 text-left text-text-sec font-medium">Species / Dims</th>
-                  <th className="px-2 py-2 text-right text-text-sec font-medium w-[64px]">Qty</th>
+                  <th className="px-2 py-2 text-right text-text-sec font-medium w-[88px]">Qty</th>
                   <th className="px-2 py-2 text-right text-text-sec font-medium w-[82px]">Unit $</th>
                   <th className="px-2 py-2 text-right text-text-sec font-medium w-[60px]">Disc %</th>
                   <th className="px-2 py-2 text-right text-text-sec font-medium whitespace-nowrap">Extended</th>

@@ -1,10 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { UserPlus } from "lucide-react";
-import type { Client, SalesOrder, SalesOrderStatus } from "@/lib/types";
+import type { Client, Role, SalesOrder, SalesOrderStatus, Tag } from "@/lib/types";
 import { Button } from "@/components/shared/Button";
 import { Pagination, DEFAULT_PAGE_SIZE, usePagedSlice } from "@/components/shared/Pagination";
 import { FilterBar } from "@/components/shared/FilterBar";
-import { PillFilter } from "@/features/stock-locator/filters";
 import { useClients } from "@/hooks/useClients";
 import { ClientDetail } from "./ClientDetail";
 import { ClientCreate } from "./ClientCreate";
@@ -32,16 +31,24 @@ function formatDate(iso: string): string {
 }
 
 interface ClientsProps {
+  tags: Tag[];
+  role: Role;
   salesOrders: SalesOrder[];
   openClientId?: string | null;
   onClientOpened?: () => void;
   onOpenSo: (id: string) => void;
+  onCreateSalesOrder: (
+    clientId: string,
+    lineItems: { tagId: string; qty: number; unitPrice: number; discountPct?: number }[],
+    confirm: boolean,
+    meta?: { notes?: string; expectedShipDate?: string },
+  ) => { ok: true; soId: string } | { ok: false; unavailableIds: string[] };
+  onViewOrders: (soId?: string) => void;
 }
 
-export function Clients({ salesOrders, openClientId, onClientOpened, onOpenSo }: ClientsProps) {
+export function Clients({ tags, role, salesOrders, openClientId, onClientOpened, onOpenSo, onCreateSalesOrder, onViewOrders }: ClientsProps) {
   const { clients, updateClient, createClient } = useClients();
   const [search, setSearch] = useState("");
-  const [territoryF, setTerritoryF] = useState<string[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
   const [fullscreen, setFullscreen] = useState(false);
   const [creating, setCreating] = useState(false);
@@ -78,16 +85,9 @@ export function Clients({ salesOrders, openClientId, onClientOpened, onOpenSo }:
     return map;
   }, [salesOrders]);
 
-  const territoryOpts = useMemo(
-    () =>
-      Array.from(new Set(clients.map((c) => c.territory).filter((t): t is string => !!t))).sort(),
-    [clients],
-  );
-
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return clients.filter((c) => {
-      if (territoryF.length && (!c.territory || !territoryF.includes(c.territory))) return false;
       if (!q) return true;
       const hay = [c.name, c.contactName, c.phone, c.email, c.address, c.territory]
         .filter(Boolean)
@@ -95,11 +95,11 @@ export function Clients({ salesOrders, openClientId, onClientOpened, onOpenSo }:
         .toLowerCase();
       return hay.includes(q);
     });
-  }, [clients, search, territoryF]);
+  }, [clients, search]);
 
   useEffect(() => {
     setPage(1);
-  }, [search, territoryF, pageSize]);
+  }, [search, pageSize]);
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
   useEffect(() => {
     if (page > totalPages) setPage(totalPages);
@@ -108,10 +108,9 @@ export function Clients({ salesOrders, openClientId, onClientOpened, onOpenSo }:
 
   const selectedClient = selected ? clients.find((c) => c.id === selected) ?? null : null;
 
-  const filtersActive = search.trim().length > 0 || territoryF.length > 0;
+  const filtersActive = search.trim().length > 0;
   const resetFilters = () => {
     setSearch("");
-    setTerritoryF([]);
   };
 
   const handleOpenSo = (id: string) => {
@@ -163,11 +162,7 @@ export function Clients({ salesOrders, openClientId, onClientOpened, onOpenSo }:
               {filtered.length} {filtered.length === 1 ? "client" : "clients"}
             </div>
           }
-        >
-          {territoryOpts.length > 0 && (
-            <PillFilter label="Territory" options={territoryOpts} applied={territoryF} onApply={setTerritoryF} />
-          )}
-        </FilterBar>
+        />
 
         <div className="bg-white rounded-[10px] overflow-hidden shadow-[0_1px_4px_rgba(0,0,0,0.07)]">
           <div className="overflow-x-auto">
@@ -251,12 +246,16 @@ export function Clients({ salesOrders, openClientId, onClientOpened, onOpenSo }:
         <ClientDetail
           key={selectedClient.id}
           client={selectedClient}
+          tags={tags}
+          role={role}
           salesOrders={salesOrders}
           fullscreen={fullscreen}
           onToggleFullscreen={() => setFullscreen((f) => !f)}
           onClose={closeDrawer}
           onSave={handleSave}
           onOpenSo={handleOpenSo}
+          onCreateSalesOrder={onCreateSalesOrder}
+          onViewOrders={onViewOrders}
         />
       )}
 

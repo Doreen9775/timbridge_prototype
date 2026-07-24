@@ -1,8 +1,9 @@
-import { useMemo, useState } from "react";
-import { X, Maximize2, Minimize2, Pencil, Mail, Phone, MapPin, Map, CreditCard } from "lucide-react";
-import type { Client, SalesOrder } from "@/lib/types";
+import { useEffect, useMemo, useState } from "react";
+import { X, Maximize2, Minimize2, Pencil, Mail, Phone, MapPin, Map, CreditCard, FilePlus } from "lucide-react";
+import type { Client, Role, SalesOrder, Tag } from "@/lib/types";
 import { Button } from "@/components/shared/Button";
 import { SOStatusPill } from "@/components/shared/SOStatusPill";
+import { SalesOrderPanel } from "@/features/sales-orders/SalesOrderPanel";
 
 const MONTHS_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
@@ -17,25 +18,67 @@ function formatDate(iso: string): string {
 
 interface ClientDetailProps {
   client: Client;
+  tags: Tag[];
+  role: Role;
   salesOrders: SalesOrder[];
   fullscreen: boolean;
   onToggleFullscreen: () => void;
   onClose: () => void;
   onSave: (patch: Partial<Omit<Client, "id" | "createdAt">>) => void;
   onOpenSo: (id: string) => void;
+  onCreateSalesOrder: (
+    clientId: string,
+    lineItems: { tagId: string; qty: number; unitPrice: number; discountPct?: number }[],
+    confirm: boolean,
+    meta?: { notes?: string; expectedShipDate?: string },
+  ) => { ok: true; soId: string } | { ok: false; unavailableIds: string[] };
+  onViewOrders: (soId?: string) => void;
 }
 
 export function ClientDetail({
   client,
+  tags,
+  role,
   salesOrders,
   fullscreen,
   onToggleFullscreen,
   onClose,
   onSave,
   onOpenSo,
+  onCreateSalesOrder,
+  onViewOrders,
 }: ClientDetailProps) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState<Client>(client);
+  // Starting a new order for this client is Sales-only (same rule as Available-to-Sell;
+  // Prompt 3). Inline role gate + teardown effect mirrors that pattern.
+  const isSalesUser = role === "sales";
+  const [creatingOrder, setCreatingOrder] = useState(false);
+
+  // Defense-in-depth: if the role leaves Sales mid-session, tear the create panel down.
+  useEffect(() => {
+    if (!isSalesUser) setCreatingOrder(false);
+  }, [isSalesUser]);
+
+  // New order from this client: customer is pre-filled + locked to `client.id`, so the
+  // clientId handed back is always this client. Draft/Confirm behave exactly as they do
+  // from Available-to-Sell (same handler). Save-as-Draft closes the panel; Confirm leaves
+  // it open so the panel can show its own success stage (with links to the new order).
+  const handleOrderSaveDraft = (
+    clientId: string,
+    lineItems: { tagId: string; qty: number; unitPrice: number }[],
+    meta?: { notes?: string; expectedShipDate?: string },
+  ) => {
+    const result = onCreateSalesOrder(clientId, lineItems, false, meta);
+    if (result.ok) setCreatingOrder(false);
+  };
+  const handleOrderConfirm = (
+    clientId: string,
+    lineItems: { tagId: string; qty: number; unitPrice: number }[],
+    meta?: { notes?: string; expectedShipDate?: string },
+  ) => {
+    return onCreateSalesOrder(clientId, lineItems, true, meta);
+  };
 
   const startEdit = () => {
     setDraft(client);
@@ -195,11 +238,18 @@ export function ClientDetail({
       )}
 
       <div>
-        <div className="flex items-baseline justify-between mb-2">
+        <div className="flex items-center justify-between gap-2 mb-2">
           <div className="text-xs text-text-sec">Linked Sales Orders</div>
-          <div className="text-[11px] text-text-ter">
-            {orderCount} {orderCount === 1 ? "order" : "orders"}
-            {orderCount > 0 && ` · ${formatUSD(totalRevenue)} total`}
+          <div className="flex items-center gap-2.5">
+            <div className="text-[11px] text-text-ter">
+              {orderCount} {orderCount === 1 ? "order" : "orders"}
+              {orderCount > 0 && ` · ${formatUSD(totalRevenue)} total`}
+            </div>
+            {isSalesUser && (
+              <Button size="sm" variant="primary" onClick={() => setCreatingOrder(true)} leftIcon={<FilePlus size={13} />}>
+                New Sales Order
+              </Button>
+            )}
           </div>
         </div>
         {linkedSOs.length === 0 ? (
@@ -231,24 +281,56 @@ export function ClientDetail({
 
   const body = editing ? editBody : viewBody;
 
+  // Create-order panel (Sales only). Rendered as a sibling of whichever layout is active
+  // so it stacks above this drawer; customer is locked to this client.
+  const orderPanel = isSalesUser && creatingOrder && (
+    <SalesOrderPanel
+      mode="create"
+      initialTags={[]}
+      allTags={tags}
+      lockedClientId={client.id}
+      onCancel={() => setCreatingOrder(false)}
+      onSaveDraft={handleOrderSaveDraft}
+      onConfirm={handleOrderConfirm}
+      onViewOrders={onViewOrders}
+    />
+  );
+
+  // Backdrop click closes the drawer — but not while editing the client or creating an
+  // order, so an in-progress action isn't lost by a stray click.
+  const closeOnBackdrop = editing || creatingOrder ? undefined : onClose;
+
   if (fullscreen) {
+    // Dim-backdrop lightbox (mirrors Stock Locator's tag-detail fullscreen) rather than an
+    // opaque takeover, so the client list stays visible behind it instead of reading as a
+    // separate blank page.
     return (
-      <div className="fixed inset-0 z-[100] bg-cream flex flex-col">
-        <div className="w-full max-w-[900px] mx-auto flex-1 flex flex-col bg-white shadow-[0_8px_30px_rgba(0,0,0,0.08)] my-6 rounded-2xl overflow-hidden">
-          {header}
-          <div className="flex-1 overflow-y-auto">{body}</div>
+      <>
+        <div
+          className="fixed inset-0 z-[100] bg-ink/40 flex items-center justify-center p-6"
+          onClick={closeOnBackdrop}
+        >
+          <div
+            className="bg-white w-full max-w-3xl max-h-[90vh] rounded-xl overflow-y-auto shadow-[0_10px_40px_rgba(0,0,0,0.25)] flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {header}
+            <div className="flex-1 overflow-y-auto">{body}</div>
+          </div>
         </div>
-      </div>
+        {orderPanel}
+      </>
     );
   }
 
   return (
     <>
-      <div className="fixed inset-0 z-[90] bg-ink/40" onClick={onClose} />
+      <div className="fixed inset-0 z-[90] bg-ink/40" onClick={closeOnBackdrop} />
       <div className="fixed top-0 right-0 bottom-0 z-[100] w-full max-w-[520px] bg-white shadow-[-10px_0_40px_rgba(0,0,0,0.12)] flex flex-col">
         {header}
         <div className="flex-1 overflow-y-auto">{body}</div>
       </div>
+      {orderPanel}
     </>
   );
 }

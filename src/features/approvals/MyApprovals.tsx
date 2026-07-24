@@ -146,7 +146,7 @@ export function MyApprovals({
         {mine.length === 0 ? (
           <div className="bg-white rounded-xl border border-sage p-10 text-center text-text-sec">
             <div className="text-[15px] font-semibold text-ink mb-1">Nothing to show yet</div>
-            <div className="text-[13px]">Submit a request from the Reserve modal, a Sales Order, or Request Discount above.</div>
+            <div className="text-[13px]">Submit a request from a Sales Order, or Request Discount above.</div>
           </div>
         ) : filtered.length === 0 ? (
           <div className="bg-white rounded-xl border border-sage p-10 text-center text-text-sec">

@@ -105,7 +105,7 @@ export interface ApprovalRequest {
   id: string;                     // e.g. "AR-2026-0001"
   type: ApprovalRequestType;
   requestedBy: string;            // display name of the submitter (role identity)
-  relatedSoId?: string;           // set when originated from Reserve modal or SO detail
+  relatedSoId?: string;           // the Sales Order this request is scoped to
   relatedClientId?: string;       // reserved for the customer-entity phase
   details: string;                // free-text reason / justification
   discountRate?: number;          // 0–100. Only meaningful for type "discount"; the current

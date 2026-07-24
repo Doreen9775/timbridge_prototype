@@ -23,6 +23,7 @@ import { useRole } from "@/hooks/useRole";
 import { useTags } from "@/hooks/useTags";
 import { useSalesOrders } from "@/hooks/useSalesOrders";
 import { useApprovalRequests } from "@/hooks/useApprovalRequests";
+import { reserveLineItems } from "@/lib/reserveSplit";
 
 const MONTHS_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 function nowStamp(): string {
@@ -105,12 +106,6 @@ export default function App() {
     setTags((prev) => prev.map((t) => (t.id === updated.id ? updated : t)));
   }, [setTags]);
 
-  // Append a brand-new tag to the shared Tag table (Available-to-Sell's partial-qty
-  // Reserve split — the only caller so far that needs to add rather than mutate).
-  const handleCreateTag = useCallback((tag: Tag) => {
-    setTags((prev) => [...prev, tag]);
-  }, [setTags]);
-
   // Manager-only destructive drop from the Tag table (Stock Locator). Callers pre-filter
   // SO-linked tags — this just removes what's handed in, no cascade.
   const handleDeleteTags = useCallback((ids: string[]) => {
@@ -134,8 +129,9 @@ export default function App() {
   const handleCreateSalesOrder = useCallback(
     (
       clientId: string,
-      lineItems: { tagId: string; qty: number; unitPrice: number }[],
+      lineItems: { tagId: string; qty: number; unitPrice: number; discountPct?: number }[],
       confirm: boolean,
+      meta?: { notes?: string; expectedShipDate?: string },
     ): { ok: true; soId: string } | { ok: false; unavailableIds: string[] } => {
       if (confirm) {
         // Defensive check: every referenced tag must still be Available at commit time.
@@ -149,35 +145,67 @@ export default function App() {
       const newId = `SO-${String(salesOrders.length + 42).padStart(4, "0")}`;
       const today = new Date();
       const iso = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+
+      // On Confirm, reserve every line through the shared helper: whole-tag lines flip
+      // Available → Reserved, partial-qty lines split off a Reserved child and get
+      // rewritten to point at it. On Save-as-Draft, tags stay Available and the lines
+      // are stored as-is (the split happens later, at Draft → Open confirm).
+      let soLineItems = lineItems;
+      if (confirm) {
+        const { tags: nextTags, lineItems: reservedLines } = reserveLineItems(tags, lineItems, {
+          soId: newId,
+          worker: identityFor(role),
+          stamp: nowStamp(),
+          via: "Available-to-Sell",
+        });
+        soLineItems = reservedLines;
+        setTags(nextTags);
+      }
+
       const newSo: SalesOrder = {
         id: newId,
         clientId,
         status: confirm ? "Open" : "Draft",
         date: iso,
-        lineItems,
+        lineItems: soLineItems,
+        notes: meta?.notes,
+        expectedShipDate: meta?.expectedShipDate,
       };
       setSalesOrders((prev) => [...prev, newSo]);
 
+      // Sales-entered discounts on a confirmed order auto-generate a Pending discount
+      // approval request tied to the new SO, so a Manager sees it in the Approval Queue.
       if (confirm) {
-        const idSet = new Set(lineItems.map((li) => li.tagId));
-        const worker = identityFor(role);
-        const stamp = nowStamp();
-        setTags((prev) =>
-          prev.map((t) =>
-            idSet.has(t.id)
-              ? {
-                  ...t,
-                  status: "Reserved",
-                  updated: "just now",
-                  history: [...t.history, { e: `Reserved for ${newId} via Available-to-Sell`, t: stamp, w: worker }],
-                }
-              : t,
-          ),
-        );
+        const discounted = soLineItems.filter((li) => (li.discountPct ?? 0) > 0);
+        if (discounted.length > 0) {
+          const listTotal = soLineItems.reduce((s, li) => s + li.qty * li.unitPrice, 0);
+          const netTotal = soLineItems.reduce((s, li) => s + li.qty * li.unitPrice * (1 - (li.discountPct ?? 0) / 100), 0);
+          const blended = listTotal > 0 ? Math.round((1 - netTotal / listTotal) * 100) : 0;
+          const linesText = discounted
+            .map((li) => `${li.tagId}: ${li.discountPct}% off (${li.qty} pcs @ $${li.unitPrice.toFixed(2)})`)
+            .join("; ");
+          const details = `Auto-generated from ${newId}. Discounted lines — ${linesText}. Blended discount ${blended}%.`;
+          const stamp = nowStamp();
+          const requestedBy = identityFor(role);
+          setApprovalRequests((prev) => [
+            ...prev,
+            {
+              id: `AR-2026-${String(prev.length + 1).padStart(4, "0")}`,
+              type: "discount",
+              requestedBy,
+              relatedSoId: newId,
+              discountRate: blended,
+              details,
+              status: "Pending",
+              createdAt: stamp,
+            },
+          ]);
+        }
       }
+
       return { ok: true, soId: newId };
     },
-    [tags, salesOrders.length, role, setSalesOrders, setTags],
+    [tags, salesOrders.length, role, setSalesOrders, setTags, setApprovalRequests],
   );
 
   // Persist an edited Sales Order back into the store. The panel enforces which
@@ -202,24 +230,19 @@ export default function App() {
         .map((li) => li.tagId);
       if (unavailable.length > 0) return { ok: false, unavailableIds: unavailable };
 
-      const idSet = new Set(lineItems.map((li) => li.tagId));
-      const worker = identityFor(role);
-      const stamp = nowStamp();
+      // Reserve through the shared helper so partial-qty lines split a Reserved child
+      // off their Available parent (same rule as Create-and-Confirm), then persist the
+      // rewritten line items on the now-Open order.
+      const { tags: nextTags, lineItems: reservedLines } = reserveLineItems(tags, lineItems, {
+        soId,
+        worker: identityFor(role),
+        stamp: nowStamp(),
+        via: "Sales Orders",
+      });
       setSalesOrders((prev) =>
-        prev.map((so) => (so.id === soId ? { ...so, status: "Open", lineItems } : so)),
+        prev.map((so) => (so.id === soId ? { ...so, status: "Open", lineItems: reservedLines } : so)),
       );
-      setTags((prev) =>
-        prev.map((t) =>
-          idSet.has(t.id)
-            ? {
-                ...t,
-                status: "Reserved",
-                updated: "just now",
-                history: [...t.history, { e: `Reserved for ${soId} via Sales Orders`, t: stamp, w: worker }],
-              }
-            : t,
-        ),
-      );
+      setTags(nextTags);
       return { ok: true };
     },
     [tags, role, setSalesOrders, setTags],
@@ -280,6 +303,13 @@ export default function App() {
   }, []);
   const handleSoOpened = useCallback(() => setPendingSoId(null), []);
 
+  // Post-confirm success screen (Create Sales Order) → Sales Orders surface, optionally
+  // opening the just-created order.
+  const handleViewOrders = useCallback((soId?: string) => {
+    setNav("sales");
+    if (soId) setPendingSoId(soId);
+  }, []);
+
   // Deep-link: Sales Order detail's Tag ID chip → Stock Locator + open Tag drawer.
   const handleOpenTagFromSo = useCallback((tagId: string) => {
     setNav("locator");
@@ -294,7 +324,7 @@ export default function App() {
   }, []);
   const handleClientOpened = useCallback(() => setPendingClientId(null), []);
 
-  // Submit a new approval request from Reserve modal / SO detail / Request Discount
+  // Submit a new approval request from the SO detail panel / Request Discount
   // quick-entry form. Auto-assigns id + createdAt + Pending status; requester identity
   // is stamped from the current role. discountRate passes through untouched when the
   // draft sets one (Request Discount form) and stays undefined otherwise (generic form).
@@ -403,13 +433,9 @@ export default function App() {
                   tags={tags}
                   role={role}
                   salesOrders={salesOrders}
-                  onUpdateTag={handleUpdateTag}
-                  onCreateTag={handleCreateTag}
-                  onLinkSalesOrder={handleLinkSalesOrder}
                   onCreateSalesOrder={handleCreateSalesOrder}
                   onAppendToDraftOrder={handleAppendToDraftOrder}
-                  onCreateApproval={handleCreateApproval}
-                  requesterIdentity={identityFor(role)}
+                  onViewOrders={handleViewOrders}
                 />
               )}
               {nav === "sales" && role !== "floor" && (
@@ -429,10 +455,14 @@ export default function App() {
               )}
               {nav === "clientprofile" && role !== "floor" && (
                 <Clients
+                  tags={tags}
+                  role={role}
                   salesOrders={salesOrders}
                   openClientId={pendingClientId}
                   onClientOpened={handleClientOpened}
                   onOpenSo={handleOpenSoFromLocator}
+                  onCreateSalesOrder={handleCreateSalesOrder}
+                  onViewOrders={handleViewOrders}
                 />
               )}
               {nav === "pulse" && role !== "floor" && (

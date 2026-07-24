@@ -1,7 +1,8 @@
 // Available-to-Sell — the Sales view of quotable inventory.
-// Scoped strictly to status === "Available". The Reserve action goes through the
-// same state-update path established in 3B (onUpdateTag + onLinkSalesOrder),
-// keeping a single source of truth for the 6-state lifecycle.
+// Scoped strictly to status === "Available". Reservation is done exclusively through
+// the checkbox + action-bar flow (Create Sales Order / Add to Existing Order); the
+// actual Available → Reserved transition (and any partial-qty split) happens on
+// Confirm, in App.tsx's shared reserveLineItems helper.
 import { useEffect, useMemo, useRef, useState } from "react";
 import { CheckCircle2, FilePlus, ListPlus, X } from "lucide-react";
 import type { Tag, Role, SalesOrder } from "@/lib/types";
@@ -9,9 +10,6 @@ import { PillFilter } from "@/features/stock-locator/filters";
 import { Pagination, DEFAULT_PAGE_SIZE, usePagedSlice } from "@/components/shared/Pagination";
 import { Button } from "@/components/shared/Button";
 import { FilterBar } from "@/components/shared/FilterBar";
-import { calcFbm } from "@/lib/fbm";
-import { RequestApprovalForm, type ApprovalDraft } from "@/features/approvals/RequestApprovalForm";
-import { useClients } from "@/hooks/useClients";
 import { SalesOrderPanel } from "@/features/sales-orders/SalesOrderPanel";
 import { AddToOrderPicker } from "./AddToOrderPicker";
 
@@ -19,14 +17,6 @@ const MONTHS_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "S
 
 function formatUSD(v?: number): string {
   return v === undefined ? "—" : `$${v.toFixed(2)}`;
-}
-
-// "Jun 23 2026 14:32" — mirrors the history timestamp format used in StockLocator
-// so all Tag history events have the same shape regardless of which surface wrote them.
-function nowStamp(): string {
-  const d = new Date();
-  const p = (n: number) => String(n).padStart(2, "0");
-  return `${MONTHS_SHORT[d.getMonth()]} ${p(d.getDate())} ${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}`;
 }
 
 // Parse the received timestamp out of a history entry like "Jun 01 2026 08:12".
@@ -56,25 +46,27 @@ interface AvailableToSellProps {
   tags: Tag[];
   role: Role;
   salesOrders: SalesOrder[];
-  onUpdateTag: (tag: Tag) => void;
-  onCreateTag: (tag: Tag) => void;
-  onLinkSalesOrder: (soId: string, tagId: string, qty: number, unitPrice: number) => void;
   onCreateSalesOrder: (
     clientId: string,
-    lineItems: { tagId: string; qty: number; unitPrice: number }[],
+    lineItems: { tagId: string; qty: number; unitPrice: number; discountPct?: number }[],
     confirm: boolean,
+    meta?: { notes?: string; expectedShipDate?: string },
   ) => { ok: true; soId: string } | { ok: false; unavailableIds: string[] };
   onAppendToDraftOrder: (soId: string, lineItems: { tagId: string; qty: number; unitPrice: number }[]) => void;
-  onCreateApproval: (draft: ApprovalDraft) => void;
-  requesterIdentity: string;
+  onViewOrders: (soId?: string) => void;
 }
 
-export function AvailableToSell({ tags, role, salesOrders, onUpdateTag, onCreateTag, onLinkSalesOrder, onCreateSalesOrder, onAppendToDraftOrder, onCreateApproval, requesterIdentity }: AvailableToSellProps) {
+export function AvailableToSell({ tags, role, salesOrders, onCreateSalesOrder, onAppendToDraftOrder, onViewOrders }: AvailableToSellProps) {
+  // Reserving inventory is Sales' action per the permission matrix; Manager sees this
+  // surface read-only (filters + table + tag detail, but no checkboxes or action bar).
+  // Mirrors the Manager-only Settings guard: a render gate on `role` below, plus the
+  // teardown effect that tears down any in-flight selection/panels if the role changes
+  // away from Sales mid-session.
+  const isSalesUser = role === "sales";
   const [speciesF, setSpeciesF] = useState<string[]>([]);
   const [gradeF, setGradeF] = useState<string[]>([]);
   const [lengthF, setLengthF] = useState<string[]>([]);
   const [locationF, setLocationF] = useState<string[]>([]);
-  const [reserving, setReserving] = useState<Tag | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
@@ -127,60 +119,6 @@ export function AvailableToSell({ tags, role, salesOrders, onUpdateTag, onCreate
     setLocationF([]);
   };
 
-  // Reserve = update tag status + append SO line item. Both go through props so
-  // App.tsx remains the single owner of the Tag / SalesOrder stores (3B path).
-  // Reserving fewer pieces than the tag holds splits off a new tag for the reserved
-  // qty (status can only apply to a whole Tag row) and shrinks the original in place.
-  const handleReserveConfirm = (tag: Tag, soId: string, qty: number) => {
-    const worker = role === "sales" ? "Sales" : "Admin";
-
-    if (qty >= tag.qty) {
-      onLinkSalesOrder(soId, tag.id, tag.qty, tag.marketValue ?? 0);
-      onUpdateTag({
-        ...tag,
-        status: "Reserved",
-        updated: "just now",
-        history: [
-          ...tag.history,
-          { e: `Reserved for ${soId} via Available-to-Sell`, t: nowStamp(), w: worker },
-        ],
-      });
-      setReserving(null);
-      setToast(`Tag ${tag.id} reserved to Order ${soId}`);
-      return;
-    }
-
-    const newId = `T-2026-${String(tags.length + 100 + 1).padStart(4, "0")}`;
-    const remainingQty = tag.qty - qty;
-    const splitNote = `Split from ${tag.id} · Reserved via Available-to-Sell`;
-
-    onCreateTag({
-      ...tag,
-      id: newId,
-      qty,
-      fbm: calcFbm(tag.thick, tag.width, tag.length, qty),
-      status: "Reserved",
-      updated: "just now",
-      parentTagId: tag.id,
-      splitTagIds: undefined,
-      history: [...tag.history, { e: splitNote, t: nowStamp(), w: worker }],
-    });
-    onLinkSalesOrder(soId, newId, qty, tag.marketValue ?? 0);
-    onUpdateTag({
-      ...tag,
-      qty: remainingQty,
-      fbm: calcFbm(tag.thick, tag.width, tag.length, remainingQty),
-      updated: "just now",
-      splitTagIds: [...(tag.splitTagIds ?? []), newId],
-      history: [
-        ...tag.history,
-        { e: `Split ${qty} pcs into ${newId} · Reserved via Available-to-Sell`, t: nowStamp(), w: worker },
-      ],
-    });
-    setReserving(null);
-    setToast(`${qty} of ${tag.qty} pcs from ${tag.id} reserved to Order ${soId} as ${newId}`);
-  };
-
   // Toast auto-dismiss.
   useEffect(() => {
     if (!toast) return;
@@ -198,6 +136,16 @@ export function AvailableToSell({ tags, role, salesOrders, onUpdateTag, onCreate
       return next.size === prev.size ? prev : next;
     });
   }, [available]);
+
+  // Defense-in-depth: if the role switches away from Sales while a selection or a
+  // create/add panel is open, tear it all down immediately (no reload) so the
+  // Sales-only reserve flow can't be left half-open for a Manager.
+  useEffect(() => {
+    if (isSalesUser) return;
+    setCheckedIds(new Set());
+    setCreatingSo(false);
+    setPickingSo(false);
+  }, [isSalesUser]);
 
   const toggleChecked = (id: string) =>
     setCheckedIds((prev) => {
@@ -225,23 +173,30 @@ export function AvailableToSell({ tags, role, salesOrders, onUpdateTag, onCreate
   );
   const draftSoCount = useMemo(() => salesOrders.filter((so) => so.status === "Draft").length, [salesOrders]);
 
-  // New SO created from selection — clears selection + closes panel on success.
-  // Returns to the panel a list of unavailable tag ids so it can highlight rows
-  // when the defensive double-booking check fires (only possible on Confirm).
-  const handlePanelSaveDraft = (clientId: string, lineItems: { tagId: string; qty: number; unitPrice: number }[]) => {
-    const result = onCreateSalesOrder(clientId, lineItems, false);
+  // New SO from selection. Save-as-Draft closes the panel with a toast; Confirm leaves
+  // the panel open so it can show its own success stage (we just clear the selection).
+  // Both return the unavailable-id list so the panel can highlight rows if the defensive
+  // double-booking check fires (only possible on Confirm).
+  const handlePanelSaveDraft = (
+    clientId: string,
+    lineItems: { tagId: string; qty: number; unitPrice: number }[],
+    meta?: { notes?: string; expectedShipDate?: string },
+  ) => {
+    const result = onCreateSalesOrder(clientId, lineItems, false, meta);
     if (result.ok) {
       setCreatingSo(false);
       setCheckedIds(new Set());
       setToast(`${result.soId} saved as Draft with ${lineItems.length} line${lineItems.length === 1 ? "" : "s"}`);
     }
   };
-  const handlePanelConfirm = (clientId: string, lineItems: { tagId: string; qty: number; unitPrice: number }[]) => {
-    const result = onCreateSalesOrder(clientId, lineItems, true);
+  const handlePanelConfirm = (
+    clientId: string,
+    lineItems: { tagId: string; qty: number; unitPrice: number }[],
+    meta?: { notes?: string; expectedShipDate?: string },
+  ) => {
+    const result = onCreateSalesOrder(clientId, lineItems, true, meta);
     if (result.ok) {
-      setCreatingSo(false);
       setCheckedIds(new Set());
-      setToast(`${result.soId} confirmed — ${lineItems.length} tag${lineItems.length === 1 ? "" : "s"} reserved`);
     }
     return result;
   };
@@ -279,10 +234,9 @@ export function AvailableToSell({ tags, role, salesOrders, onUpdateTag, onCreate
         <PillFilter label="Location" options={locationOpts} applied={locationF} onApply={setLocationF} />
       </FilterBar>
 
-      {/* Selection action bar — shown only when tags are checked. Sales is the
-          primary user per matrix; Manager is included here too (batch deviation
-          from the read-only rule, flagged in this prompt's proposal). */}
-      {checkedIds.size > 0 && (
+      {/* Selection action bar — Sales only, shown when tags are checked. Manager
+          never sees it (they get the read-only table without checkboxes). */}
+      {isSalesUser && checkedIds.size > 0 && (
         <div className="mb-3 flex items-center gap-3 px-4 py-2.5 bg-coral/[0.08] border border-coral/40 rounded-lg">
           <span className="text-[13px] text-ink font-semibold">
             {checkedIds.size} tag{checkedIds.size === 1 ? "" : "s"} selected
@@ -315,16 +269,18 @@ export function AvailableToSell({ tags, role, salesOrders, onUpdateTag, onCreate
           <table className="w-full text-[13px]">
             <thead>
               <tr className="bg-sage/20 text-ink text-left">
-                <th className="pl-3 pr-1 py-3 w-9">
-                  <input
-                    ref={selectAllRef}
-                    type="checkbox"
-                    checked={allFilteredChecked}
-                    onChange={toggleAllFiltered}
-                    aria-label="Select all"
-                    className="accent-coral w-4 h-4 cursor-pointer align-middle"
-                  />
-                </th>
+                {isSalesUser && (
+                  <th className="pl-3 pr-1 py-3 w-9">
+                    <input
+                      ref={selectAllRef}
+                      type="checkbox"
+                      checked={allFilteredChecked}
+                      onChange={toggleAllFiltered}
+                      aria-label="Select all"
+                      className="accent-coral w-4 h-4 cursor-pointer align-middle"
+                    />
+                  </th>
+                )}
                 <th className="px-3 py-3 font-semibold whitespace-nowrap">Tag ID</th>
                 <th className="px-3 py-3 font-semibold whitespace-nowrap">Species</th>
                 <th className="px-3 py-3 font-semibold whitespace-nowrap">Grade</th>
@@ -334,13 +290,12 @@ export function AvailableToSell({ tags, role, salesOrders, onUpdateTag, onCreate
                 <th className="px-3 py-3 font-semibold whitespace-nowrap">Location</th>
                 <th className="px-3 py-3 font-semibold whitespace-nowrap text-right">Market Value</th>
                 <th className="px-3 py-3 font-semibold whitespace-nowrap text-right">Days in Yard</th>
-                <th className="px-3 py-3 font-semibold whitespace-nowrap w-[1%]"></th>
               </tr>
             </thead>
             <tbody>
               {filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={11} className="px-3 py-12 text-center text-text-sec">
+                  <td colSpan={isSalesUser ? 10 : 9} className="px-3 py-12 text-center text-text-sec">
                     <div className="mb-2">No available inventory matches your filters.</div>
                     {hasActiveFilters ? (
                       <button
@@ -357,15 +312,17 @@ export function AvailableToSell({ tags, role, salesOrders, onUpdateTag, onCreate
                   const isChecked = checkedIds.has(t.id);
                   return (
                     <tr key={t.id} className={`border-t border-sage/40 ${isChecked ? "bg-coral/[0.06] hover:bg-coral/[0.10]" : "hover:bg-sage/10"}`}>
-                      <td className="pl-3 pr-1 py-3">
-                        <input
-                          type="checkbox"
-                          checked={isChecked}
-                          onChange={() => toggleChecked(t.id)}
-                          aria-label={`Select ${t.id}`}
-                          className="accent-coral w-4 h-4 cursor-pointer align-middle"
-                        />
-                      </td>
+                      {isSalesUser && (
+                        <td className="pl-3 pr-1 py-3">
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={() => toggleChecked(t.id)}
+                            aria-label={`Select ${t.id}`}
+                            className="accent-coral w-4 h-4 cursor-pointer align-middle"
+                          />
+                        </td>
+                      )}
                       <td className="px-3 py-3 font-medium text-ink whitespace-nowrap">{t.id}</td>
                       <td className="px-3 py-3 whitespace-nowrap">{t.species}</td>
                       <td className="px-3 py-3 whitespace-nowrap">{t.grade}</td>
@@ -375,9 +332,6 @@ export function AvailableToSell({ tags, role, salesOrders, onUpdateTag, onCreate
                       <td className="px-3 py-3 whitespace-nowrap">{t.yard} · {t.section} · {t.rack}</td>
                       <td className="px-3 py-3 text-right tabular-nums">{formatUSD(t.marketValue)}</td>
                       <td className="px-3 py-3 text-right tabular-nums">{daysInYard(t, todayMs)}</td>
-                      <td className="px-3 py-3 whitespace-nowrap">
-                        <Button size="sm" variant="primary" onClick={() => setReserving(t)}>Reserve</Button>
-                      </td>
                     </tr>
                   );
                 })
@@ -395,24 +349,7 @@ export function AvailableToSell({ tags, role, salesOrders, onUpdateTag, onCreate
         />
       </div>
 
-      {reserving ? (
-        <ReserveModal
-          tag={reserving}
-          salesOrders={salesOrders}
-          onCancel={() => setReserving(null)}
-          onConfirm={(soId, qty) => handleReserveConfirm(reserving, soId, qty)}
-          onSubmitApproval={(draft) => {
-            onCreateApproval(draft);
-            setReserving(null);
-            setToast(
-              `Approval request submitted${draft.relatedSoId ? ` for ${draft.relatedSoId}` : ""}`,
-            );
-          }}
-          requesterIdentity={requesterIdentity}
-        />
-      ) : null}
-
-      {creatingSo && (
+      {isSalesUser && creatingSo && (
         <SalesOrderPanel
           mode="create"
           initialTags={selectedTags}
@@ -420,10 +357,11 @@ export function AvailableToSell({ tags, role, salesOrders, onUpdateTag, onCreate
           onCancel={() => setCreatingSo(false)}
           onSaveDraft={handlePanelSaveDraft}
           onConfirm={handlePanelConfirm}
+          onViewOrders={onViewOrders}
         />
       )}
 
-      {pickingSo && (
+      {isSalesUser && pickingSo && (
         <AddToOrderPicker
           salesOrders={salesOrders}
           selectedCount={checkedIds.size}
@@ -446,124 +384,5 @@ export function AvailableToSell({ tags, role, salesOrders, onUpdateTag, onCreate
         </div>
       ) : null}
     </div>
-  );
-}
-
-// ── Reserve modal ───────────────────────────────────────────────────────────────
-// Single-tag only. Lists Open sales orders (other statuses can't accept new lines).
-function ReserveModal({
-  tag,
-  salesOrders,
-  onCancel,
-  onConfirm,
-  onSubmitApproval,
-  requesterIdentity,
-}: {
-  tag: Tag;
-  salesOrders: SalesOrder[];
-  onCancel: () => void;
-  onConfirm: (soId: string, qty: number) => void;
-  onSubmitApproval: (draft: ApprovalDraft) => void;
-  requesterIdentity: string;
-}) {
-  const eligible = useMemo(() => salesOrders.filter((so) => so.status === "Open"), [salesOrders]);
-  const [soId, setSoId] = useState<string>("");
-  const [qty, setQty] = useState<number>(tag.qty);
-  const [showApproval, setShowApproval] = useState(false);
-  const { getClientName } = useClients();
-  const qtyValid = Number.isInteger(qty) && qty >= 1 && qty <= tag.qty;
-  const canConfirm = soId !== "" && eligible.some((so) => so.id === soId) && qtyValid;
-  const willSplit = qtyValid && qty < tag.qty;
-
-  return (
-    <>
-      <div className="fixed inset-0 bg-ink/40 z-40" onClick={onCancel} />
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
-        <div className="bg-white rounded-2xl shadow-[0_24px_60px_rgba(0,0,0,0.18)] w-full max-w-[440px] pointer-events-auto">
-          <div className="flex items-center justify-between px-5 pt-5 pb-3 border-b border-sage/60">
-            <h2 className="text-[17px] font-bold text-ink" style={{ fontFamily: "Montserrat, sans-serif" }}>
-              Reserve Tag {tag.id}
-            </h2>
-            <button onClick={onCancel} aria-label="Close" className="p-1 rounded hover:bg-sage/30 cursor-pointer">
-              <X size={16} />
-            </button>
-          </div>
-
-          <div className="px-5 py-5">
-            <div className="text-[12px] text-text-sec mb-4">
-              <div>{tag.species} · {tag.grade} · {tag.thick}″ × {tag.width}″ × {tag.length}′</div>
-              <div>{tag.qty} pcs · {tag.fbm} FBM · {tag.yard} · {tag.section} · {tag.rack}</div>
-            </div>
-
-            <label className="block text-[13px] font-semibold text-ink mb-2">Qty to reserve</label>
-            <input
-              type="number"
-              min={1}
-              max={tag.qty}
-              step={1}
-              value={qty}
-              onChange={(e) => setQty(e.target.value === "" ? 0 : Math.round(Number(e.target.value)))}
-              className="w-full border border-sage rounded-md px-3 py-2 text-[13px] bg-white outline-none focus:border-coral mb-1.5"
-            />
-            {!qtyValid ? (
-              <div className="text-[11px] text-coral mb-3">Enter a whole number between 1 and {tag.qty}.</div>
-            ) : willSplit ? (
-              <div className="text-[11px] text-text-ter mb-3">
-                Reserving fewer than {tag.qty} pcs splits off a new tag for {qty} pcs; the remaining {tag.qty - qty} pcs stay Available on {tag.id}.
-              </div>
-            ) : (
-              <div className="text-[11px] text-text-ter mb-3">Reserves the whole tag — no split.</div>
-            )}
-
-            <label className="block text-[13px] font-semibold text-ink mb-2">Link to Sales Order</label>
-            {eligible.length === 0 ? (
-              <div className="text-[12px] text-text-sec bg-sage/15 rounded-md px-3 py-2.5 border border-sage/60">
-                No open sales orders to link.
-              </div>
-            ) : (
-              <select
-                value={soId}
-                onChange={(e) => setSoId(e.target.value)}
-                className="w-full border border-sage rounded-md px-3 py-2 text-[13px] bg-white focus:outline-none focus:border-coral cursor-pointer"
-              >
-                <option value="">— Select a sales order —</option>
-                {eligible.map((so) => (
-                  <option key={so.id} value={so.id}>
-                    {so.id} — {getClientName(so.clientId)}
-                  </option>
-                ))}
-              </select>
-            )}
-          </div>
-
-          <div className="flex items-center justify-between px-5 pb-5 pt-1">
-            <button
-              onClick={() => setShowApproval(true)}
-              className="text-[12px] text-coral hover:underline bg-transparent border-0 p-0 cursor-pointer"
-            >
-              Need approval? Request one
-            </button>
-            <div className="flex items-center gap-2">
-              <Button onClick={onCancel}>Cancel</Button>
-              <Button variant="primary" onClick={() => canConfirm && onConfirm(soId, qty)} disabled={!canConfirm}>
-                Confirm
-              </Button>
-            </div>
-          </div>
-        </div>
-      </div>
-      {showApproval && (
-        <RequestApprovalForm
-          requestedBy={requesterIdentity}
-          prefillSoId={soId || undefined}
-          onCancel={() => setShowApproval(false)}
-          onSubmit={(draft) => {
-            onSubmitApproval(draft);
-            setShowApproval(false);
-          }}
-          zIndex={60}
-        />
-      )}
-    </>
   );
 }

@@ -22,15 +22,15 @@ export interface ApprovalDraft {
 
 interface RequestApprovalFormProps {
   requestedBy: string;             // display name of the current user (from role)
-  prefillSoId?: string;            // pre-populated when opened from Reserve modal / SO detail
+  relatedSoId: string;             // the Sales Order this request is scoped to (always required)
   onCancel: () => void;
   onSubmit: (draft: ApprovalDraft) => void;
-  zIndex?: number;                  // higher when stacked over another modal (e.g. Reserve)
+  zIndex?: number;                  // higher when stacked over the SO panel
 }
 
 export function RequestApprovalForm({
   requestedBy,
-  prefillSoId,
+  relatedSoId,
   onCancel,
   onSubmit,
   zIndex = 60,
@@ -43,7 +43,7 @@ export function RequestApprovalForm({
     if (!canSubmit) return;
     onSubmit({
       type,
-      relatedSoId: prefillSoId,
+      relatedSoId,
       details: details.trim(),
     });
   };
@@ -68,11 +68,7 @@ export function RequestApprovalForm({
           <div className="px-5 py-5">
             <div className="text-[11px] text-text-ter mb-4">
               Submitting as <span className="font-semibold text-ink">{requestedBy}</span>
-              {prefillSoId && (
-                <>
-                  {" · "}related order <span className="font-mono font-semibold text-ink">{prefillSoId}</span>
-                </>
-              )}
+              {" · "}related order <span className="font-mono font-semibold text-ink">{relatedSoId}</span>
             </div>
 
             <label className="block text-[13px] font-semibold text-ink mb-2">Request type</label>
