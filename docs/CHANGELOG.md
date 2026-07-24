@@ -950,6 +950,59 @@ A history of every commit (push) on `main`, in chronological order, with what wa
 **Files / 改动:** new `src/features/approvals/discountParts.tsx`; renamed `src/features/insights/Insights.tsx` → `src/features/pulse/Pulse.tsx`; modified `src/App.tsx`, `src/components/layout/Sidebar.tsx`, `src/components/layout/TopBar.tsx`, `src/features/approvals/ApprovalQueue.tsx`, `src/features/approvals/MyApprovals.tsx`, `src/features/approvals/RequestDiscountForm.tsx`, `src/features/sales-orders/SalesOrderPanel.tsx`, `src/features/clients/ClientDetail.tsx`, `src/features/stock-locator/StockLocator.tsx`
 
 ---
+## 2026-07-23
+
+### `8d415d8` · 19:52 · Sales order flow — 重构预留流程 / 仅销售可下单 / 客户档案建单 / 订单 UX 批量优化
+
+**🇨🇳 中文**
+
+**1. 预留流程整合 + 审批绑定订单**
+- 移除 Available-to-Sell 里每行的「Reserve」弹窗；所有预留（单个或批量）统一走 **勾选 + 操作栏**（Create Sales Order / Add to Existing Order）。
+- 把「部分数量拆分」抽成唯一的共享 helper（[`src/lib/reserveSplit.ts`](src/lib/reserveSplit.ts)），在 App 的两条 confirm 路径里调用：当下单数量 < 标签数量时，拆出一张 Reserved 子标签（`calcFbm` / `parentTagId` / `splitTagIds` / 历史），逻辑不再重复两份。
+- **RequestApprovalForm 现在强制绑定一个真实 SO**（`prefillSoId` → 必填 `relatedSoId`）；申请审批只能从 SO 面板头部按钮和「Request Discount」两处发起，清掉所有指向已删除 Reserve 弹窗的死引用（文案 + 注释）。
+
+**2. 下单权限：仅 Sales**
+- 建单是 Sales 的动作：Available-to-Sell 的勾选框/操作栏、Client Profile 的「New Sales Order」按钮都用 `role === "sales"` 门控，并加中途切换角色的 teardown effect（沿用 Settings 仅 Manager 的防御式写法）。
+
+**3. Client Profile**
+- 新增 **「New Sales Order」**（仅 Sales）：打开 create 模式的 SalesOrderPanel，客户**预填且锁定**（新 `lockedClientId` 属性），复用面板自带的 TagPicker 选标签。
+- 修复客户全屏从「不透明整屏接管」改为 **暗底 lightbox**（与 Stock Locator 一致），列表仍在背后可见，不再像空白新页。
+- 修复跨设备客户数据不一致的 bug：localStorage key 加版本（`timbridge_clients` → `_v2`），旧设备重新按当前 `INITIAL_CLIENTS` 播种（territory/contact 恢复）。
+- **去掉 Territory 筛选，只保留搜索**。
+
+**4. 订单 UX**
+- Create 面板从右侧抽屉改为**居中展开的 lightbox**（所有入口一致）。
+- 修好 create 模式下「预计发货日期 / 备注」两个字段（原来是空操作，点了没反应），并写入订单。
+- Confirm 后新增 **成功页**（仿 Delivery Slips）：查看本单 / 查看全部订单 / 再建一单。
+- Sales 在建单时填了折扣，Confirm 后**自动生成一条绑定该 SO 的 Pending 折扣审批**（含混合折扣率 + 逐行明细）。
+- Sales Orders：加**全文搜索**（SO# / 客户 / 状态，Manager 与 Sales 都可用）；表头**改成和 Stock Locator 一致**（搜索 + 导出在上，筛选在下）；**多选导出 PDF**（改用隐藏 iframe 打印，避免被浏览器拦截的弹窗）；加宽被截断的 Qty 输入框。
+
+**🇬🇧 English**
+
+**1. Reservation flow consolidation + SO-scoped approvals**
+- Removed the per-row Reserve modal in Available-to-Sell; every reservation (single or multi) now routes through the **checkbox + action bar** (Create Sales Order / Add to Existing Order).
+- Extracted the partial-qty split into one shared helper ([`src/lib/reserveSplit.ts`](src/lib/reserveSplit.ts)) called from both confirm paths in App: Qty < tag.qty spawns a Reserved child (`calcFbm` / `parentTagId` / `splitTagIds` / history) with no duplicated logic.
+- **RequestApprovalForm now always requires a real SO** (`prefillSoId` → required `relatedSoId`); approvals are reachable only from the SO panel header + Request Discount. Removed stale Reserve-modal references (copy + comments).
+
+**2. Order creation is Sales-only**
+- Gated the Available-to-Sell checkboxes/action bar and Client Profile's "New Sales Order" behind `role === "sales"`, with a mid-session teardown effect (mirrors the Manager-only Settings guard).
+
+**3. Client Profile**
+- Added **"New Sales Order"** (Sales-only): opens SalesOrderPanel create mode with the customer **pre-filled + locked** (new `lockedClientId` prop); reuses the built-in TagPicker.
+- Fixed the client fullscreen to a **dim lightbox** (matching Stock Locator) instead of an opaque takeover.
+- Fixed the stale-client localStorage bug by versioning the store key (`timbridge_clients` → `_v2`) so devices re-seed the current `INITIAL_CLIENTS`.
+- **Removed the Territory filter; search only.**
+
+**4. Order UX**
+- The create panel opens as a centered expanded lightbox from every entry point.
+- Wired the expected-ship-date and notes fields (were no-ops) and persist them onto the order.
+- Post-confirm **success screen** (like Delivery Slips) with view-order / view-all / create-another.
+- Sales-entered discounts **auto-create a Pending discount approval** linked to the SO (blended rate + per-line detail).
+- Sales Orders: free-text **search** (SO# / client / status; both roles); header **restructured to match Stock Locator** (search + Export on top, filters below); multi-select **Export PDF** via a hidden iframe (no blocked pop-up); widened the cramped Qty input.
+
+**Files / 改动:** new `src/lib/reserveSplit.ts`; modified `src/App.tsx`, `src/features/available-to-sell/AvailableToSell.tsx`, `src/features/sales-orders/SalesOrderPanel.tsx`, `src/features/sales-orders/SalesOrders.tsx`, `src/features/clients/Clients.tsx`, `src/features/clients/ClientDetail.tsx`, `src/features/approvals/RequestApprovalForm.tsx`, `src/features/approvals/MyApprovals.tsx`, `src/hooks/useClients.tsx`, `src/hooks/useApprovalRequests.ts`, `src/lib/types.ts`
+
+---
 ## Pending / 未来 (not yet built — 尚未开始)
 
 - **Approvals 里 Sales 视图看到的历史范围**（当前 MyApprovals 显示所有状态，Manager 只看 Pending；如果 Manager 需要审批历史查阅，加个 History tab）
