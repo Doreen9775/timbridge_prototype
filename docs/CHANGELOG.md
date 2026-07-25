@@ -1045,6 +1045,42 @@ A history of every commit (push) on `main`, in chronological order, with what wa
 **Files / 改动:** `src/features/pulse/Pulse.tsx`, `src/App.tsx`, `src/features/sales-orders/SalesOrders.tsx`, `src/features/stock-locator/StockLocator.tsx`, `src/lib/types.ts`
 
 ---
+
+## 2026-07-25
+
+### `ff99bf9` · 12:39 · 角色化 onboarding 导览（spotlight walkthrough）
+
+**🇨🇳 中文**
+
+**导览框架**
+- 新增 **`OnboardingTour`**：桌面端在 `bg-ink/40` lightbox 上挖出高亮镂空 + 说明卡片（Next / Back / Skip + 步骤圆点）；**Floor 端复用 FloorTagSheet 的底部滑出弹层**（大触控按钮）。
+- 三套步骤配置（Manager 7 步 / Sales 5 步 / Floor 4 步），按各角色「典型一天」的流程**跨页面**走：每步可带 `nav` 让导览先切到对应页面（通过 `onNavigate` 回调 = App 的 `setNav`）；目标元素若暂时不在 DOM 里会**优雅跳过**、不报错。在各功能上打了 `data-onboarding` 锚点。
+- **每次 sign in 都自动播放**（登录时重置「已看过」状态——这是给用户测试的 demo 原型，登出再登录也会重播）；TopBar 的 **`?` 按钮**和 Settings 的「Take a tour」可随时手动重播。
+
+**本轮细化**
+- **修复 lag**：之前卡片先出现在屏幕中间再跳到目标位。改为同步测量目标 + 瞬时滚动，**卡片只在算好位置后才渲染**，无跳动。
+- **高亮边框变淡**：`coral` → `coral/45`。
+- **大目标**（整页）自动把卡片**居中**，避免贴边跑出屏幕。
+- **Manager**：Step 2 展示真实 **Delivery Slips** 页面；新增 Step「点击 tag 看详情（可 expand / edit）」；新增 Step「Client Profile」；最后一步高亮**整个 Pulse**（不再只是 Reports tab）。
+- **Sales**：Step 1 高亮 **Tags Available** 卡（不再是 Total FBM）；Step 3 高亮**一整行 item**；Step 4/5 分别展示真实 **Sales Orders / Approvals** 页面。
+
+**🇬🇧 English**
+
+**Tour framework**
+- New **`OnboardingTour`**: desktop spotlight cut out of the `bg-ink/40` lightbox + tooltip card (Next / Back / Skip + step dots); **Floor renders as a bottom sheet reusing FloorTagSheet's slide-up** with large touch targets.
+- Three step configs (manager 7 / sales 5 / floor 4) that walk each role's typical day **across pages** — a step's optional `nav` drives the page via an `onNavigate` callback (App's `setNav`), and any target not currently in the DOM is **skipped gracefully** (no console error). `data-onboarding` anchors added across the touched features.
+- **Auto-starts on every sign-in** (seen-state is reset at sign-in — this is a demo prototype, so sign-out → sign-in replays it); a TopBar **`?` button** and a Settings "Take a tour" entry replay it manually anytime.
+
+**This batch's refinements**
+- **Lag fix**: the card used to appear centered then jump to the target. Now it measures the target synchronously with an instant scroll and **only renders once positioned** — no jump.
+- **Softer highlight border**: `coral` → `coral/45`.
+- **Large targets** (a whole page) **center** the card so it never runs off-screen.
+- **Manager**: Step 2 shows the real **Delivery Slips** page; new step for opening a tag's detail drawer (expand / edit); new **Client Profile** step; the final step highlights the **whole Pulse** page (not just the Reports tab).
+- **Sales**: Step 1 highlights the **Tags Available** card (not Total FBM); Step 3 highlights a **full item row**; Steps 4/5 show the real **Sales Orders / Approvals** pages.
+
+**Files / 改动:** new `src/components/shared/OnboardingTour.tsx`, `src/hooks/useOnboarding.ts`, `src/lib/onboardingSteps.ts`; modified `src/App.tsx`, `src/components/layout/TopBar.tsx`, `src/components/layout/Sidebar.tsx`, `src/features/settings/CustomValuesSettings.tsx`, `src/features/dashboard/Dashboard.tsx`, `src/features/stock-locator/StockLocator.tsx`, `src/features/delivery-slips/DeliverySlips.tsx`, `src/features/pulse/Pulse.tsx`, `src/features/available-to-sell/AvailableToSell.tsx`, `src/features/sales-orders/SalesOrders.tsx`, `src/features/clients/Clients.tsx`, `src/features/approvals/MyApprovals.tsx`, `src/features/tag-entry/TagEntry.tsx`
+
+---
 ## Pending / 未来 (not yet built — 尚未开始)
 
 - **Approvals 里 Sales 视图看到的历史范围**（当前 MyApprovals 显示所有状态，Manager 只看 Pending；如果 Manager 需要审批历史查阅，加个 History tab）
