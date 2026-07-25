@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Download, Search } from "lucide-react";
-import type { SalesOrder, SalesOrderStatus, Tag } from "@/lib/types";
+import type { SalesOrder, SalesOrderFilter, SalesOrderStatus, Tag } from "@/lib/types";
 import { PillFilter } from "@/features/stock-locator/filters";
 import { Pagination, DEFAULT_PAGE_SIZE, usePagedSlice } from "@/components/shared/Pagination";
 import { SOStatusPill } from "@/components/shared/SOStatusPill";
@@ -36,6 +36,8 @@ interface SalesOrdersProps {
   tags: Tag[];
   openSoId?: string | null;
   onSoOpened?: () => void;
+  salesFilter?: SalesOrderFilter | null;
+  onClearSalesFilter?: () => void;
   onAdvanceStatus: (soId: string, next: SalesOrderStatus) => void;
   onUpdateSalesOrder: (so: SalesOrder) => void;
   onConfirmDraft: (soId: string, lineItems: DraftLineItem[]) => { ok: true } | { ok: false; unavailableIds: string[] };
@@ -45,11 +47,12 @@ interface SalesOrdersProps {
   requesterIdentity: string;
 }
 
-export function SalesOrders({ salesOrders, tags, openSoId, onSoOpened, onAdvanceStatus, onUpdateSalesOrder, onConfirmDraft, onOpenTag, onOpenClient, onCreateApproval, requesterIdentity }: SalesOrdersProps) {
+export function SalesOrders({ salesOrders, tags, openSoId, onSoOpened, salesFilter, onClearSalesFilter, onAdvanceStatus, onUpdateSalesOrder, onConfirmDraft, onOpenTag, onOpenClient, onCreateApproval, requesterIdentity }: SalesOrdersProps) {
   const { clientById, getClientName } = useClients();
   const [search, setSearch] = useState("");
   const [statusF, setStatusF] = useState<string[]>([]);
   const [customerF, setCustomerF] = useState<string[]>([]);
+  const [speciesF, setSpeciesF] = useState<string[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
   const [fullscreen, setFullscreen] = useState(false);
   const [page, setPage] = useState(1);
@@ -79,33 +82,71 @@ export function SalesOrders({ salesOrders, tags, openSoId, onSoOpened, onAdvance
     [salesOrders, getClientName],
   );
 
+  // Species an SO touches, via its line-item tags (an SO has no species of its own).
+  // Memoized as a per-SO Set so both the options list and the filter predicate share it.
+  const speciesBySo = useMemo(() => {
+    const tagById = new Map(tags.map((t) => [t.id, t]));
+    const map = new Map<string, Set<string>>();
+    for (const so of salesOrders) {
+      const set = new Set<string>();
+      for (const li of so.lineItems) {
+        const sp = tagById.get(li.tagId)?.species;
+        if (sp) set.add(sp);
+      }
+      map.set(so.id, set);
+    }
+    return map;
+  }, [salesOrders, tags]);
+
+  // Options = only species that appear on at least one order (mirrors the Customer
+  // filter's "derive from data" approach — every option yields ≥1 result).
+  const speciesOpts = useMemo(
+    () => Array.from(new Set([...speciesBySo.values()].flatMap((s) => [...s]))).sort(),
+    [speciesBySo],
+  );
+
+  // Deep-link entry point (Pulse species-velocity drill-through): apply the incoming
+  // species + status filter once, then consume-and-clear it in App (same one-shot
+  // pattern as Stock Locator's entryFilter — navigating away and back won't re-apply).
+  useEffect(() => {
+    if (!salesFilter) return;
+    if (salesFilter.species) setSpeciesF(salesFilter.species);
+    if (salesFilter.status) setStatusF(salesFilter.status);
+    onClearSalesFilter?.();
+  }, [salesFilter, onClearSalesFilter]);
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return salesOrders.filter((so) => {
       if (statusF.length && !statusF.includes(so.status)) return false;
       if (customerF.length && !customerF.includes(getClientName(so.clientId))) return false;
+      if (speciesF.length) {
+        const soSpecies = speciesBySo.get(so.id);
+        if (!soSpecies || !speciesF.some((sp) => soSpecies.has(sp))) return false;
+      }
       if (q) {
         const hay = [so.id, getClientName(so.clientId), so.status].join(" ").toLowerCase();
         if (!hay.includes(q)) return false;
       }
       return true;
     });
-  }, [salesOrders, search, statusF, customerF, getClientName]);
+  }, [salesOrders, search, statusF, customerF, speciesF, speciesBySo, getClientName]);
 
   useEffect(() => {
     setPage(1);
-  }, [search, statusF, customerF, pageSize]);
+  }, [search, statusF, customerF, speciesF, pageSize]);
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
   useEffect(() => {
     if (page > totalPages) setPage(totalPages);
   }, [page, totalPages]);
   const pageRows = usePagedSlice(filtered, page, pageSize);
 
-  const filtersActive = search.trim().length > 0 || statusF.length > 0 || customerF.length > 0;
+  const filtersActive = search.trim().length > 0 || statusF.length > 0 || customerF.length > 0 || speciesF.length > 0;
   const resetFilters = () => {
     setSearch("");
     setStatusF([]);
     setCustomerF([]);
+    setSpeciesF([]);
   };
 
   const selectedSo = selected ? salesOrders.find((so) => so.id === selected) ?? null : null;
@@ -262,6 +303,7 @@ export function SalesOrders({ salesOrders, tags, openSoId, onSoOpened, onAdvance
         >
           <PillFilter label="Status" options={STATUS_OPTIONS} applied={statusF} onApply={setStatusF} />
           <PillFilter label="Customer" options={customerOpts} applied={customerF} onApply={setCustomerF} />
+          <PillFilter label="Species" options={speciesOpts} applied={speciesF} onApply={setSpeciesF} />
         </FilterBar>
 
         <div className="bg-white rounded-[10px] overflow-hidden shadow-[0_1px_4px_rgba(0,0,0,0.07)]">

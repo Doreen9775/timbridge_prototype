@@ -101,6 +101,9 @@ export function StockLocator({ tags, floorView, role, openTagId, onTagOpened, on
   const [lowQty, setLowQty] = useState(false);
   // Hard ID-set gate from entryFilter (composes with the bar filters; cleared by Reset Filter).
   const [idSet, setIdSet] = useState<string[] | null>(null);
+  // Optional label describing an ID-gate deep-link, shown in place of the default
+  // "N tags created" banner text (set by Pulse drill-throughs; null → default).
+  const [idSetLabel, setIdSetLabel] = useState<string | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
   const [fullscreen, setFullscreen] = useState(false);
   const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
@@ -152,8 +155,10 @@ export function StockLocator({ tags, floorView, role, openTagId, onTagOpened, on
     if (entryFilter.species) setSpeciesF(entryFilter.species);
     if (entryFilter.grade) setGradeF(entryFilter.grade);
     if (entryFilter.yard) setYardF(entryFilter.yard);
+    if (entryFilter.dates) setDates(entryFilter.dates);
     if (entryFilter.lowQty !== undefined) setLowQty(entryFilter.lowQty);
     if (entryFilter.tagIds) setIdSet(entryFilter.tagIds);
+    if (entryFilter.filterLabel) setIdSetLabel(entryFilter.filterLabel);
     // Resolve a Sales Order number into the set of linked tag IDs; if exactly one
     // tag matches, auto-open its drawer so Linked Transactions is visible immediately.
     if (entryFilter.orderNo) {
@@ -214,6 +219,7 @@ export function StockLocator({ tags, floorView, role, openTagId, onTagOpened, on
   const resetFilters = () => {
     setSearch(""); setDates([]); setStatusF([]); setSpeciesF([]); setGradeF([]); setStateF([]); setMillingF([]); setYardF([]); setLowQty(false);
     setIdSet(null);
+    setIdSetLabel(null);
     onClearEntryFilter?.();
   };
 
@@ -262,7 +268,7 @@ export function StockLocator({ tags, floorView, role, openTagId, onTagOpened, on
   const idCount = idSet?.length ?? 0;
   const banner = idCount > 0 ? (
     <ConfirmationBanner
-      message={`${idCount} tag${idCount === 1 ? "" : "s"} created`}
+      message={idSetLabel ?? `${idCount} tag${idCount === 1 ? "" : "s"} created`}
       actionLabel="View all stock"
       onAction={resetFilters}
       onDismiss={resetFilters}

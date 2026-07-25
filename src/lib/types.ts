@@ -144,10 +144,23 @@ export interface EntryFilter {
   species?: Species[];
   grade?: Grade[]; // feeds the existing Grade filter — used by Delivery Slip "Match to Tags"
   yard?: string[]; // feeds the existing Location filter — used by the Dashboard Yard Map drill-through
+  dates?: string[]; // feeds the existing Date filter (exact ISO multi-select) — used by Pulse FBM-by-week/month drill-through
   lowQty?: boolean;
   // Resolves to a tagIds set (Sales Orders → linked tags). Auto-opens the drawer
   // if exactly one tag matches. Used by Delivery Slip "Match to Transaction".
   orderNo?: string;
+  // Overrides the tagIds-gate confirmation banner text. Defaults to "N tags created"
+  // (Tag Entry). Pulse drill-throughs set this to describe the gate, e.g.
+  // "12 Available tags · 91+ days in yard".
+  filterLabel?: string;
+}
+
+// ─── Sales Orders deep-link filter (Pulse species-velocity drill-through) ─────────
+// Passed into Sales Orders from App via the same transient-state pattern as EntryFilter.
+// species matches an SO if any of its line-item tags is one of these species.
+export interface SalesOrderFilter {
+  species?: Species[];
+  status?: SalesOrderStatus[];
 }
 
 // ─── Recent records (top-nav "Recent" dropdown; persisted to localStorage) ────────

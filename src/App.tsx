@@ -18,7 +18,7 @@ import { Pulse } from "@/features/pulse/Pulse";
 import { RecentRecordsProvider } from "@/hooks/useRecentRecords";
 import { LookupsProvider } from "@/hooks/useLookups";
 import { ClientsProvider } from "@/hooks/useClients";
-import type { ApprovalRequest, ApprovalRequestType, EntryFilter, RecentRecord, SalesOrder, SalesOrderStatus, Tag } from "@/lib/types";
+import type { ApprovalRequest, ApprovalRequestType, EntryFilter, RecentRecord, SalesOrder, SalesOrderFilter, SalesOrderStatus, Tag } from "@/lib/types";
 import { useRole } from "@/hooks/useRole";
 import { useTags } from "@/hooks/useTags";
 import { useSalesOrders } from "@/hooks/useSalesOrders";
@@ -45,6 +45,7 @@ export default function App() {
   const [pendingSoId, setPendingSoId] = useState<string | null>(null);
   const [pendingClientId, setPendingClientId] = useState<string | null>(null);
   const [entryFilter, setEntryFilter] = useState<EntryFilter | null>(null);
+  const [salesFilter, setSalesFilter] = useState<SalesOrderFilter | null>(null);
   const [authed, setAuthed] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
   const { role, isFloor, setRole } = useRole();
@@ -411,6 +412,12 @@ export default function App() {
     setPendingTagId(tagId);
   }, []);
 
+  // Pulse species-velocity drill-through: chart bar → pre-filtered Sales Orders.
+  const handleNavigateToSales = useCallback((filter: SalesOrderFilter) => {
+    setNav("sales");
+    setSalesFilter(filter);
+  }, []);
+
   if (!authed) return <LoginPage onSignIn={handleSignIn} />;
 
   return (
@@ -444,6 +451,8 @@ export default function App() {
                   tags={tags}
                   openSoId={pendingSoId}
                   onSoOpened={handleSoOpened}
+                  salesFilter={salesFilter}
+                  onClearSalesFilter={() => setSalesFilter(null)}
                   onAdvanceStatus={handleAdvanceSoStatus}
                   onUpdateSalesOrder={handleUpdateSalesOrder}
                   onConfirmDraft={handleConfirmDraftOrder}
@@ -466,7 +475,13 @@ export default function App() {
                 />
               )}
               {nav === "pulse" && role !== "floor" && (
-                <Pulse tags={tags} salesOrders={salesOrders} role={role} />
+                <Pulse
+                  tags={tags}
+                  salesOrders={salesOrders}
+                  role={role}
+                  onNavigateToLocator={handleNavigateToLocator}
+                  onNavigateToSales={handleNavigateToSales}
+                />
               )}
               {nav === "approvals" && role === "sales" && (
                 <MyApprovals
