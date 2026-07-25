@@ -1003,6 +1003,48 @@ A history of every commit (push) on `main`, in chronological order, with what wa
 **Files / 改动:** new `src/lib/reserveSplit.ts`; modified `src/App.tsx`, `src/features/available-to-sell/AvailableToSell.tsx`, `src/features/sales-orders/SalesOrderPanel.tsx`, `src/features/sales-orders/SalesOrders.tsx`, `src/features/clients/Clients.tsx`, `src/features/clients/ClientDetail.tsx`, `src/features/approvals/RequestApprovalForm.tsx`, `src/features/approvals/MyApprovals.tsx`, `src/hooks/useClients.tsx`, `src/hooks/useApprovalRequests.ts`, `src/lib/types.ts`
 
 ---
+
+## 2026-07-24
+
+### `7baf31f` · 22:20 · Pulse Analytics — 图表下钻 + 新鲜度标签 + CSV 导出 + FBM 环比徽标
+
+**🇨🇳 中文**
+
+**1. 图表下钻（Analytics 三图 → 预筛选页面）**
+- **FBM 柱** → Stock Locator，按该周/月的入库日期预筛（复用 Date 筛选，顶部可见「N dates」）。
+- **树种流速柱** → Sales Orders，按树种 + 状态预筛（Reserved 柱 → Open/Picked；Shipped 柱 → Shipped）。为此给 **Sales Orders 新增「树种」筛选维度**（选项仅取订单上出现过的树种，经行项目标签解析）。
+- **库龄柱** → Stock Locator，按 Available + 该库龄区间的标签 ID 预筛，落地页顶部显示描述性 banner（如「5 Available tags · 31–60d in yard」）。
+- 复用既有 App 级导航 + 筛选预填机制；新增 `EntryFilter.dates` / `filterLabel` 与 `SalesOrderFilter`。空桶零高度不可点，无死点击。
+
+**2. 「Updated X ago」数据新鲜度标签**
+- Pulse 两个 tab 顶部各加一个静态相对时间标签（无轮询）：Analytics 取全量标签中最新的 `tag.date`；Reports 取最新一条标签 history 事件（含时间）。数据/角色变化后自动重算（例如送货单批量建标签后，从「51d ago」变「刚刚 / 21h ago」）。
+
+**3. Analytics 三图各自 CSV 导出**
+- 每张图表头加一个小图标导出按钮（复用 StockLocator 的 `csvCell` RFC 4180 转义 + `csvFilename`）：FBM（周/月桶 + FBM）、树种流速（树种 + Reserved/Shipped FBM）、库龄分布（桶 + 数量 + 标签 ID）。文件名沿用 `timbridge_{slug}_YYYY-MM-DD_HH-MM.csv`。空数据时按钮禁用 + tooltip（沿用 Reports 空态）。
+
+**4. FBM 图环比 delta 徽标**
+- 「FBM entered by week/month」标题旁加一个环比徽标：涨 = lime ↑、跌 = coral ↓、持平/无上一桶 = 灰色破折号（不显示误导性 0%）。随 Weekly/Monthly 切换重算。
+
+**🇬🇧 English**
+
+**1. Chart drill-through (three Analytics charts → pre-filtered pages)**
+- **FBM bar** → Stock Locator pre-filtered to that week/month's entry dates (reuses the Date filter — visible "N dates").
+- **Species-velocity bar** → Sales Orders by species + status (Reserved→Open/Picked, Shipped→Shipped). Added a **Species filter dimension to Sales Orders** (options derived from species that appear on orders, resolved via line-item tags).
+- **Days-in-yard bar** → Stock Locator filtered to Available tags in that bucket, with a descriptive banner ("5 Available tags · 31–60d in yard").
+- Reuses the existing App-level nav + filter-prefill pattern; new `EntryFilter.dates`/`filterLabel` + `SalesOrderFilter`. Zero-height (empty) bars aren't clickable — no dead clicks.
+
+**2. "Updated X ago" freshness label**
+- A static relative-time label on both Pulse tabs (no polling): Analytics uses the latest `tag.date`; Reports uses the latest tag history event (incl. time). Recomputes on data/role change (e.g. after a Delivery-Slip batch it moves from "51d ago" to "just now / 21h ago").
+
+**3. Per-chart CSV export on the Analytics tab**
+- A small icon export button in each chart header (reuses StockLocator's `csvCell` RFC-4180 escaper + `csvFilename`): FBM (bucket + FBM), Species velocity (species + Reserved/Shipped FBM), Days-in-yard (bucket + count + tag IDs). Filenames follow `timbridge_{slug}_YYYY-MM-DD_HH-MM.csv`. Disabled + tooltip on empty data (matches the Reports empty state).
+
+**4. Period-over-period delta badge on the FBM chart**
+- A delta badge beside the "FBM entered by week/month" title: up = lime ↑, down = coral ↓, flat/no-prior = muted gray dash (never a misleading 0%). Recomputes with the Weekly/Monthly toggle.
+
+**Files / 改动:** `src/features/pulse/Pulse.tsx`, `src/App.tsx`, `src/features/sales-orders/SalesOrders.tsx`, `src/features/stock-locator/StockLocator.tsx`, `src/lib/types.ts`
+
+---
 ## Pending / 未来 (not yet built — 尚未开始)
 
 - **Approvals 里 Sales 视图看到的历史范围**（当前 MyApprovals 显示所有状态，Manager 只看 Pending；如果 Manager 需要审批历史查阅，加个 History tab）
