@@ -1,4 +1,4 @@
-import { Search, Bell, ChevronRight } from "lucide-react";
+import { Search, Bell, ChevronRight, HelpCircle } from "lucide-react";
 import type { NavKey } from "./Sidebar";
 import type { RecentRecord, Role } from "@/lib/types";
 import { RecentMenu } from "./RecentMenu";
@@ -29,9 +29,10 @@ interface TopBarProps {
   role: Role;
   setRole: (role: Role) => void;
   onOpenRecord: (r: RecentRecord) => void;
+  onStartTour: () => void;
 }
 
-export function TopBar({ nav, role, setRole, onOpenRecord }: TopBarProps) {
+export function TopBar({ nav, role, setRole, onOpenRecord, onStartTour }: TopBarProps) {
   return (
     <div className="bg-white h-14 flex items-center px-6 border-b border-sage sticky top-0 z-10 gap-4">
       <div className="flex-1">
@@ -65,6 +66,14 @@ export function TopBar({ nav, role, setRole, onOpenRecord }: TopBarProps) {
       </div>
 
       <div className="flex items-center gap-3">
+        <button
+          onClick={onStartTour}
+          aria-label="Take a tour"
+          title="Take a tour"
+          className="flex items-center justify-center text-text-sec cursor-pointer hover:text-ink bg-transparent border-0 p-0"
+        >
+          <HelpCircle size={18} />
+        </button>
         <Search size={18} className="text-text-sec cursor-pointer hover:text-ink" />
         <div className="relative">
           <Bell size={18} className="text-text-sec cursor-pointer hover:text-ink" />

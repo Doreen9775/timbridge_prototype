@@ -270,7 +270,7 @@ export function AvailableToSell({ tags, role, salesOrders, onCreateSalesOrder, o
             <thead>
               <tr className="bg-sage/20 text-ink text-left">
                 {isSalesUser && (
-                  <th className="pl-3 pr-1 py-3 w-9">
+                  <th className="pl-3 pr-1 py-3 w-9" data-onboarding="avail-checkbox">
                     <input
                       ref={selectAllRef}
                       type="checkbox"
@@ -308,10 +308,10 @@ export function AvailableToSell({ tags, role, salesOrders, onCreateSalesOrder, o
                   </td>
                 </tr>
               ) : (
-                pageRows.map((t) => {
+                pageRows.map((t, rowIdx) => {
                   const isChecked = checkedIds.has(t.id);
                   return (
-                    <tr key={t.id} className={`border-t border-sage/40 ${isChecked ? "bg-coral/[0.06] hover:bg-coral/[0.10]" : "hover:bg-sage/10"}`}>
+                    <tr key={t.id} data-onboarding={rowIdx === 0 ? "avail-row" : undefined} className={`border-t border-sage/40 ${isChecked ? "bg-coral/[0.06] hover:bg-coral/[0.10]" : "hover:bg-sage/10"}`}>
                       {isSalesUser && (
                         <td className="pl-3 pr-1 py-3">
                           <input

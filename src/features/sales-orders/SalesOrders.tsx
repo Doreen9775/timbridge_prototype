@@ -260,7 +260,7 @@ export function SalesOrders({ salesOrders, tags, openSoId, onSoOpened, salesFilt
 
   return (
     <div className="p-6 bg-cream min-h-full">
-      <div className="max-w-[1600px] mx-auto">
+      <div className="max-w-[1600px] mx-auto" data-onboarding="sales-page">
         <div className="mb-5">
           <h1 className="text-[26px] font-bold text-ink leading-tight" style={{ fontFamily: "Montserrat, sans-serif" }}>
             Sales Orders

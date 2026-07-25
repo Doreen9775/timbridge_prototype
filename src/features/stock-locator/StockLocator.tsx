@@ -281,7 +281,7 @@ export function StockLocator({ tags, floorView, role, openTagId, onTagOpened, on
       <>
       {banner}
       <div className="p-6 bg-cream min-h-full">
-        <div className="relative mb-6">
+        <div className="relative mb-6" data-onboarding="locator-scan">
           <Search size={22} className="absolute left-4 top-1/2 -translate-y-1/2 text-text-sec" />
           <Scan size={22} className="absolute right-4 top-1/2 -translate-y-1/2 text-coral cursor-pointer" />
           <input
@@ -302,6 +302,7 @@ export function StockLocator({ tags, floorView, role, openTagId, onTagOpened, on
               <div className="text-base text-text-sec mb-4">{t.species} · {t.grade} · {t.thick}×{t.width} × {t.length}' · {t.qty} pcs</div>
               {t.status === "Pending" ? (
                 <button
+                  data-onboarding="floor-confirm-receipt"
                   onClick={() => setConfirmTagId(t.id)}
                   className="w-full min-h-[44px] p-4 bg-lime text-ink border-0 rounded-lg text-lg font-semibold cursor-pointer hover:brightness-95"
                 >
@@ -388,6 +389,8 @@ export function StockLocator({ tags, floorView, role, openTagId, onTagOpened, on
         <span className="text-xs text-text-ter whitespace-nowrap">Last synced 14:32</span>
       </div>
 
+      {/* Wrapper carries the onboarding-tour anchor for the filter bar. */}
+      <div data-onboarding="locator-filterbar">
       <FilterBar filtersActive={filtersActive} onReset={resetFilters}>
         <DateFilter applied={dates} onApply={setDates} />
         <PillFilter label="Species" options={lookups.species.map((v) => v.code)} applied={speciesF} onApply={setSpeciesF} />
@@ -406,6 +409,7 @@ export function StockLocator({ tags, floorView, role, openTagId, onTagOpened, on
           Low Qty
         </button>
       </FilterBar>
+      </div>
 
       <div className="grid grid-cols-4 gap-3 mb-5">
         {summaryCards.map(([label, value], i) => {
@@ -447,6 +451,7 @@ export function StockLocator({ tags, floorView, role, openTagId, onTagOpened, on
               return (
                 <tr
                   key={t.id}
+                  data-onboarding={i === 0 ? "locator-row" : undefined}
                   onClick={() => handleRowClick(t.id)}
                   className={[
                     "border-b border-[#F3F4F6] cursor-pointer",

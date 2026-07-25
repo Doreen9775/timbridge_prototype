@@ -108,7 +108,7 @@ export function MyApprovals({
           onDismiss={() => onAcknowledgeResolved(unacknowledgedResolved.map((r) => r.id))}
         />
       )}
-      <div className="p-6 max-w-[1000px] mx-auto">
+      <div className="p-6 max-w-[1000px] mx-auto" data-onboarding="approvals-page">
         <div className="mb-5 flex items-start justify-between gap-4">
           <div>
             <h1 className="text-[26px] font-bold text-ink leading-tight" style={{ fontFamily: "Montserrat, sans-serif" }}>

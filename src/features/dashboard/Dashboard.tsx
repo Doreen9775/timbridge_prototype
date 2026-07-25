@@ -151,6 +151,7 @@ export function Dashboard({ tags, floorView, onNavigateToLocator, onOpenTag }: D
           return (
             <div
               key={i}
+              data-onboarding={i === 0 ? "dashboard-kpi" : i === 1 ? "dashboard-available" : undefined}
               role="button"
               tabIndex={0}
               aria-label={c.ariaLabel}

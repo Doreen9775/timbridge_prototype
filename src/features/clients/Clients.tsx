@@ -133,7 +133,7 @@ export function Clients({ tags, role, salesOrders, openClientId, onClientOpened,
 
   return (
     <div className="p-6 bg-cream min-h-full">
-      <div className="max-w-[1600px] mx-auto">
+      <div className="max-w-[1600px] mx-auto" data-onboarding="clients-page">
         <div className="mb-5 flex items-start justify-between gap-4">
           <div>
             <h1 className="text-[26px] font-bold text-ink leading-tight" style={{ fontFamily: "Montserrat, sans-serif" }}>

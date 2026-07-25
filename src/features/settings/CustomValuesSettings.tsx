@@ -1,11 +1,11 @@
 import { useState } from "react";
-import { Trash2, Plus } from "lucide-react";
+import { Trash2, Plus, Compass } from "lucide-react";
 import { LOOKUP_TABLE_LABELS, type LookupTable } from "@/lib/lookups";
 import { useLookups } from "@/hooks/useLookups";
 
 const TABLES: LookupTable[] = ["species", "grades", "states", "milling", "locations"];
 
-export function CustomValuesSettings() {
+export function CustomValuesSettings({ onStartTour }: { onStartTour: () => void }) {
   const lookups = useLookups();
 
   return (
@@ -15,6 +15,20 @@ export function CustomValuesSettings() {
         <div className="text-[13px] text-text-sec mb-6">
           Add custom values for the lookup fields used in Tag Entry and Stock Locator. System defaults can't be removed.
         </div>
+
+        <div className="bg-white rounded-xl p-5 shadow-[0_1px_6px_rgba(0,0,0,0.07)] mb-6 flex items-center justify-between gap-4">
+          <div>
+            <div className="text-[14px] font-semibold text-ink mb-0.5">New here?</div>
+            <div className="text-[13px] text-text-sec">Take a quick guided tour of the Manager workflow.</div>
+          </div>
+          <button
+            onClick={onStartTour}
+            className="flex items-center gap-2 shrink-0 px-4 py-2 rounded-lg bg-ink text-white text-[13px] font-medium cursor-pointer hover:brightness-110 border-0"
+          >
+            <Compass size={15} />Take a tour
+          </button>
+        </div>
+
         <div className="flex flex-col gap-6">
           {TABLES.map((table) => (
             <LookupSection key={table} table={table} values={lookups[table]} onAdd={lookups.addValue} onDelete={lookups.deleteValue} />

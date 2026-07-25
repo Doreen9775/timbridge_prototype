@@ -195,7 +195,7 @@ export function TagEntry({ tags, setTags, floorView, onViewInInventory }: TagEnt
         </div>
 
         {step === 1 && (
-          <div className="bg-white rounded-xl p-7 shadow-[0_1px_6px_rgba(0,0,0,0.07)]">
+          <div className="bg-white rounded-xl p-7 shadow-[0_1px_6px_rgba(0,0,0,0.07)]" data-onboarding="tagentry-step1">
             <button onClick={handleScan} className="w-full py-3.5 border-2 border-dashed border-coral rounded-lg bg-transparent text-coral text-sm font-medium cursor-pointer mb-5 flex items-center justify-center gap-2 hover:bg-coral/5">
               <Scan size={18} />Scan Existing Tag to Duplicate
             </button>

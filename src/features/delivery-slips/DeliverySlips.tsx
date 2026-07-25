@@ -643,7 +643,7 @@ export function DeliverySlips({ tags, setTags, onNavigateToLocator }: DeliverySl
     return (
       <div className="p-8 bg-cream min-h-full">
         <div className="max-w-[600px] mx-auto">
-          <div className="bg-white rounded-2xl p-10 shadow-[0_1px_8px_rgba(0,0,0,0.08)] text-center mb-5">
+          <div className="bg-white rounded-2xl p-10 shadow-[0_1px_8px_rgba(0,0,0,0.08)] text-center mb-5" data-onboarding="delivery-upload">
             <div className="w-16 h-16 rounded-full bg-coral/10 flex items-center justify-center mx-auto mb-4">
               <Truck size={28} className="text-coral" />
             </div>

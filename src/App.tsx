@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Sidebar, type NavKey } from "@/components/layout/Sidebar";
 import { TopBar } from "@/components/layout/TopBar";
 import { FloorBanner } from "@/components/layout/FloorBanner";
@@ -18,12 +18,15 @@ import { Pulse } from "@/features/pulse/Pulse";
 import { RecentRecordsProvider } from "@/hooks/useRecentRecords";
 import { LookupsProvider } from "@/hooks/useLookups";
 import { ClientsProvider } from "@/hooks/useClients";
-import type { ApprovalRequest, ApprovalRequestType, EntryFilter, RecentRecord, SalesOrder, SalesOrderFilter, SalesOrderStatus, Tag } from "@/lib/types";
+import type { ApprovalRequest, ApprovalRequestType, EntryFilter, RecentRecord, Role, SalesOrder, SalesOrderFilter, SalesOrderStatus, Tag } from "@/lib/types";
 import { useRole } from "@/hooks/useRole";
 import { useTags } from "@/hooks/useTags";
 import { useSalesOrders } from "@/hooks/useSalesOrders";
 import { useApprovalRequests } from "@/hooks/useApprovalRequests";
 import { reserveLineItems } from "@/lib/reserveSplit";
+import { useOnboarding } from "@/hooks/useOnboarding";
+import { OnboardingTour } from "@/components/shared/OnboardingTour";
+import { tourStepsForRole } from "@/lib/onboardingSteps";
 
 const MONTHS_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 function nowStamp(): string {
@@ -56,6 +59,34 @@ export default function App() {
   // request store so the ApprovalRequest type stays exactly as spec'd.
   const [acknowledgedApprovalIds, setAcknowledgedApprovalIds] = useState<Set<string>>(() => new Set());
 
+  // ── Onboarding tour ─────────────────────────────────────────────────────────
+  const { activeRole, startTour, endTour, hasSeen, autoFired, resetOnboarding } = useOnboarding();
+  // Mirror the current page into a ref (synced in an effect) so a tour can restore it on close.
+  const navRef = useRef<NavKey>(nav);
+  useEffect(() => { navRef.current = nav; });
+  const preTourNavRef = useRef<NavKey>("dashboard");
+
+  const handleStartTour = useCallback((r: Role) => {
+    preTourNavRef.current = navRef.current;
+    startTour(r);
+  }, [startTour]);
+
+  const handleTourClose = useCallback(() => {
+    endTour();
+    setNav(preTourNavRef.current); // return the user to where they launched the tour
+  }, [endTour]);
+
+  // Auto-start a role's tour on its first visit (mount or role switch) once the page
+  // has settled. Runs only after sign-in and never interrupts an active tour.
+  useEffect(() => {
+    if (!authed || activeRole) return;
+    if (hasSeen(role) || autoFired.current.has(role)) return;
+    const t = window.setTimeout(() => {
+      if (!hasSeen(role) && !autoFired.current.has(role)) handleStartTour(role);
+    }, 700);
+    return () => window.clearTimeout(t);
+  }, [authed, role, activeRole, hasSeen, autoFired, handleStartTour]);
+
   // Settings (Custom Values) is Manager-only — redirect away if role changes while on it
   // (e.g. switching to Floor View) or if it's somehow reached otherwise.
   useEffect(() => {
@@ -79,10 +110,13 @@ export default function App() {
   }, []);
 
   // Every sign-in lands on the Dashboard, regardless of where the last session left off.
+  // Reset the onboarding "seen" state so the walkthrough auto-starts on every sign-in
+  // (this is a demo prototype — sign-out → sign-in should replay it too).
   const handleSignIn = useCallback(() => {
+    resetOnboarding();
     setNav("dashboard");
     setAuthed(true);
-  }, []);
+  }, [resetOnboarding]);
 
   // Fade the app out before returning to the login page (mirrors the sign-in transition).
   const handleLogout = useCallback(() => {
@@ -427,14 +461,14 @@ export default function App() {
         <div className={`flex h-screen bg-cream text-text overflow-hidden animate-fade-in transition-opacity duration-500 ${loggingOut ? "opacity-0" : "opacity-100"}`}>
           <Sidebar nav={nav} setNav={handleNav} floorView={isFloor} role={role} onLogout={handleLogout} />
           <div className="flex-1 flex flex-col overflow-hidden">
-            <TopBar nav={nav} role={role} setRole={setRole} onOpenRecord={handleOpenRecord} />
+            <TopBar nav={nav} role={role} setRole={setRole} onOpenRecord={handleOpenRecord} onStartTour={() => handleStartTour(role)} />
             {isFloor && <FloorBanner />}
             <div key={`${nav}:${navEpoch}`} className="flex-1 overflow-y-auto">
               {nav === "dashboard" && <Dashboard tags={tags} floorView={isFloor} onNavigateToLocator={handleNavigateToLocator} onOpenTag={handleOpenTagFromDashboard} />}
               {nav === "locator" && <StockLocator tags={tags} floorView={isFloor} role={role} openTagId={pendingTagId} onTagOpened={handleTagOpened} onUpdateTag={handleUpdateTag} onDeleteTags={handleDeleteTags} entryFilter={entryFilter} onClearEntryFilter={() => setEntryFilter(null)} salesOrders={salesOrders} onLinkSalesOrder={handleLinkSalesOrder} onOpenSo={handleOpenSoFromLocator} />}
               {nav === "tagentry" && <TagEntry tags={tags} setTags={setTags} floorView={isFloor} onViewInInventory={handleViewInInventory} />}
               {nav === "delivery" && <DeliverySlips tags={tags} setTags={setTags} onNavigateToLocator={handleNavigateToLocator} />}
-              {nav === "settings" && role === "manager" && <CustomValuesSettings />}
+              {nav === "settings" && role === "manager" && <CustomValuesSettings onStartTour={() => handleStartTour(role)} />}
               {nav === "avail" && role !== "floor" && (
                 <AvailableToSell
                   tags={tags}
@@ -514,6 +548,14 @@ export default function App() {
             </div>
           </div>
         </div>
+        {activeRole && (
+          <OnboardingTour
+            steps={tourStepsForRole(activeRole)}
+            isFloor={activeRole === "floor"}
+            onNavigate={setNav}
+            onClose={handleTourClose}
+          />
+        )}
         </ClientsProvider>
       </LookupsProvider>
     </RecentRecordsProvider>

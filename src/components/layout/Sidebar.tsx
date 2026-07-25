@@ -16,6 +16,13 @@ export type NavKey =
 interface NavItem { key: NavKey; icon: ReactNode; label: string; allowedRoles?: Role[]; }
 interface NavSection { label: string; items: NavItem[]; }
 
+// Onboarding-tour anchors on specific nav items (attribute only — does not affect gating).
+const NAV_ONBOARDING: Partial<Record<NavKey, string>> = {
+  delivery: "nav-delivery",
+  sales: "nav-sales",
+  approvals: "nav-approvals",
+};
+
 const sections: NavSection[] = [
   { label: "OVERVIEW", items: [
     { key: "dashboard", icon: <Home size={16} />, label: "Dashboard", allowedRoles: ["manager", "sales", "floor"] },
@@ -71,6 +78,7 @@ export function Sidebar({ nav, setNav, floorView, role, onLogout }: SidebarProps
                     return (
                       <div
                         key={item.key}
+                        data-onboarding={NAV_ONBOARDING[item.key]}
                         onClick={() => setNav(item.key)}
                         className={[
                           "relative flex items-center gap-2 py-2 px-2.5 rounded-md cursor-pointer mb-0.5",

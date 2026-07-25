@@ -157,7 +157,7 @@ export function Pulse({ tags, salesOrders, role, onNavigateToLocator, onNavigate
 
   return (
     <div className="p-6 bg-cream min-h-full">
-      <div className="max-w-[1600px] mx-auto">
+      <div className="max-w-[1600px] mx-auto" data-onboarding="pulse-page">
         <div className="mb-5 flex items-start justify-between gap-4">
           <div>
             <h1 className="text-[26px] font-bold text-ink leading-tight" style={{ fontFamily: "Montserrat, sans-serif" }}>
@@ -179,7 +179,7 @@ export function Pulse({ tags, salesOrders, role, onNavigateToLocator, onNavigate
         <div className="mb-5 border-b border-sage flex gap-1">
           <TabButton label="Analytics" active={tab === "analytics"} onClick={() => setTab("analytics")} />
           {canSeeReports && (
-            <TabButton label="Reports" active={tab === "reports"} onClick={() => setTab("reports")} />
+            <TabButton label="Reports" active={tab === "reports"} onClick={() => setTab("reports")} dataOnboarding="pulse-reports-tab" />
           )}
         </div>
 
@@ -193,10 +193,11 @@ export function Pulse({ tags, salesOrders, role, onNavigateToLocator, onNavigate
   );
 }
 
-function TabButton({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
+function TabButton({ label, active, onClick, dataOnboarding }: { label: string; active: boolean; onClick: () => void; dataOnboarding?: string }) {
   return (
     <button
       onClick={onClick}
+      data-onboarding={dataOnboarding}
       className={[
         "px-4 py-2 text-[13px] cursor-pointer border-0 bg-transparent -mb-px border-b-2",
         active ? "border-ink text-ink font-semibold" : "border-transparent text-text-sec hover:text-ink",
