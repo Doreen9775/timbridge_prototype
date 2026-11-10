@@ -1081,6 +1081,32 @@ A history of every commit (push) on `main`, in chronological order, with what wa
 **Files / 改动:** new `src/components/shared/OnboardingTour.tsx`, `src/hooks/useOnboarding.ts`, `src/lib/onboardingSteps.ts`; modified `src/App.tsx`, `src/components/layout/TopBar.tsx`, `src/components/layout/Sidebar.tsx`, `src/features/settings/CustomValuesSettings.tsx`, `src/features/dashboard/Dashboard.tsx`, `src/features/stock-locator/StockLocator.tsx`, `src/features/delivery-slips/DeliverySlips.tsx`, `src/features/pulse/Pulse.tsx`, `src/features/available-to-sell/AvailableToSell.tsx`, `src/features/sales-orders/SalesOrders.tsx`, `src/features/clients/Clients.tsx`, `src/features/approvals/MyApprovals.tsx`, `src/features/tag-entry/TagEntry.tsx`
 
 ---
+
+## 2026-11-10
+
+### `dcadbdd` · 15:18 · CLAUDE.md 与代码现状同步（仅文档）
+
+**🇨🇳 中文**
+- **只改文档，没有代码变更。** `CLAUDE.md` 还停留在最初四大功能的阶段，这次按当前代码逐项核对后更新。
+- **纠正过时内容**：React 18 → 19；Sales 角色不再是"没有 UI 入口"，而是 TopBar 上的 Manager / Sales / Floor 三向切换；`available-to-sell` 不再是空占位；"唯一的外部调用"改为准确说法（另有 Mapbox 公开 token `VITE_MAPBOX_TOKEN` 和 Maze 脚本）。
+- **新增权限矩阵**：各导航项对三种角色的可见性，以及功能内部的细分限制（建单仅 Sales、Stock Locator 编辑/删除仅 Manager、Pulse 报表区仅 Manager）。
+- **新增 Sales Order 生命周期说明**：Draft 不动标签；确认时统一走 `reserveLineItems`（含部分数量拆分子标签）；发货级联到 Shipped；可编辑范围由 `permissions.ts` 决定；折扣价计算共用 `pricing.ts`。
+- **补全状态存储**：`useSalesOrders`、`useApprovalRequests`（内存，刷新重置）；`useClients`（持久化，key `timbridge_clients_v2`，种子结构变化时需升版本号）；`useOnboarding`。
+- **补全功能清单与未建部分**：Purchase Orders、Production、Shipping / Trucking、Invoicing 仍是 `ComingSoon` 占位，`reports` 是空目录。
+- 另补：跨功能跳转机制、登录页是 mock、导览的 `data-onboarding` 锚点、共享 UI 组件清单、Sales Order 状态配色。
+
+**🇬🇧 English**
+- **Docs only — no code changes.** `CLAUDE.md` still described the original four-feature scaffold; it was re-checked against the code and updated.
+- **Corrected stale statements**: React 18 → 19; the Sales role is no longer "no UI entry point" but a three-way Manager / Sales / Floor toggle in the TopBar; `available-to-sell` is no longer an empty placeholder; the "only external call" claim now also names the public Mapbox token (`VITE_MAPBOX_TOKEN`) and the Maze snippet.
+- **Added a permission matrix**: nav visibility per role, plus finer in-feature gates (order creation is Sales-only, Stock Locator edit/delete is Manager-only, Pulse's report section is Manager-only).
+- **Documented the Sales Order lifecycle**: Drafts leave tags untouched; confirming reserves through `reserveLineItems` (including partial-qty child-tag splits); shipping cascades to Shipped; editability comes from `permissions.ts`; discount math is shared via `pricing.ts`.
+- **Completed the state-store list**: `useSalesOrders`, `useApprovalRequests` (in-memory, reset on reload); `useClients` (persisted, key `timbridge_clients_v2`, bump the suffix when the seed shape changes); `useOnboarding`.
+- **Completed the feature list and what is not built**: Purchase Orders, Production, Shipping / Trucking and Invoicing still render `ComingSoon`; `reports` is an empty folder.
+- Also added: cross-feature deep-link mechanism, the mock login gate, the tour's `data-onboarding` anchors, the shared UI primitives, and Sales Order status colors.
+
+**Files / 改动:** `CLAUDE.md`
+
+---
 ## Pending / 未来 (not yet built — 尚未开始)
 
 - **Approvals 里 Sales 视图看到的历史范围**（当前 MyApprovals 显示所有状态，Manager 只看 Pending；如果 Manager 需要审批历史查阅，加个 History tab）
