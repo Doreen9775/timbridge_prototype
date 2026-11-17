@@ -1,18 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, Legend } from "recharts";
-import { AlertTriangle, ArrowDown, ArrowUp, Download, Minus } from "lucide-react";
-import type { EntryFilter, Role, SalesOrder, SalesOrderFilter, Tag } from "@/lib/types";
-import { Button } from "@/components/shared/Button";
-
-// Brand palette mirrors Dashboard.tsx — recharts needs hex values, not Tailwind classes.
-const C = {
-  ink: "#1F1F1F",
-  coral: "#F0542B",
-  lime: "#AADB1E",
-  sage: "#B7CDC2",
-  textSec: "#6B7280",
-  textTer: "#9CA3AF",
-};
+import { AlertTriangle, ArrowDown, ArrowUp, Minus } from "lucide-react";
+import type { ApprovalRequest, EntryFilter, Role, SalesOrder, SalesOrderFilter, Tag } from "@/lib/types";
+import { ACTIVE_STATUSES, RANGE_OPTIONS, buildOrderMetrics, inRange, isoToMs, msToIso, resolveRange, startOfTodayMs, type DateRange, type RangeKey } from "@/lib/analytics";
+import { ChartExportButton } from "./parts";
+import { C, csvCell, csvFilename, downloadCsv } from "./pulseUtils";
+import { SalesTab } from "./SalesTab";
+import { OverviewTab } from "./OverviewTab";
+import { ReportsTab } from "./ReportsTab";
+import { InventoryExtras } from "./InventoryExtras";
 
 const MONTHS_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
@@ -85,28 +81,6 @@ function shortRelative(ms: number, nowMs: number): string {
   return `${d}d ago`;
 }
 
-// CSV cell escaper — mirrors the StockLocator csvCell to keep export behavior consistent
-// across features (RFC 4180 quoting, doubled quotes for embedded ").
-const csvCell = (v: string | number): string => `"${String(v).replace(/"/g, '""')}"`;
-
-function csvFilename(prefix: string): string {
-  const d = new Date();
-  const p = (n: number) => String(n).padStart(2, "0");
-  return `timbridge_${prefix}_${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}_${p(d.getHours())}-${p(d.getMinutes())}.csv`;
-}
-
-function downloadCsv(csv: string, filename: string) {
-  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
-}
-
 // ISO YYYY-MM-DD → ISO week-start (Monday of that week) as YYYY-MM-DD.
 function isoWeekStart(iso: string): string {
   const [y, m, d] = iso.split("-").map(Number);
@@ -130,21 +104,40 @@ function shortMonth(key: string): string {
 interface PulseProps {
   tags: Tag[];
   salesOrders: SalesOrder[];
+  approvalRequests: ApprovalRequest[];
   role: Role;
-  // Drill-through: Analytics charts navigate to a pre-filtered Stock Locator / Sales Orders.
+  // Drill-through: every chart navigates to the operational page behind its numbers.
   onNavigateToLocator?: (filter: EntryFilter) => void;
   onNavigateToSales?: (filter: SalesOrderFilter) => void;
+  onOpenClient?: (clientId: string) => void;
+  onOpenSo?: (soId: string) => void;
+  onOpenApprovals?: () => void;
 }
 
-type TabKey = "analytics" | "reports";
+// Tabs are organised by the question being asked, not by chart-vs-table.
+type TabKey = "overview" | "inventory" | "sales" | "reports";
 
-export function Pulse({ tags, salesOrders, role, onNavigateToLocator, onNavigateToSales }: PulseProps) {
-  const canSeeReports = role === "manager";
-  const [tab, setTab] = useState<TabKey>("analytics");
+const TAB_BLURB: Record<TabKey, string> = {
+  overview: "How the business is doing, and what needs attention today.",
+  inventory: "Stock flow, turnover, aging, value and receiving quality.",
+  sales: "What sold, who bought it, and where orders are held up.",
+  reports: "Exportable reports for your role — orders, clients, stock and approvals.",
+};
+
+export function Pulse({ tags, salesOrders, approvalRequests, role, onNavigateToLocator, onNavigateToSales, onOpenClient, onOpenSo, onOpenApprovals }: PulseProps) {
+  // Reports are role-aware (see ReportsTab): Manager and Sales each get their own library.
+  const canSeeReports = role !== "floor";
+  const [tab, setTab] = useState<TabKey>("overview");
+
+  // Global period — one picker drives every period-based figure on the page. Cards that
+  // show a point-in-time figure (aging, pending queues) are labelled "As of today".
+  const [rangeKey, setRangeKey] = useState<RangeKey>("30d");
+  const todayMs = useMemo(() => startOfTodayMs(), []);
+  const range = useMemo(() => resolveRange(rangeKey, todayMs), [rangeKey, todayMs]);
 
   // Defense-in-depth: if Sales somehow lands with tab=reports (e.g. role toggle mid-view), snap back.
   useEffect(() => {
-    if (!canSeeReports && tab === "reports") setTab("analytics");
+    if (!canSeeReports && tab === "reports") setTab("overview");
   }, [canSeeReports, tab]);
 
   // Freshness label for the active tab — computed from the freshest underlying record
@@ -152,7 +145,7 @@ export function Pulse({ tags, salesOrders, role, onNavigateToLocator, onNavigate
   // clock (see helper block above). `nowMs` is captured per-mount via useMemo — matching
   // AnalyticsTab's todayMs convention — since Pulse remounts on each nav visit.
   const nowMs = useMemo(() => new Date().getTime(), []);
-  const freshestMs = tab === "analytics" ? latestTagDateMs(tags) : latestHistoryMs(tags);
+  const freshestMs = tab === "inventory" ? latestTagDateMs(tags) : latestHistoryMs(tags);
   const updatedLabel = freshestMs === null ? null : `Updated ${shortRelative(freshestMs, nowMs)}`;
 
   return (
@@ -163,31 +156,77 @@ export function Pulse({ tags, salesOrders, role, onNavigateToLocator, onNavigate
             <h1 className="text-[26px] font-bold text-ink leading-tight" style={{ fontFamily: "Montserrat, sans-serif" }}>
               Pulse
             </h1>
-            <p className="text-sm text-text-sec mt-1">
-              {tab === "analytics"
-                ? "Inventory flow, species velocity, and yard aging."
-                : "Shortage & asset breakdown by species and grade."}
-            </p>
+            <p className="text-sm text-text-sec mt-1">{TAB_BLURB[tab]}</p>
           </div>
-          {updatedLabel && (
-            <span className="text-xs text-text-ter whitespace-nowrap mt-1" title="Freshness of the data feeding this tab">
-              {updatedLabel}
-            </span>
-          )}
+          <div className="flex flex-col items-end gap-1.5">
+            {(
+              <div className="flex bg-white border border-sage rounded-full p-[3px] gap-[2px]" role="group" aria-label="Reporting period" data-onboarding="pulse-period">
+                {RANGE_OPTIONS.map((o) => (
+                  <button
+                    key={o.key}
+                    type="button"
+                    onClick={() => setRangeKey(o.key)}
+                    title={o.label}
+                    aria-pressed={rangeKey === o.key}
+                    className={[
+                      "px-3 py-[5px] rounded-full border-0 cursor-pointer text-xs font-medium",
+                      rangeKey === o.key ? "bg-ink text-white" : "bg-transparent text-text-sec hover:text-text",
+                    ].join(" ")}
+                  >
+                    {o.short}
+                  </button>
+                ))}
+              </div>
+            )}
+            {updatedLabel && (
+              <span className="text-xs text-text-ter whitespace-nowrap" title="Freshness of the data feeding this tab">
+                {range.label} · {updatedLabel}
+              </span>
+            )}
+          </div>
         </div>
 
         <div className="mb-5 border-b border-sage flex gap-1">
-          <TabButton label="Analytics" active={tab === "analytics"} onClick={() => setTab("analytics")} />
+          <TabButton label="Overview" active={tab === "overview"} onClick={() => setTab("overview")} />
+          <TabButton label="Inventory" active={tab === "inventory"} onClick={() => setTab("inventory")} />
+          <TabButton label="Sales" active={tab === "sales"} onClick={() => setTab("sales")} dataOnboarding="pulse-sales-tab" />
           {canSeeReports && (
             <TabButton label="Reports" active={tab === "reports"} onClick={() => setTab("reports")} dataOnboarding="pulse-reports-tab" />
           )}
         </div>
 
-        {tab === "analytics" ? (
-          <AnalyticsTab tags={tags} onNavigateToLocator={onNavigateToLocator} onNavigateToSales={onNavigateToSales} />
-        ) : (
-          <ReportsTab tags={tags} salesOrders={salesOrders} />
+        {tab === "overview" && (
+          <OverviewTab
+            tags={tags}
+            salesOrders={salesOrders}
+            approvalRequests={approvalRequests}
+            role={role}
+            range={range}
+            todayMs={todayMs}
+            onNavigateToLocator={onNavigateToLocator}
+            onNavigateToSales={onNavigateToSales}
+            onOpenApprovals={onOpenApprovals}
+            onOpenTab={setTab}
+          />
         )}
+        {tab === "inventory" && (
+          <AnalyticsTab tags={tags} salesOrders={salesOrders} role={role} range={range} onNavigateToLocator={onNavigateToLocator} onNavigateToSales={onNavigateToSales} />
+        )}
+        {tab === "sales" && (
+          <SalesTab
+            tags={tags}
+            salesOrders={salesOrders}
+            approvalRequests={approvalRequests}
+            role={role}
+            range={range}
+            todayMs={todayMs}
+            onNavigateToSales={onNavigateToSales}
+            onOpenClient={onOpenClient}
+            onOpenSo={onOpenSo}
+            onOpenApprovals={onOpenApprovals}
+          />
+        )}
+        {tab === "reports" && canSeeReports && <ReportsTab tags={tags} salesOrders={salesOrders} approvalRequests={approvalRequests} role={role} range={range} todayMs={todayMs} />}
       </div>
     </div>
   );
@@ -210,39 +249,16 @@ function TabButton({ label, active, onClick, dataOnboarding }: { label: string; 
 
 // ── Analytics tab ─────────────────────────────────────────────────────────────
 
-// Compact per-chart CSV export affordance — lives in each chart's own header (not a
-// page-level export). Disabled + tooltip when the chart has no data, mirroring the
-// Reports tab's disabled Export button.
-function ChartExportButton({ onClick, disabled, ariaLabel }: { onClick: () => void; disabled: boolean; ariaLabel: string }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      title={disabled ? "No data to export" : "Export CSV"}
-      aria-label={ariaLabel}
-      className={[
-        "flex items-center justify-center w-7 h-7 rounded-md border bg-white transition-colors",
-        disabled
-          ? "border-sage/50 text-text-ter opacity-50 cursor-not-allowed"
-          : "border-sage text-text-sec hover:border-coral hover:text-coral cursor-pointer",
-      ].join(" ")}
-    >
-      <Download size={14} />
-    </button>
-  );
-}
-
 // Period-over-period delta badge for the FBM chart. `delta` is null when there's no
 // prior bucket to compare against; a flat (rounds-to-0) delta also renders the muted
 // dash — never a misleading "0%". Up = lime (positive highlight), down = coral (matches
 // the shortage badge), flat/no-prior = muted gray.
 function TrendDeltaBadge({ delta, period }: { delta: { pct: number; dir: "up" | "down" | "flat" } | null; period: "week" | "month" }) {
-  const suffix = period === "week" ? "vs last week" : "vs last month";
+  const suffix = period === "week" ? "last full week vs prior" : "last full month vs prior";
   if (!delta || delta.dir === "flat") {
     return (
       <span
-        title={delta ? `No change ${suffix}` : `No prior ${period} to compare`}
+        title={delta ? `No change · ${suffix}` : `Not enough complete ${period}s to compare`}
         className="inline-flex items-center gap-0.5 text-[11px] font-semibold text-text-ter bg-[#F3F4F6] rounded-full px-2 py-0.5"
       >
         <Minus size={11} />
@@ -258,17 +274,23 @@ function TrendDeltaBadge({ delta, period }: { delta: { pct: number; dir: "up" | 
       ].join(" ")}
     >
       {up ? <ArrowUp size={11} /> : <ArrowDown size={11} />}
-      {up ? "+" : ""}{delta.pct}% {suffix}
+      {up ? "+" : ""}{delta.pct}% · {suffix}
     </span>
   );
 }
 
 function AnalyticsTab({
   tags,
+  salesOrders,
+  role,
+  range,
   onNavigateToLocator,
   onNavigateToSales,
 }: {
   tags: Tag[];
+  salesOrders: SalesOrder[];
+  role: Role;
+  range: DateRange;
   onNavigateToLocator?: (filter: EntryFilter) => void;
   onNavigateToSales?: (filter: SalesOrderFilter) => void;
 }) {
@@ -281,49 +303,68 @@ function AnalyticsTab({
   const trendData = useMemo(() => {
     const buckets = new Map<string, number>();
     for (const t of tags) {
+      if (!inRange(isoToMs(t.date), range)) continue; // global period picker
       const key = period === "week" ? isoWeekStart(t.date) : t.date.slice(0, 7);
       buckets.set(key, (buckets.get(key) ?? 0) + t.fbm);
     }
     return Array.from(buckets.entries())
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([k, v]) => ({ key: k, label: period === "week" ? shortDay(k) : shortMonth(k), fbm: v }));
-  }, [tags, period]);
+  }, [tags, period, range]);
 
-  // Period-over-period delta: latest bucket vs the immediately prior one. Null when
-  // there's no prior bucket (or its FBM is 0) so the badge shows the muted dash instead
-  // of a misleading 0%. Direction is decided on the rounded %, so a sub-0.5% change
-  // reads as flat rather than "+0%". Recomputes with the Weekly/Monthly toggle.
+  // Period-over-period delta: the last *complete* bucket vs the one before it. The
+  // bucket containing today is still filling up, so comparing it would always read as a
+  // collapse early in the week/month. Null when there aren't two complete buckets (or the
+  // earlier one is 0) so the badge shows the muted dash instead of a misleading 0%.
   const trendDelta = useMemo<{ pct: number; dir: "up" | "down" | "flat" } | null>(() => {
-    if (trendData.length < 2) return null;
-    const latest = trendData[trendData.length - 1].fbm;
-    const prior = trendData[trendData.length - 2].fbm;
+    const todayIso = msToIso(todayMs);
+    const currentKey = period === "week" ? isoWeekStart(todayIso) : todayIso.slice(0, 7);
+    const complete = trendData.filter((d) => d.key !== currentKey);
+    if (complete.length < 2) return null;
+    const latest = complete[complete.length - 1].fbm;
+    const prior = complete[complete.length - 2].fbm;
     if (prior <= 0) return null;
     const pct = Math.round(((latest - prior) / prior) * 100);
     return { pct, dir: pct > 0 ? "up" : pct < 0 ? "down" : "flat" };
-  }, [trendData]);
+  }, [trendData, period, todayMs]);
 
-  // Chart 2: Reserved + Shipped FBM per species (grouped bars). Only include species
-  // that show up in the current data to keep the chart readable. `species` keeps the
-  // full (un-shortened) name so a bar click can filter Sales Orders by it.
+  // Chart 2: FBM per species, read from Sales Orders (not tag status) so it agrees with
+  // the Sales tab: "reserved" = on confirmed orders still to ship (live), "shipped" =
+  // shipped within the period. Order ids are kept per bar for the drill-through.
   const velocityData = useMemo(() => {
-    const bySpecies = new Map<string, { reserved: number; shipped: number }>();
-    for (const t of tags) {
-      const g = bySpecies.get(t.species) ?? { reserved: 0, shipped: 0 };
-      if (t.status === "Reserved") g.reserved += t.fbm;
-      if (t.status === "Shipped") g.shipped += t.fbm;
-      bySpecies.set(t.species, g);
+    const tagById = new Map(tags.map((t) => [t.id, t]));
+    const bySpecies = new Map<string, { reserved: number; shipped: number; reservedIds: Set<string>; shippedIds: Set<string> }>();
+    for (const m of buildOrderMetrics(salesOrders, tags)) {
+      const active = ACTIVE_STATUSES.includes(m.so.status);
+      const shippedInPeriod = m.so.status === "Shipped" && inRange(m.shippedMs ?? m.orderMs, range);
+      if (!active && !shippedInPeriod) continue;
+      for (const li of m.so.lineItems) {
+        const t = tagById.get(li.tagId);
+        if (!t) continue;
+        const g = bySpecies.get(t.species) ?? { reserved: 0, shipped: 0, reservedIds: new Set<string>(), shippedIds: new Set<string>() };
+        const fbm = ((t.thick * t.width * t.length) / 12) * li.qty;
+        if (active) {
+          g.reserved += fbm;
+          g.reservedIds.add(m.so.id);
+        } else {
+          g.shipped += fbm;
+          g.shippedIds.add(m.so.id);
+        }
+        bySpecies.set(t.species, g);
+      }
     }
     return Array.from(bySpecies.entries())
       .map(([species, v]) => ({
         species,
         // W.R. Cedar short label to keep the axis readable, matches Dashboard's convention.
         name: species === "Western Red Cedar" ? "W.R. Cedar" : species,
-        reserved: v.reserved,
-        shipped: v.shipped,
+        reserved: Math.round(v.reserved),
+        shipped: Math.round(v.shipped),
+        reservedIds: [...v.reservedIds],
+        shippedIds: [...v.shippedIds],
       }))
-      .filter((d) => d.reserved > 0 || d.shipped > 0)
       .sort((a, b) => b.reserved + b.shipped - (a.reserved + a.shipped));
-  }, [tags]);
+  }, [tags, salesOrders, range]);
 
   // Chart 3: Available-only tags bucketed by days-in-yard. `min`/`max` are kept so a bar
   // click can re-resolve the exact Available tag IDs in that bucket.
@@ -367,12 +408,14 @@ function AnalyticsTab({
     onNavigateToLocator?.({ dates });
   };
 
-  // Chart 2: Reserved bar → Sales Orders (species + Open/Picked); Shipped bar → (species + Shipped).
+  // Chart 2: bar → Sales Orders gated to exactly the orders behind it.
   const handleVelocityClick = (species: string | undefined, kind: "reserved" | "shipped") => {
-    if (!species) return;
+    const row = velocityData.find((d) => d.species === species);
+    const ids = row ? (kind === "reserved" ? row.reservedIds : row.shippedIds) : [];
+    if (!species || ids.length === 0) return;
     onNavigateToSales?.({
-      species: [species],
-      status: kind === "reserved" ? ["Open", "Picked"] : ["Shipped"],
+      soIds: ids,
+      filterLabel: kind === "reserved" ? `${species} · ${ids.length} order${ids.length === 1 ? "" : "s"} still to ship` : `${species} · ${ids.length} order${ids.length === 1 ? "" : "s"} shipped · ${range.label.toLowerCase()}`,
     });
   };
 
@@ -412,7 +455,7 @@ function AnalyticsTab({
   // Chart 2: one row per species — full species name + Reserved/Shipped FBM.
   const handleExportVelocity = () => {
     const lines = [
-      ["Species", "Reserved FBM", "Shipped FBM"].map(csvCell).join(","),
+      ["Species", "On Order FBM", "Shipped FBM"].map(csvCell).join(","),
       ...velocityData.map((d) => [d.species, d.reserved, d.shipped].map(csvCell).join(",")),
     ];
     downloadCsv(lines.join("\r\n"), csvFilename("species_velocity"));
@@ -466,7 +509,7 @@ function AnalyticsTab({
           </div>
         </div>
         {trendData.length === 0 ? (
-          <div className="text-[13px] text-text-ter py-10 text-center">No entry data yet.</div>
+          <div className="text-[13px] text-text-ter py-10 text-center">No stock entered in this period.</div>
         ) : (
           <ResponsiveContainer width="100%" height={220}>
             <BarChart data={trendData} barCategoryGap="30%" accessibilityLayer={false}>
@@ -490,11 +533,14 @@ function AnalyticsTab({
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         <div className="bg-white rounded-[10px] pt-5 px-5 pb-3 shadow-[0_1px_4px_rgba(0,0,0,0.07)]">
           <div className="flex items-center justify-between mb-4">
-            <div className="text-[13px] font-display font-semibold text-text">Species sales velocity (Reserved + Shipped FBM)</div>
+            <div>
+              <div className="text-[13px] font-display font-semibold text-text">Species sales velocity</div>
+              <div className="text-[11px] text-text-ter mt-0.5">FBM on order now vs shipped · {range.label.toLowerCase()} · from Sales Orders</div>
+            </div>
             <ChartExportButton onClick={handleExportVelocity} disabled={velocityData.length === 0} ariaLabel="Export species velocity as CSV" />
           </div>
           {velocityData.length === 0 ? (
-            <div className="text-[13px] text-text-ter py-10 text-center">No sales activity yet.</div>
+            <div className="text-[13px] text-text-ter py-10 text-center">No orders on the books or shipped in this period.</div>
           ) : (
             <ResponsiveContainer width="100%" height={220}>
               <BarChart data={velocityData} barCategoryGap="25%" accessibilityLayer={false}>
@@ -504,7 +550,7 @@ function AnalyticsTab({
                 <Legend wrapperStyle={{ fontSize: 11 }} iconType="square" />
                 <Bar
                   dataKey="reserved"
-                  name="Reserved"
+                  name="On order (Open + Picked)"
                   fill={C.lime}
                   radius={[3, 3, 0, 0]}
                   cursor="pointer"
@@ -513,7 +559,7 @@ function AnalyticsTab({
                 />
                 <Bar
                   dataKey="shipped"
-                  name="Shipped"
+                  name="Shipped in period"
                   fill={C.ink}
                   radius={[3, 3, 0, 0]}
                   cursor="pointer"
@@ -557,171 +603,8 @@ function AnalyticsTab({
           </ResponsiveContainer>
         </div>
       </div>
-    </div>
-  );
-}
 
-// ── Reports tab ───────────────────────────────────────────────────────────────
-
-interface ShortageRow {
-  species: string;
-  grade: string;
-  physicalFbm: number;
-  reservedFbm: number;
-  availableFbm: number;
-  availableCount: number;
-  hasOpenDemand: boolean;
-  shortage: boolean;
-}
-
-function ReportsTab({ tags, salesOrders }: { tags: Tag[]; salesOrders: SalesOrder[] }) {
-  const rows: ShortageRow[] = useMemo(() => {
-    // Group by species+grade, aggregating FBM per lifecycle state. Shipped is excluded
-    // from Physical (already out the gate); Pending/Received count toward Physical since
-    // they're on-yard even if not yet quotable.
-    const groups = new Map<string, ShortageRow>();
-    for (const t of tags) {
-      const key = `${t.species}|${t.grade}`;
-      const g = groups.get(key) ?? {
-        species: t.species,
-        grade: t.grade,
-        physicalFbm: 0,
-        reservedFbm: 0,
-        availableFbm: 0,
-        availableCount: 0,
-        hasOpenDemand: false,
-        shortage: false,
-      };
-      if (t.status !== "Shipped") g.physicalFbm += t.fbm;
-      if (t.status === "Reserved") g.reservedFbm += t.fbm;
-      if (t.status === "Available") {
-        g.availableFbm += t.fbm;
-        g.availableCount += 1;
-      }
-      groups.set(key, g);
-    }
-
-    // Cross-reference Open SO line items: does any Open SO reference a tag in this group?
-    const openSoTagIds = new Set(
-      salesOrders.filter((so) => so.status === "Open").flatMap((so) => so.lineItems.map((li) => li.tagId)),
-    );
-    const tagById = new Map(tags.map((t) => [t.id, t]));
-    for (const tagId of openSoTagIds) {
-      const t = tagById.get(tagId);
-      if (!t) continue;
-      const key = `${t.species}|${t.grade}`;
-      const g = groups.get(key);
-      if (g) g.hasOpenDemand = true;
-    }
-
-    return Array.from(groups.values())
-      .map((g) => ({ ...g, shortage: g.hasOpenDemand && g.availableFbm === 0 }))
-      .sort((a, b) => {
-        // Shortages float to the top, then alphabetical by species then grade.
-        if (a.shortage !== b.shortage) return a.shortage ? -1 : 1;
-        return a.species.localeCompare(b.species) || a.grade.localeCompare(b.grade);
-      });
-  }, [tags, salesOrders]);
-
-  const shortageCount = rows.filter((r) => r.shortage).length;
-
-  const handleExport = () => {
-    const HEADERS = ["Species", "Grade", "Physical FBM", "Reserved FBM", "Available FBM", "Available Count", "Open Demand", "Shortage"];
-    const lines = [
-      HEADERS.map(csvCell).join(","),
-      ...rows.map((r) =>
-        [r.species, r.grade, r.physicalFbm, r.reservedFbm, r.availableFbm, r.availableCount, r.hasOpenDemand ? "Yes" : "No", r.shortage ? "Yes" : "No"]
-          .map(csvCell)
-          .join(","),
-      ),
-    ];
-    downloadCsv(lines.join("\r\n"), csvFilename("shortage_report"));
-  };
-
-  return (
-    <div className="flex flex-col gap-4">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="text-[13px] font-display font-semibold text-text">Shortage & Asset — by Species and Grade</div>
-          {shortageCount > 0 && (
-            <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-coral bg-coral/10 rounded-full px-2 py-0.5">
-              <AlertTriangle size={11} />
-              {shortageCount} shortage{shortageCount === 1 ? "" : "s"}
-            </span>
-          )}
-        </div>
-        <Button variant="primary" onClick={handleExport} leftIcon={<Download size={14} />} disabled={rows.length === 0}>
-          Export CSV
-        </Button>
-      </div>
-
-      <div className="bg-white rounded-[10px] overflow-hidden shadow-[0_1px_4px_rgba(0,0,0,0.07)]">
-        <div className="overflow-x-auto">
-          <table className="w-full border-collapse text-[13px]">
-            <thead>
-              <tr className="bg-[#F9FAFB] border-b border-sage">
-                {["Species", "Grade", "Physical FBM", "Reserved FBM", "Available FBM", "Available Count", "Open Demand", ""].map((h, i) => (
-                  <th
-                    key={i}
-                    className={`px-3.5 py-2.5 text-text-sec font-medium whitespace-nowrap text-xs ${
-                      i >= 2 && i <= 5 ? "text-right" : "text-left"
-                    }`}
-                  >
-                    {h}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((r, i) => (
-                <tr
-                  key={`${r.species}|${r.grade}`}
-                  className={[
-                    "border-b border-[#F3F4F6]",
-                    r.shortage
-                      ? "bg-coral/[0.06] hover:bg-coral/[0.12]"
-                      : `${i % 2 === 0 ? "bg-transparent" : "bg-[#FAFAFA]"} hover:bg-sage/15`,
-                  ].join(" ")}
-                >
-                  <td className={`px-3.5 py-[11px] whitespace-nowrap ${r.shortage ? "text-coral font-semibold" : "text-ink font-semibold"}`}>
-                    {r.species}
-                  </td>
-                  <td className={`px-3.5 py-[11px] whitespace-nowrap ${r.shortage ? "text-coral" : "text-text"}`}>{r.grade}</td>
-                  <td className="px-3.5 py-[11px] text-right tabular-nums">{r.physicalFbm.toLocaleString()}</td>
-                  <td className="px-3.5 py-[11px] text-right tabular-nums text-text-sec">{r.reservedFbm.toLocaleString()}</td>
-                  <td className={`px-3.5 py-[11px] text-right tabular-nums ${r.availableFbm === 0 ? "text-coral font-semibold" : "text-ink font-semibold"}`}>
-                    {r.availableFbm.toLocaleString()}
-                  </td>
-                  <td className="px-3.5 py-[11px] text-right tabular-nums text-text-sec">{r.availableCount}</td>
-                  <td className="px-3.5 py-[11px]">
-                    {r.hasOpenDemand ? (
-                      <span className="text-[11px] font-medium text-text bg-sage/40 rounded-full px-2 py-0.5">Yes</span>
-                    ) : (
-                      <span className="text-[11px] text-text-ter">—</span>
-                    )}
-                  </td>
-                  <td className="px-3.5 py-[11px] text-right">
-                    {r.shortage && (
-                      <span title="Open demand with no Available inventory" className="inline-flex items-center gap-1 text-[11px] font-semibold text-coral">
-                        <AlertTriangle size={12} />Shortage
-                      </span>
-                    )}
-                  </td>
-                </tr>
-              ))}
-              {rows.length === 0 && (
-                <tr>
-                  <td colSpan={8} className="p-10 text-center text-text-sec">No inventory to report.</td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      <div className="text-[11px] text-text-ter">
-        <span className="font-semibold">Shortage rule:</span> flagged rows have at least one Open Sales Order line item referencing this species+grade group but zero Available FBM to satisfy new demand.
-      </div>
+      <InventoryExtras tags={tags} salesOrders={salesOrders} role={role} range={range} todayMs={todayMs} onNavigateToLocator={onNavigateToLocator} />
     </div>
   );
 }

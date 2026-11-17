@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { isLowStock } from "@/lib/analytics";
 import { Search, Scan, X, Download, Maximize2, Minimize2, Pencil, Trash2 } from "lucide-react";
 import type { Tag, Species, Grade, MoistureState, Milling, TagStatus, EntryFilter, Role, SalesOrder } from "@/lib/types";
 import { StatusBadge } from "@/components/shared/StatusBadge";
@@ -190,9 +191,11 @@ export function StockLocator({ tags, floorView, role, openTagId, onTagOpened, on
           (stateF.length === 0 || stateF.includes(t.state)) &&
           (millingF.length === 0 || millingF.includes(t.milling)) &&
           (yardF.length === 0 || yardF.includes(t.yard)) &&
-          (!lowQty || t.qty < 50)
+          (!lowQty || isLowStock(t))
         );
-      }),
+      })
+      // Newest first (entry date, then tag number) regardless of the order tags were appended in.
+      .sort((a, b) => b.date.localeCompare(a.date) || b.id.localeCompare(a.id)),
     [tags, search, dates, statusF, speciesF, gradeF, stateF, millingF, yardF, lowQty, idSet],
   );
 
@@ -203,15 +206,23 @@ export function StockLocator({ tags, floorView, role, openTagId, onTagOpened, on
   useEffect(() => { if (page > totalPages) setPage(totalPages); }, [page, totalPages]);
   const pageRows = usePagedSlice(filtered, page, pageSize);
 
-  const totals = useMemo(
-    () => ({
-      total: filtered.length,
+  // Summary cards describe stock physically in the yard: Shipped tags stay listed in the
+  // table as history but are left out of the on-hand count and FBM.
+  const totals = useMemo(() => {
+    const onHand = filtered.filter((t) => t.status !== "Shipped");
+    return {
+      total: onHand.length,
       available: filtered.filter((t) => t.status === "Available").length,
-      fbm: filtered.reduce((s, t) => s + t.fbm, 0),
+      fbm: onHand.reduce((s, t) => s + t.fbm, 0),
       reserved: filtered.filter((t) => t.status === "Reserved").length,
-    }),
-    [filtered],
-  );
+    };
+  }, [filtered]);
+
+  // Wall-clock time this view loaded (the data is in-memory, so that is when it was read).
+  const [syncedAt] = useState(() => {
+    const d = new Date();
+    return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+  });
 
   const selTag = selected ? tags.find((t) => t.id === selected) ?? null : null;
 
@@ -338,9 +349,9 @@ export function StockLocator({ tags, floorView, role, openTagId, onTagOpened, on
   }
 
   const summaryCards: [string, ReactNode][] = [
-    ["Total Tags", totals.total],
+    ["Tags On Hand", totals.total],
     ["Available", totals.available],
-    ["Total FBM", `${totals.fbm.toLocaleString()} fbm`],
+    ["On-hand FBM", `${totals.fbm.toLocaleString()} fbm`],
     ["Reserved", totals.reserved],
   ];
   // Colored summary cards (reference layout, brand colors): white + sage + coral + lime.
@@ -386,7 +397,7 @@ export function StockLocator({ tags, floorView, role, openTagId, onTagOpened, on
             Delete{checkedIds.size > 0 ? ` (${checkedIds.size})` : ""}
           </Button>
         )}
-        <span className="text-xs text-text-ter whitespace-nowrap">Last synced 14:32</span>
+        <span className="text-xs text-text-ter whitespace-nowrap">Last synced {syncedAt}</span>
       </div>
 
       {/* Wrapper carries the onboarding-tour anchor for the filter bar. */}
@@ -477,7 +488,7 @@ export function StockLocator({ tags, floorView, role, openTagId, onTagOpened, on
                   <td className="px-3.5 py-[11px]">{t.species}</td>
                   <td className="px-3.5 py-[11px]">{t.grade}</td>
                   <td className="px-3.5 py-[11px] font-mono whitespace-nowrap">{t.thick}×{t.width} × {t.length}'</td>
-                  <td className={`px-3.5 py-[11px] ${t.qty < 50 ? "text-coral font-semibold" : "text-text"}`}>{t.qty}</td>
+                  <td className={`px-3.5 py-[11px] ${isLowStock(t) ? "text-coral font-semibold" : "text-text"}`}>{t.qty}</td>
                   <td className="px-3.5 py-[11px] text-text-sec">{t.fbm.toLocaleString()}</td>
                   <td className="px-3.5 py-[11px]">
                     <span className="bg-sage/40 text-ink font-mono text-[11px] px-2 py-[3px] rounded-[5px]">{t.yard} · {t.section} · {t.rack}</span>

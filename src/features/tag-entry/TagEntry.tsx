@@ -69,11 +69,17 @@ export function TagEntry({ tags, setTags, floorView, onViewInInventory }: TagEnt
 
   const handleSave = () => {
     const newId = `T-2026-${String(tags.length + 100 + 1).padStart(4, "0")}`;
+    // Stamp with the real clock (the seed data rolls with today's date — see mock-data.ts).
+    const now = new Date();
+    const p2 = (n: number) => String(n).padStart(2, "0");
+    const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    const todayIso = `${now.getFullYear()}-${p2(now.getMonth() + 1)}-${p2(now.getDate())}`;
+    const nowStamp = `${MONTHS[now.getMonth()]} ${p2(now.getDate())} ${now.getFullYear()} ${p2(now.getHours())}:${p2(now.getMinutes())}`;
     const newTag: Tag = {
       id: newId, species, grade, thick, width, length, qty, fbm, state: state_, milling,
-      yard, section, rack, bin, status: "Available", date: "2026-06-04", updated: "just now",
+      yard, section, rack, bin, status: "Available", date: todayIso, updated: "just now",
       parentLog: parentLog || null,
-      history: [{ e: "Tag created via Tag Entry", t: "Jun 04 2026 14:32", w: "DW" }],
+      history: [{ e: "Tag created via Tag Entry", t: nowStamp, w: "DW" }],
     };
     setTags([...tags, newTag]);
     // Persist any newly-typed lookup value so it's a first-class option next time.

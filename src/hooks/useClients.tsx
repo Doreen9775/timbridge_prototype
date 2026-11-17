@@ -18,7 +18,7 @@ function nowStamp(): string {
 // stuck with stale records (e.g. missing territory/contact). Bump this suffix whenever the
 // seed shape changes so every device re-seeds from the current INITIAL_CLIENTS. Prototype
 // tradeoff: bumping drops clients created via "New Client" on that device.
-const STORAGE_KEY = "timbridge_clients_v2";
+const STORAGE_KEY = "timbridge_clients_v3";
 
 function load(): Client[] {
   try {

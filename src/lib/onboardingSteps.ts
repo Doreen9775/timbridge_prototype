@@ -64,7 +64,7 @@ export const managerTourSteps: TourStep[] = [
     nav: "pulse",
     placement: "bottom",
     title: "Track your pulse",
-    body: "Analytics on inventory flow, species velocity and yard aging — plus a Reports tab that flags shortages before you run out.",
+    body: "One period picker drives every figure: an Overview of sales and what needs attention, Inventory and Sales detail — plus a Reports tab that flags shortages before you run out.",
   },
 ];
 

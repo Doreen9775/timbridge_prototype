@@ -42,14 +42,14 @@ There are **no tests** — verify changes with `npx tsc -b --noEmit` plus a visu
 | Approvals | ✓ review queue (`ApprovalQueue`) | ✓ own requests (`MyApprovals`) | — |
 | Delivery Slips, Settings | ✓ | — | — |
 
-Finer gates inside features: **creating orders is Sales-only** (the selection checkboxes and order panel in Available to Sell and Client Profile render only for Sales; Manager browses read-only), editing and deleting tags in Stock Locator is Manager-only, and Pulse's report section is Manager-only (`canSeeReports`).
+Finer gates inside features: **creating orders is Sales-only** (the selection checkboxes and order panel in Available to Sell and Client Profile render only for Sales; Manager browses read-only), editing and deleting tags in Stock Locator is Manager-only, and Pulse's Reports tab is role-aware — Sales gets its own library with list prices only; anything built on cost is Manager-only.
 
 **State stores (React only, no backend):**
 - In-memory, seeded from `src/lib/mock-data.ts`, threaded via props from `App`, **reset on reload**: `useTags` (the Tag table), `useSalesOrders`, `useApprovalRequests`.
 - Context providers at the App root, **persisted to `localStorage`**:
   - `useRecentRecords` — key `timbridge_recent_records`.
   - `useLookups` — merges system defaults (`src/lib/lookups.ts`) with Manager-added custom values (key `timbridge_custom_lookups`) for the Species/Grade/State/Milling/Yard Location dropdowns.
-  - `useClients` — the CRM store, key `timbridge_clients_v2`. It seeds once from `INITIAL_CLIENTS` and never reconciles, so **bump the version suffix whenever the `Client` seed shape changes** (this drops clients created on that device).
+  - `useClients` — the CRM store, key `timbridge_clients_v3`. It seeds once from `INITIAL_CLIENTS` and never reconciles, so **bump the version suffix whenever the `Client` seed shape changes** (this drops clients created on that device).
 - `useOnboarding` — which role's tour is active; "seen" flags in `localStorage` (`timbridge_onboarding_seen_<role>`), cleared on every sign-in so the tour auto-starts each session.
 
 Because clients persist while tags and orders reset, a reload can leave a locally created client with no orders — expected in this prototype.
@@ -57,10 +57,22 @@ Because clients persist while tags and orders reset, a reload can leave a locall
 **Features** (`src/features/*`, each self-contained, fed via props):
 - Inventory: `dashboard` (KPIs, charts, `YardMap`), `stock-locator`, `tag-entry`, `delivery-slips`.
 - Sales: `available-to-sell` (Sales: multi-tag selection → new order or append to a Draft), `sales-orders`, `clients` (Client Profile: list / detail / create, can also start an order), `approvals` (discount, credit-term, cancellation and other requests).
-- `pulse` — analytics with chart drill-through and per-chart CSV export (formerly "Insights").
+- `pulse` — analytics (formerly "Insights"); see **Pulse** below.
 - `settings` — Custom Values, Manager-only.
 - `auth` — the mock login page.
 - **Not built:** `reports` is an empty folder with no nav entry. The nav items Purchase Orders (`po`), Production (`prod`), Shipping / Trucking (`shipping`) and Invoicing (`invoicing`) render the `ComingSoon` placeholder.
+
+**Pulse and analytics math.** `src/features/pulse/Pulse.tsx` is the shell: one global period picker (7D / 30D / 90D / YTD / All, default 30D) and tabs organised by question — `OverviewTab` (KPIs + "needs attention"), the Inventory tab (`AnalyticsTab` in `Pulse.tsx` + `InventoryExtras`), `SalesTab`, and `ReportsTab` (role-aware report library — Sales: sales register, clients, open orders, available to sell, approvals, shortages; Manager: those plus valuation and aging; every report is typed columns + raw rows sharing one table and one CSV export, and Manager-only reports/columns are never built for Sales). Shared card / KPI / delta components are in `parts.tsx`; colors and CSV helpers in `pulseUtils.ts`.
+- **Every number is defined once in `src/lib/analytics.ts`** (order metrics, date ranges, period-over-period deltas, shortages, inventory value, days in yard, availability history) and reused by Pulse and the Dashboard. Add or change a metric there, never inline in a tab. Key definitions: *booked* = Open / Picked / Shipped (Draft and Cancelled never count as sales); sales are attributed to the order date; ship date is read from the `Shipped via SO-xxxx` tag-history stamp that `App` writes.
+- Period figures follow the picker and show a delta vs the previous equal-length window; point-in-time figures (aging, pending queues, valuation) carry an "As of today" tag instead.
+- Every chart, row and KPI drills through to the operational page behind it: `EntryFilter` for Stock Locator, `SalesOrderFilter` (`soIds` + `filterLabel` gate with a banner) for Sales Orders, `onOpenClient` / `onOpenSo` for drawers.
+- Cost, market value and margin are finance data: rendered for Manager only, never for Sales.
+
+**Seed data rolls with the clock and is internally consistent.** `src/lib/mock-data.ts` has two layers: the original hand-written June 2026 records, shifted at load time so their anchor date lands on today, and ~7 months of generated history (`SEED_ORDERS` / `SEED_STOCK`, authored in "days ago") that expands each order into a `SalesOrder` plus matching whole-tag line items. Invariants to keep when editing the seed:
+- A tag's status agrees with its order (Shipped order → Shipped tags carrying a `Shipped via SO-xxxx` stamp, Open/Picked → Reserved, Draft/Cancelled → Available); every Reserved or Shipped tag is on exactly one live order; a line never exceeds its tag's qty; unit price = the tag's market value.
+- Ids are chronological: orders `SO-0014…` by order date (generated and legacy together — refer to an order by its key via `so("g53")` / `so("L46")`, never a literal id), generated tags `T-2026-0001…` by receipt date (all older than the legacy `T-2026-0101…` block), approvals `AR-2026-0001…` by creation time. They must stay below what `App`, Tag Entry and Delivery Slips mint.
+- Every discounted order line has an approval request behind it; `updated` labels and the Dashboard activity feed are derived from tag history, not typed in.
+- Each 30-day window carries a similar, gently growing volume, and the history is long enough that a 90-day period has a complete previous period. Deltas are hidden (`hasFullPrevPeriod`) when it does not.
 
 **Onboarding tour.** `src/components/shared/OnboardingTour.tsx` spotlights elements by their `data-onboarding` attribute; per-role step lists live in `src/lib/onboardingSteps.ts`. Renaming or removing an element that carries `data-onboarding` silently drops that step, so update the step config with it.
 

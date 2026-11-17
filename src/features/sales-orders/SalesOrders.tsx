@@ -6,6 +6,7 @@ import { Pagination, DEFAULT_PAGE_SIZE, usePagedSlice } from "@/components/share
 import { SOStatusPill } from "@/components/shared/SOStatusPill";
 import { FilterBar } from "@/components/shared/FilterBar";
 import { Button } from "@/components/shared/Button";
+import { ConfirmationBanner } from "@/components/shared/ConfirmationBanner";
 import { SalesOrderPanel, type DraftLineItem } from "./SalesOrderPanel";
 import type { ApprovalDraft } from "@/features/approvals/RequestApprovalForm";
 import { useClients } from "@/hooks/useClients";
@@ -53,6 +54,9 @@ export function SalesOrders({ salesOrders, tags, openSoId, onSoOpened, salesFilt
   const [statusF, setStatusF] = useState<string[]>([]);
   const [customerF, setCustomerF] = useState<string[]>([]);
   const [speciesF, setSpeciesF] = useState<string[]>([]);
+  // Hard ID-set gate from a Pulse drill-through (composes with the bar filters; cleared by Reset).
+  const [idSet, setIdSet] = useState<string[] | null>(null);
+  const [idSetLabel, setIdSetLabel] = useState<string | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
   const [fullscreen, setFullscreen] = useState(false);
   const [page, setPage] = useState(1);
@@ -112,12 +116,17 @@ export function SalesOrders({ salesOrders, tags, openSoId, onSoOpened, salesFilt
     if (!salesFilter) return;
     if (salesFilter.species) setSpeciesF(salesFilter.species);
     if (salesFilter.status) setStatusF(salesFilter.status);
+    if (salesFilter.soIds) {
+      setIdSet(salesFilter.soIds);
+      setIdSetLabel(salesFilter.filterLabel ?? null);
+    }
     onClearSalesFilter?.();
   }, [salesFilter, onClearSalesFilter]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return salesOrders.filter((so) => {
+      if (idSet !== null && !idSet.includes(so.id)) return false;
       if (statusF.length && !statusF.includes(so.status)) return false;
       if (customerF.length && !customerF.includes(getClientName(so.clientId))) return false;
       if (speciesF.length) {
@@ -129,24 +138,28 @@ export function SalesOrders({ salesOrders, tags, openSoId, onSoOpened, salesFilt
         if (!hay.includes(q)) return false;
       }
       return true;
-    });
-  }, [salesOrders, search, statusF, customerF, speciesF, speciesBySo, getClientName]);
+    })
+      // Newest first (order date, then SO number) regardless of append order.
+      .sort((a, b) => b.date.localeCompare(a.date) || b.id.localeCompare(a.id));
+  }, [salesOrders, search, statusF, customerF, speciesF, idSet, speciesBySo, getClientName]);
 
   useEffect(() => {
     setPage(1);
-  }, [search, statusF, customerF, speciesF, pageSize]);
+  }, [search, statusF, customerF, speciesF, idSet, pageSize]);
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
   useEffect(() => {
     if (page > totalPages) setPage(totalPages);
   }, [page, totalPages]);
   const pageRows = usePagedSlice(filtered, page, pageSize);
 
-  const filtersActive = search.trim().length > 0 || statusF.length > 0 || customerF.length > 0 || speciesF.length > 0;
+  const filtersActive = search.trim().length > 0 || statusF.length > 0 || customerF.length > 0 || speciesF.length > 0 || idSet !== null;
   const resetFilters = () => {
     setSearch("");
     setStatusF([]);
     setCustomerF([]);
     setSpeciesF([]);
+    setIdSet(null);
+    setIdSetLabel(null);
   };
 
   const selectedSo = selected ? salesOrders.find((so) => so.id === selected) ?? null : null;
@@ -258,7 +271,19 @@ export function SalesOrders({ salesOrders, tags, openSoId, onSoOpened, salesFilt
     }, 200);
   };
 
+  // Drill-through banner — shown while a Pulse ID-set gate is active.
+  const idCount = idSet?.length ?? 0;
+
   return (
+    <>
+    {idSet !== null && (
+      <ConfirmationBanner
+        message={idSetLabel ?? `${idCount} order${idCount === 1 ? "" : "s"} selected`}
+        actionLabel="View all orders"
+        onAction={resetFilters}
+        onDismiss={resetFilters}
+      />
+    )}
     <div className="p-6 bg-cream min-h-full">
       <div className="max-w-[1600px] mx-auto" data-onboarding="sales-page">
         <div className="mb-5">
@@ -419,5 +444,6 @@ export function SalesOrders({ salesOrders, tags, openSoId, onSoOpened, salesFilt
         />
       )}
     </div>
+    </>
   );
 }

@@ -161,6 +161,11 @@ export interface EntryFilter {
 export interface SalesOrderFilter {
   species?: Species[];
   status?: SalesOrderStatus[];
+  // Hard ID-set gate (Pulse drill-throughs: "the orders behind this bar / stage / KPI").
+  // Composes with the bar filters and is cleared by Reset — mirrors EntryFilter.tagIds.
+  soIds?: string[];
+  // Banner text describing the gate, e.g. "4 orders placed · week of Oct 5".
+  filterLabel?: string;
 }
 
 // ─── Recent records (top-nav "Recent" dropdown; persisted to localStorage) ────────

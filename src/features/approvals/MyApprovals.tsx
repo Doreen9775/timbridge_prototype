@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { parseStampMs } from "@/lib/analytics";
 import { CheckCircle2, ChevronDown, ExternalLink, Pencil } from "lucide-react";
 import type { ApprovalRequest, ApprovalRequestStatus, SalesOrder, Tag } from "@/lib/types";
 import { Button } from "@/components/shared/Button";
@@ -73,7 +74,7 @@ export function MyApprovals({
         .filter((r) => r.requestedBy === identity)
         // most recent first so newly-resolved decisions surface at the top
         .slice()
-        .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1)),
+        .sort((a, b) => (parseStampMs(b.createdAt) ?? 0) - (parseStampMs(a.createdAt) ?? 0)),
     [approvalRequests, identity],
   );
 

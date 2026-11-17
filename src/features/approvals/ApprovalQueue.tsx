@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { parseStampMs } from "@/lib/analytics";
 import { CheckCircle2, ChevronDown, ExternalLink } from "lucide-react";
 import type { ApprovalRequest, SalesOrder, SalesOrderStatus, Tag } from "@/lib/types";
 import { Button } from "@/components/shared/Button";
@@ -55,7 +56,7 @@ export function ApprovalQueue({
         .filter((r) => r.status === "Pending")
         // oldest first — queue processing order
         .slice()
-        .sort((a, b) => (a.createdAt < b.createdAt ? -1 : 1)),
+        .sort((a, b) => (parseStampMs(a.createdAt) ?? 0) - (parseStampMs(b.createdAt) ?? 0)),
     [approvalRequests],
   );
 

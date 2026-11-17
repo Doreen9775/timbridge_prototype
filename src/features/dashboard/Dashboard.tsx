@@ -5,6 +5,7 @@ import {
 import { ArrowLeftRight, PackageCheck, BookmarkCheck, BadgeCheck, ScanLine, type LucideIcon } from "lucide-react";
 import type { Tag, TagStatus, Species, ActivityType, EntryFilter } from "@/lib/types";
 import { recentActivity, floorTasks } from "@/lib/mock-data";
+import { ON_HAND_STATUSES, availabilityHistory, isLowStock, startOfTodayMs } from "@/lib/analytics";
 import { Sparkline } from "@/components/shared/Sparkline";
 import { YardMap } from "./YardMap";
 
@@ -48,6 +49,11 @@ export function Dashboard({ tags, floorView, onNavigateToLocator, onOpenTag }: D
   const reserved = tags.filter((t) => t.status === "Reserved");
   const totalFBM = available.reduce((s, t) => s + t.fbm, 0);
 
+  // Wall-clock time this view loaded (the data is in-memory, so that is when it was read).
+  const [loadedAt] = useState(() => {
+    const d = new Date();
+    return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+  });
   const [activityFilter, setActivityFilter] = useState<ActivityType | "all">("all");
   const filteredActivity = recentActivity.filter((a) => activityFilter === "all" || a.type === activityFilter);
 
@@ -58,7 +64,8 @@ export function Dashboard({ tags, floorView, onNavigateToLocator, onOpenTag }: D
   const speciesData = SPECIES.map((sp) => ({
     sp,
     name: sp === "Western Red Cedar" ? "W.R. Cedar" : sp,
-    fbm: tags.filter((t) => t.species === sp).reduce((s, t) => s + t.fbm, 0),
+    // On hand only — shipped tags are history, not stock.
+    fbm: tags.filter((t) => t.species === sp && t.status !== "Shipped").reduce((s, t) => s + t.fbm, 0),
   }));
 
   const statusData = STATUS_ORDER.map((st) => ({
@@ -107,11 +114,18 @@ export function Dashboard({ tags, floorView, onNavigateToLocator, onOpenTag }: D
     );
   }
 
+  // Seven weekly checkpoints ending today, reconstructed from tag history (shared with
+  // Pulse via lib/analytics) — the sparklines and the week-over-week change are real, and
+  // each series ends on the live number shown beside it.
+  const availHistory = availabilityHistory(tags, startOfTodayMs());
+  const weekDiff = available.length - (availHistory[availHistory.length - 2]?.count ?? available.length);
+  const weekDiffLabel = weekDiff === 0 ? "no change vs last week" : `${weekDiff > 0 ? "+" : ""}${weekDiff} vs last week`;
+
   const kpis: { label: string; value: string | number; sub: string; spark?: number[]; alert?: boolean; entryFilter: EntryFilter; ariaLabel: string }[] = [
-    { label: "Total FBM Available", value: totalFBM.toLocaleString(), sub: "board feet", spark: [8200, 9100, 8700, 10200, 11400, 10800, totalFBM], entryFilter: { status: ["Available"] }, ariaLabel: "Filter to Available tags" },
-    { label: "Tags Available", value: available.length, sub: "+2 vs last week", spark: [9, 10, 11, 10, 12, 11, available.length], entryFilter: { status: ["Available"] }, ariaLabel: "Filter to Available tags" },
+    { label: "Total FBM Available", value: totalFBM.toLocaleString(), sub: "board feet", spark: availHistory.map((p) => p.fbm), entryFilter: { status: ["Available"] }, ariaLabel: "Filter to Available tags" },
+    { label: "Tags Available", value: available.length, sub: weekDiffLabel, spark: availHistory.map((p) => p.count), entryFilter: { status: ["Available"] }, ariaLabel: "Filter to Available tags" },
     { label: "Tags Reserved", value: reserved.length, sub: "active holds", alert: reserved.length > 5, entryFilter: { status: ["Reserved"] }, ariaLabel: "Filter to Reserved tags" },
-    { label: "Low Stock Alerts", value: tags.filter((t) => t.qty < 50).length, sub: "qty < 50 units", alert: true, entryFilter: { lowQty: true }, ariaLabel: "Show low stock tags" },
+    { label: "Low Stock Alerts", value: tags.filter(isLowStock).length, sub: "on hand · qty < 50 units", alert: true, entryFilter: { lowQty: true }, ariaLabel: "Show low stock tags" },
   ];
 
   // Colored KPI cards (reference layout, brand colors): neutral white + sage + coral + lime.
@@ -142,7 +156,7 @@ export function Dashboard({ tags, floorView, onNavigateToLocator, onOpenTag }: D
             );
           })}
         </div>
-        <span className="text-xs text-text-ter">Last updated 14:32</span>
+        <span className="text-xs text-text-ter">Last updated {loadedAt}</span>
       </div>
 
       <div className="grid grid-cols-4 gap-4 mb-6">
@@ -174,7 +188,7 @@ export function Dashboard({ tags, floorView, onNavigateToLocator, onOpenTag }: D
 
       <div className="grid grid-cols-2 gap-5 mb-6">
         <div className="bg-white rounded-[10px] pt-5 px-5 pb-3 shadow-[0_1px_4px_rgba(0,0,0,0.07)]">
-          <div className="text-[13px] font-display font-semibold text-text mb-4">FBM by Species</div>
+          <div className="text-[13px] font-display font-semibold text-text mb-4">On-hand FBM by Species</div>
           <ResponsiveContainer width="100%" height={180}>
             <BarChart data={speciesData} barCategoryGap="30%" accessibilityLayer={false}>
               <XAxis dataKey="name" interval={0} tick={{ fontSize: 10, fill: C.textSec }} axisLine={false} tickLine={false} />
@@ -189,7 +203,7 @@ export function Dashboard({ tags, floorView, onNavigateToLocator, onOpenTag }: D
                     cursor="pointer"
                     role="button"
                     aria-label={`Filter to ${d.sp} tags`}
-                    onClick={() => onNavigateToLocator?.({ species: [d.sp] })}
+                    onClick={() => onNavigateToLocator?.({ species: [d.sp], status: ON_HAND_STATUSES })}
                     onMouseEnter={() => setHoveredBar(i)}
                     onMouseLeave={() => setHoveredBar(null)}
                   />

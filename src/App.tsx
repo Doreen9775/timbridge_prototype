@@ -512,9 +512,13 @@ export default function App() {
                 <Pulse
                   tags={tags}
                   salesOrders={salesOrders}
+                  approvalRequests={approvalRequests}
                   role={role}
                   onNavigateToLocator={handleNavigateToLocator}
                   onNavigateToSales={handleNavigateToSales}
+                  onOpenClient={handleOpenClient}
+                  onOpenSo={handleOpenSoFromLocator}
+                  onOpenApprovals={() => setNav("approvals")}
                 />
               )}
               {nav === "approvals" && role === "sales" && (
