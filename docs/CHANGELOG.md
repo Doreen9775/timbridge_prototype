@@ -1165,6 +1165,56 @@ A history of every commit (push) on `main`, in chronological order, with what wa
 **Files / 改动:** new `src/lib/analytics.ts`, `src/features/pulse/{OverviewTab,SalesTab,ReportsTab,InventoryExtras,parts}.tsx`, `src/features/pulse/pulseUtils.ts`; modified `src/features/pulse/Pulse.tsx`, `src/lib/mock-data.ts`, `src/lib/types.ts`, `src/lib/onboardingSteps.ts`, `src/App.tsx`, `src/features/dashboard/Dashboard.tsx`, `src/features/stock-locator/StockLocator.tsx`, `src/features/sales-orders/SalesOrders.tsx`, `src/features/approvals/{ApprovalQueue,MyApprovals}.tsx`, `src/features/tag-entry/TagEntry.tsx`, `src/hooks/useClients.tsx`, `CLAUDE.md`
 
 ---
+
+### `dc61200` · 16:36 · 产品配置 + 行业包，新增原木贸易包（检尺入库、Booms、体积报表）
+
+**🇨🇳 中文**
+
+**产品配置（`src/lib/products.ts`）**
+- 每个标签新增 `productType`；原来的 `fbm` 字段改名为与单位无关的 **`volume`**，按所属配置的单位计。
+- 共享逻辑（分析、部分数量拆分、Pulse、种子数据）统一通过配置读取体积，不再各自用"厚 × 宽 × 长 ÷ 12"计算。
+- 目前有两套配置：**锯材**（按件计数、FBM 计量、按件计价）和**原木**（一个检尺批次，数量即 m³，按 m³ 计价；根数和检尺单号单独记录）。
+
+**行业包（`src/lib/packs.ts`、`usePack`）**
+- 行业包打包了：产品配置、用词、状态的显示名称、隐藏或改名的模块、存放点，以及一个带种子数据的演示公司。
+- 在 Settings 顶部切换行业包；整个工作区换成该包的数据，登录状态保留。各包的客户数据分开存储。
+- 侧边栏、顶栏、状态标签、Dashboard、场地地图、Stock Locator、Client Profile 都按当前包显示单位和用词。存储的状态值本身不变。
+
+**原木贸易包（演示公司 Harbour Log Traders）**
+- **Scale Intake**：录入检尺单 → 核对检尺单号、实测体积、存放位置 → 入库，可直接跳到库存查看。
+- **Booms**：把整批或部分 m³ 分配给客户的 boom；记录移库、标记运输中、确认交付（交付日期和实际体积，差额会记录）。
+- **Volume Report**：在库、已分配、暂不可售、可分配、已交付；每周交付趋势、按存放点和按客户的视图，可导出 CSV。
+- 按 Task plan 的场景验证通过：入库 100、分配 30、移库、交付 30，各数字的变化与预期一致。
+- 原木包暂时隐藏 Pulse（图表仍按锯材编写），由 Volume Report 承担报表。
+
+锯材工作区的行为和数字不变；唯一的变化是场地地图的悬停数字改为只统计在库。
+
+**🇬🇧 English**
+
+**Product profiles (`src/lib/products.ts`)**
+- Every tag now carries a `productType`; the old `fbm` field is renamed to a unit-neutral **`volume`**, measured in the profile's unit.
+- Shared logic (analytics, partial-quantity splits, Pulse, seed data) reads size through the profile instead of recomputing thick × width × length ÷ 12.
+- Two profiles: **lumber** (counted in pieces, measured in FBM, priced per piece) and **log** (a scaled lot whose quantity is its m³, priced per m³; log count and scale reference stored separately).
+
+**Industry packs (`src/lib/packs.ts`, `usePack`)**
+- A pack bundles a product profile, wording, status display labels, hidden or renamed modules, storage sites and a demo company with its own seed data.
+- Switched from the top of Settings; the whole workspace reloads on that pack's data while staying signed in. Each pack keeps its own client data.
+- Sidebar, top bar, status badges, Dashboard, yard map, Stock Locator and Client Profile show the active pack's units and wording. Stored status values never change.
+
+**Log-trading pack (demo company Harbour Log Traders)**
+- **Scale Intake**: enter a scale ticket → review the scaling reference, measured volume and storage location → add to inventory, with a link to the new lot.
+- **Booms**: allocate whole lots or part of their m³ to a customer boom; record storage moves, mark in transit, confirm delivery (date and actual volume; any difference is recorded).
+- **Volume Report**: on hand, allocated, on hold, available and delivered; deliveries by week, by storage site and by customer, with CSV export.
+- Verified against the task-plan walkthrough: scale 100, allocate 30, move, deliver 30 — every figure moved as expected.
+- Pulse is hidden in the log pack for now (its charts are still lumber-worded); the Volume Report covers reporting there.
+
+Lumber behaviour and figures are unchanged, except the yard-map hover now counts on-hand stock only.
+
+**Not included**: the temporary Figma capture script in `index.html` is still uncommitted.
+
+**Files / 改动:** new `src/lib/products.ts`, `src/lib/packs.ts`, `src/lib/mock-data-logs.ts`, `src/hooks/usePack.tsx`, `src/features/log-trading/{ScaleIntake,Booms,VolumeReport}.tsx`; modified `src/App.tsx`, `src/lib/{types,analytics,reserveSplit,mock-data}.ts`, `src/hooks/{useTags,useSalesOrders,useApprovalRequests}.ts`, `src/hooks/useClients.tsx`, `src/components/layout/{Sidebar,TopBar}.tsx`, `src/components/shared/{StatusBadge,SOStatusPill}.tsx`, `src/features/dashboard/{Dashboard,YardMap}.tsx`, `src/features/stock-locator/StockLocator.tsx`, `src/features/clients/ClientDetail.tsx`, `src/features/settings/CustomValuesSettings.tsx`, `src/features/tag-entry/TagEntry.tsx`, `src/features/delivery-slips/DeliverySlips.tsx`, `src/features/available-to-sell/AvailableToSell.tsx`, `src/features/pulse/*`, `CLAUDE.md`
+
+---
 ## Pending / 未来 (not yet built — 尚未开始)
 
 - **Approvals 里 Sales 视图看到的历史范围**（当前 MyApprovals 显示所有状态，Manager 只看 Pending；如果 Manager 需要审批历史查阅，加个 History tab）
@@ -1175,3 +1225,6 @@ A history of every commit (push) on `main`, in chronological order, with what wa
 - **`daysInYard` 在 AvailableToSell 里还有一份副本**（Pulse 已改用 `lib/analytics.ts` 的共享版本；AvailableToSell 待迁移）
 - **Dashboard 顶部 Today / This Week / This Month 切换**（目前仍是装饰性的，未接入数据）
 - **按销售员区分数据**（原型里 Sales 是统一身份，报表里的"我的订单/申请"实际是全部 Sales 的数据）
+- **财务层（第三步）**：计价单位与财务事件、Invoicing 开票队列、模拟 QBO 连接器和 CSV 导出
+- **Pulse 按单位和用词显示**（目前原木包隐藏了 Pulse；Dashboard 动态筛选、Stock Locator 状态筛选仍是锯材用词）
+- **原木批次在 Log Inventory 里编辑**（锯材的编辑表单不适用，原木批次目前只读）
