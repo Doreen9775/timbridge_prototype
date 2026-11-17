@@ -1107,6 +1107,64 @@ A history of every commit (push) on `main`, in chronological order, with what wa
 **Files / 改动:** `CLAUDE.md`
 
 ---
+
+## 2026-11-17
+
+### `3a95166` · 00:53 · Pulse 重构：Overview / Sales / 分角色报表库 + 全局时间范围 + 自洽的滚动种子数据
+
+**🇨🇳 中文**
+
+**Pulse 结构**
+- 顶部新增**全局时间范围**（7D / 30D / 90D / YTD / All，默认 30 天），驱动页面上所有周期指标，并显示"对比上一周期"；不随周期变化的卡片标注 **As of today**。
+- 分页改为按业务问题划分：**Overview / Inventory / Sales / Reports**。
+- **Overview（新，默认页）**：KPI、"Needs attention"（缺货、超期订单、91 天以上库存、Discrepancy、待审批）、销售趋势、在库状态、按树种销售。
+- **Sales（新）**：6 个 KPI、按周/月销售额趋势、订单漏斗、客户排行、territory 分布、折扣与审批、发货准时率与超期订单。
+- **Inventory**：新增库存覆盖周数、库存估值（仅 Manager）、滞销清单、按供应商的到货质量；velocity 改为按 Sales Orders 计算。
+- **Reports 改为分角色的报表库**：Sales 有 Sales register、Sales by client、Open orders、Available to sell、Approval requests、Shortage & asset 六张，只含标价；Manager 另有 Inventory valuation 和 Aging detail。成本和毛利对 Sales 根本不生成。所有报表共用一套表格、合计行和 CSV 导出。
+- 所有图表、行、KPI 都可下钻；Sales Orders 新增 ID 集合过滤和横幅。
+
+**统一算法**
+- 新增 **`src/lib/analytics.ts`**，所有指标只在这里定义一次，Pulse 和 Dashboard 共用。
+- Dashboard 的迷你折线和"vs last week"改为从标签历史推出（原为写死）；低库存和按树种 FBM 只算在库；"Last updated / Last synced"用真实时间。
+- Stock Locator 顶部卡片改为在库口径（Tags On Hand / On-hand FBM）；Stock Locator 和 Sales Orders 列表默认最新在上。
+- 审批列表按真实时间排序（原按日期字符串比较，跨月会排错）。
+
+**种子数据**
+- 原 6 月数据的日期在加载时整体平移到今天；新增约 7 个月的订单历史及对应标签、5 个客户、审批记录。
+- 修正原有数据的矛盾：订单数量超过标签数量、已发货订单挂着 Reserved 标签、历史里引用不存在的订单号等。演示订单改为 200 件 × $10.00 = $2,000。
+- 订单、标签、审批编号按时间先后分配；标签的"更新于"和 Dashboard 动态流由标签历史推出。
+- Tag Entry 新建标签改用真实日期；客户存储 key 升到 `timbridge_clients_v3`（会清掉本机之前手动新建的客户）。
+
+**未包含**：`index.html` 里临时的 Figma capture 脚本没有提交。
+
+**🇬🇧 English**
+
+**Pulse structure**
+- New **global period picker** (7D / 30D / 90D / YTD / All, default 30D) drives every period figure with a comparison to the previous period; point-in-time cards are tagged **As of today**.
+- Tabs are now organised by question: **Overview / Inventory / Sales / Reports**.
+- **Overview (new, default)**: KPIs, "Needs attention" (shortages, overdue orders, 91+ day stock, discrepancies, pending approvals), sales trend, stock on hand, what sold by species.
+- **Sales (new)**: six KPIs, booked-sales trend by week/month, order pipeline, top clients, territories, discounts & approvals, on-time shipping and overdue orders.
+- **Inventory**: added stock cover, inventory value (Manager only), slow movers and receiving quality by supplier; velocity is now computed from Sales Orders.
+- **Reports is a role-aware library**: Sales gets six reports (sales register, sales by client, open orders, available to sell, approval requests, shortage & asset) with list prices only; Manager also gets inventory valuation and aging detail. Cost and margin are never built for Sales. All reports share one table, totals row and CSV export.
+- Every chart, row and KPI drills through; Sales Orders gained an id-set filter with a banner.
+
+**Shared math**
+- New **`src/lib/analytics.ts`** defines every metric once, shared by Pulse and the Dashboard.
+- Dashboard sparklines and "vs last week" are derived from tag history (previously hardcoded); low stock and FBM by species count on-hand stock only; "Last updated / Last synced" show the real time.
+- Stock Locator summary cards use on-hand figures (Tags On Hand / On-hand FBM); Stock Locator and Sales Orders lists sort newest first.
+- Approval lists sort by parsed timestamp (string comparison mis-ordered across months).
+
+**Seed data**
+- The original June dates shift to today at load time; added ~7 months of order history with matching tags, 5 clients and approval records.
+- Fixed inconsistent legacy records: orders exceeding tag quantity, shipped orders on Reserved tags, histories naming non-existent orders. The demo order is now 200 pcs × $10.00 = $2,000.
+- Order, tag and approval ids are assigned chronologically; tag "updated" labels and the Dashboard activity feed are derived from tag history.
+- Tag Entry stamps new tags with the real date; the clients storage key is now `timbridge_clients_v3` (drops clients created locally before).
+
+**Not included**: the temporary Figma capture script in `index.html` was left uncommitted.
+
+**Files / 改动:** new `src/lib/analytics.ts`, `src/features/pulse/{OverviewTab,SalesTab,ReportsTab,InventoryExtras,parts}.tsx`, `src/features/pulse/pulseUtils.ts`; modified `src/features/pulse/Pulse.tsx`, `src/lib/mock-data.ts`, `src/lib/types.ts`, `src/lib/onboardingSteps.ts`, `src/App.tsx`, `src/features/dashboard/Dashboard.tsx`, `src/features/stock-locator/StockLocator.tsx`, `src/features/sales-orders/SalesOrders.tsx`, `src/features/approvals/{ApprovalQueue,MyApprovals}.tsx`, `src/features/tag-entry/TagEntry.tsx`, `src/hooks/useClients.tsx`, `CLAUDE.md`
+
+---
 ## Pending / 未来 (not yet built — 尚未开始)
 
 - **Approvals 里 Sales 视图看到的历史范围**（当前 MyApprovals 显示所有状态，Manager 只看 Pending；如果 Manager 需要审批历史查阅，加个 History tab）
@@ -1114,4 +1172,6 @@ A history of every commit (push) on `main`, in chronological order, with what wa
 - **Client Profile 的 Linked Sales Orders 之外的 CRM 活动记录**（通话/拜访/会议日志——按当前批次要求是 backlog，不在这一轮）
 - **Shipping/Trucking、Invoicing 实际功能**（目前只是导航占位，功能待建）
 - **Delivery Slip 持久化与列表视图**（送货单解析结果当前只在会话内存里；持久化 + Recent 下拉追踪 + 列表视图都还没建）
-- **`daysInYard` helper 公共抽取到 `lib/history.ts`**（当前 AvailableToSell 和 Insights 各一份，第三个 caller 出现时升级）
+- **`daysInYard` 在 AvailableToSell 里还有一份副本**（Pulse 已改用 `lib/analytics.ts` 的共享版本；AvailableToSell 待迁移）
+- **Dashboard 顶部 Today / This Week / This Month 切换**（目前仍是装饰性的，未接入数据）
+- **按销售员区分数据**（原型里 Sales 是统一身份，报表里的"我的订单/申请"实际是全部 Sales 的数据）
