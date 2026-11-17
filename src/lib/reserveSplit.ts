@@ -6,11 +6,11 @@
 //
 // For each line item whose reserved qty is the whole tag, the tag flips to Reserved
 // in place. For a line reserving fewer pieces than the tag holds, a new Reserved
-// child tag is split off for that qty (via calcFbm + parentTagId/splitTagIds +
+// child tag is split off for that qty (via volumeOfTag + parentTagId/splitTagIds +
 // history), the parent shrinks and stays Available, and the line item is rewritten
 // to point at the child — because status lives on a whole Tag row, not a quantity.
 import type { Tag } from "@/lib/types";
-import { calcFbm } from "@/lib/fbm";
+import { profileOf, volumeOfTag } from "@/lib/products";
 
 export interface ReserveLine {
   tagId: string;
@@ -23,6 +23,7 @@ export interface ReserveContext {
   soId: string; // order the tags are being reserved to
   worker: string; // history "w" attribution
   stamp: string; // history "t" display timestamp
+  verb?: string; // history wording for the commitment — "Reserved" (default) or "Allocated" (log booms)
   via: string; // surface label, e.g. "Available-to-Sell" or "Sales Orders"
 }
 
@@ -65,7 +66,7 @@ export function reserveLineItems<L extends ReserveLine>(
         updated: "just now",
         history: [
           ...source.history,
-          { e: `Reserved for ${ctx.soId} via ${ctx.via}`, t: ctx.stamp, w: ctx.worker },
+          { e: `${ctx.verb ?? "Reserved"} for ${ctx.soId} via ${ctx.via}`, t: ctx.stamp, w: ctx.worker },
         ],
       });
       return li;
@@ -73,30 +74,37 @@ export function reserveLineItems<L extends ReserveLine>(
 
     // Partial reserve → split a Reserved child off the Available parent.
     const childId = nextId();
-    const remainingQty = source.qty - li.qty;
+    // Round to the profile's quantity precision (whole pieces for lumber, 0.1 m³ for
+    // logs) so repeated splits never accumulate floating-point noise.
+    const scale = 10 ** profileOf(source).quantity.decimals;
+    const remainingQty = Math.round((source.qty - li.qty) * scale) / scale;
+    // Log lots also carry a log count — share it out in proportion to the volume split.
+    const childPieces = source.pieces !== undefined ? Math.round((source.pieces * li.qty) / source.qty) : undefined;
     created.push({
       ...source,
       id: childId,
       qty: li.qty,
-      fbm: calcFbm(source.thick, source.width, source.length, li.qty),
+      volume: volumeOfTag(source, li.qty),
+      ...(childPieces !== undefined ? { pieces: childPieces } : {}),
       status: "Reserved",
       updated: "just now",
       parentTagId: source.id,
       splitTagIds: undefined,
       history: [
         ...source.history,
-        { e: `Split from ${source.id} · Reserved for ${ctx.soId} via ${ctx.via}`, t: ctx.stamp, w: ctx.worker },
+        { e: `Split from ${source.id} · ${ctx.verb ?? "Reserved"} for ${ctx.soId} via ${ctx.via}`, t: ctx.stamp, w: ctx.worker },
       ],
     });
     updates.set(source.id, {
       ...source,
       qty: remainingQty,
-      fbm: calcFbm(source.thick, source.width, source.length, remainingQty),
+      volume: volumeOfTag(source, remainingQty),
+      ...(childPieces !== undefined ? { pieces: (source.pieces ?? 0) - childPieces } : {}),
       updated: "just now",
       splitTagIds: [...(source.splitTagIds ?? []), childId],
       history: [
         ...source.history,
-        { e: `Split ${li.qty} pcs into ${childId} · Reserved for ${ctx.soId} via ${ctx.via}`, t: ctx.stamp, w: ctx.worker },
+        { e: `Split ${li.qty} ${profileOf(source).quantity.short} into ${childId} · ${ctx.verb ?? "Reserved"} for ${ctx.soId} via ${ctx.via}`, t: ctx.stamp, w: ctx.worker },
       ],
     });
     return { ...li, tagId: childId };

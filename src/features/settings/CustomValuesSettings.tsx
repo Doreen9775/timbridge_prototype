@@ -1,5 +1,7 @@
 import { useState } from "react";
-import { Trash2, Plus, Compass } from "lucide-react";
+import { Trash2, Plus, Compass, Check } from "lucide-react";
+import { usePack } from "@/hooks/usePack";
+import { PACKS, type PackId } from "@/lib/packs";
 import { LOOKUP_TABLE_LABELS, type LookupTable } from "@/lib/lookups";
 import { useLookups } from "@/hooks/useLookups";
 
@@ -7,10 +9,46 @@ const TABLES: LookupTable[] = ["species", "grades", "states", "milling", "locati
 
 export function CustomValuesSettings({ onStartTour }: { onStartTour: () => void }) {
   const lookups = useLookups();
+  const { pack, setPackId } = usePack();
 
   return (
     <div className="p-6 bg-cream min-h-full">
       <div className="max-w-[800px] mx-auto">
+        <div className="mb-1 text-xl font-display font-bold text-ink">Industry pack</div>
+        <div className="text-[13px] text-text-sec mb-4">
+          Sets the product type, units, wording and modules for this workspace. In the prototype each pack opens its own demo company.
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-8" role="radiogroup" aria-label="Industry pack" data-onboarding="settings-pack">
+          {(Object.keys(PACKS) as PackId[]).map((id) => {
+            const p = PACKS[id];
+            const on = p.id === pack.id;
+            return (
+              <button
+                key={id}
+                type="button"
+                role="radio"
+                aria-checked={on}
+                onClick={() => !on && setPackId(id)}
+                className={[
+                  "text-left rounded-xl p-4 border-2 transition-colors",
+                  on ? "border-ink bg-white cursor-default" : "border-transparent bg-white/70 hover:border-sage cursor-pointer",
+                ].join(" ")}
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[14px] font-semibold text-ink">{p.label}</span>
+                  {on && (
+                    <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#4E6B0E] bg-[#EAF5D0] rounded-full px-2 py-0.5">
+                      <Check size={11} />Active
+                    </span>
+                  )}
+                </div>
+                <div className="text-[12px] text-text-sec mt-1">{p.description}</div>
+                <div className="text-[11px] text-text-ter mt-2">Demo company: {p.company}</div>
+              </button>
+            );
+          })}
+        </div>
+
         <div className="mb-1 text-xl font-display font-bold text-ink">Custom Values</div>
         <div className="text-[13px] text-text-sec mb-6">
           Add custom values for the lookup fields used in Tag Entry and Stock Locator. System defaults can't be removed.

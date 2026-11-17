@@ -488,13 +488,15 @@ export function DeliverySlips({ tags, setTags, onNavigateToLocator }: DeliverySl
         const slipNote = child.tagNo ? ` · Slip Tag: ${child.tagNo}` : "";
         newTags.push({
           id: `T-2026-${String(counter + 100).padStart(4, "0")}`,
+          // Delivery slips are parsed as lumber (thick × width × length, FBM tallies).
+          productType: "lumber",
           species: g.species,
           grade: g.grade,
           thick: g.thick,
           width: g.width,
           length: g.length,
           qty: child.qty,
-          fbm: child.fbm,
+          volume: child.fbm,
           state: g.state,
           milling: g.milling,
           yard: "YD-A", section: "A-1", rack: "R-01", bin: "B1",

@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { isLowStock } from "@/lib/analytics";
+import { profileOf, volumeOfTag } from "@/lib/products";
+import { usePack } from "@/hooks/usePack";
 import { Search, Scan, X, Download, Maximize2, Minimize2, Pencil, Trash2 } from "lucide-react";
 import type { Tag, Species, Grade, MoistureState, Milling, TagStatus, EntryFilter, Role, SalesOrder } from "@/lib/types";
 import { StatusBadge } from "@/components/shared/StatusBadge";
@@ -58,9 +60,18 @@ const CSV_HEADERS = ["Tag ID", "Species", "Grade", "Thickness", "Width", "Length
 
 const csvCell = (v: string | number): string => `"${String(v).replace(/"/g, '""')}"`;
 
+// Log lots have no dimensions — they export scale reference, log count and m³ instead.
+const LOG_CSV_HEADERS = ["Lot ID", "Species", "Grade", "Scale Ref", "Logs", "Volume (m3)", "Location", "Status", "Scaled Date", "Seller"];
+
 function buildStockCsv(tags: Tag[]): string {
+  if (tags.length > 0 && tags.every((t) => !profileOf(t).dimensioned)) {
+    const logRows = tags.map((t) =>
+      [t.id, t.species, t.grade, t.scaleRef ?? "", t.pieces ?? "", t.volume, `${t.yard} · ${t.section}`, t.status, t.history[0]?.t ?? "", t.supplier ?? ""].map(csvCell).join(","),
+    );
+    return [LOG_CSV_HEADERS.map(csvCell).join(","), ...logRows].join("\r\n");
+  }
   const rows = tags.map((t) =>
-    [t.id, t.species, t.grade, t.thick, t.width, t.length, t.qty, t.fbm, `${t.yard} · ${t.section} · ${t.rack}`, t.status, t.history[0]?.t ?? "", t.supplier ?? ""]
+    [t.id, t.species, t.grade, t.thick, t.width, t.length, t.qty, t.volume, `${t.yard} · ${t.section} · ${t.rack}`, t.status, t.history[0]?.t ?? "", t.supplier ?? ""]
       .map(csvCell)
       .join(","),
   );
@@ -120,6 +131,13 @@ export function StockLocator({ tags, floorView, role, openTagId, onTagOpened, on
   );
   const { pushRecord } = useRecentRecords();
   const lookups = useLookups();
+  // Product profile + wording of the active industry pack. Log lots have no dimensions,
+  // state or milling, are measured in m³ and live at named storage sites.
+  const { pack, profile } = usePack();
+  const isLog = !profile.dimensioned;
+  const siteName = (code: string) => pack.sites.find((st) => st.code === code)?.name ?? code;
+  const dataOpts = (pick: (t: Tag) => string) => Array.from(new Set(tags.map(pick))).sort();
+  const fmtVol = (v: number) => v.toLocaleString(undefined, { maximumFractionDigits: profile.measure.decimals });
 
   // Open a tag's detail drawer and record it as recently accessed (push hook).
   const openTag = useCallback((id: string) => {
@@ -213,7 +231,7 @@ export function StockLocator({ tags, floorView, role, openTagId, onTagOpened, on
     return {
       total: onHand.length,
       available: filtered.filter((t) => t.status === "Available").length,
-      fbm: onHand.reduce((s, t) => s + t.fbm, 0),
+      fbm: onHand.reduce((s, t) => s + t.volume, 0),
       reserved: filtered.filter((t) => t.status === "Reserved").length,
     };
   }, [filtered]);
@@ -349,10 +367,10 @@ export function StockLocator({ tags, floorView, role, openTagId, onTagOpened, on
   }
 
   const summaryCards: [string, ReactNode][] = [
-    ["Tags On Hand", totals.total],
-    ["Available", totals.available],
-    ["On-hand FBM", `${totals.fbm.toLocaleString()} fbm`],
-    ["Reserved", totals.reserved],
+    [`${pack.terms.tags} On Hand`, totals.total],
+    [pack.tagStatusLabel.Available, totals.available],
+    [`On-hand ${profile.measure.short}`, `${fmtVol(totals.fbm)} ${profile.measure.short.toLowerCase()}`],
+    [pack.tagStatusLabel.Reserved, totals.reserved],
   ];
   // Colored summary cards (reference layout, brand colors): white + sage + coral + lime.
   const cardThemes = [
@@ -404,12 +422,13 @@ export function StockLocator({ tags, floorView, role, openTagId, onTagOpened, on
       <div data-onboarding="locator-filterbar">
       <FilterBar filtersActive={filtersActive} onReset={resetFilters}>
         <DateFilter applied={dates} onApply={setDates} />
-        <PillFilter label="Species" options={lookups.species.map((v) => v.code)} applied={speciesF} onApply={setSpeciesF} />
-        <PillFilter label="Grade" options={lookups.grades.map((v) => v.code)} applied={gradeF} onApply={setGradeF} />
-        <PillFilter label="State" options={lookups.states.map((v) => v.code)} applied={stateF} onApply={setStateF} />
-        <PillFilter label="Milling" options={lookups.milling.map((v) => v.code)} applied={millingF} onApply={setMillingF} />
+        {/* Lumber options come from Settings → Custom Values; log options from the data itself. */}
+        <PillFilter label="Species" options={isLog ? dataOpts((t) => t.species) : lookups.species.map((v) => v.code)} applied={speciesF} onApply={setSpeciesF} />
+        <PillFilter label="Grade" options={isLog ? dataOpts((t) => t.grade) : lookups.grades.map((v) => v.code)} applied={gradeF} onApply={setGradeF} />
+        {!isLog && <PillFilter label="State" options={lookups.states.map((v) => v.code)} applied={stateF} onApply={setStateF} />}
+        {!isLog && <PillFilter label="Milling" options={lookups.milling.map((v) => v.code)} applied={millingF} onApply={setMillingF} />}
         <PillFilter label="Status" options={STATUS_OPTIONS} applied={statusF} onApply={setStatusF} />
-        <PillFilter label="Location" options={lookups.locations.map((v) => v.code)} applied={yardF} onApply={setYardF} />
+        <PillFilter label="Location" options={isLog ? pack.sites.map((st) => st.code) : lookups.locations.map((v) => v.code)} applied={yardF} onApply={setYardF} />
         <button
           onClick={() => setLowQty(!lowQty)}
           className={[
@@ -449,7 +468,10 @@ export function StockLocator({ tags, floorView, role, openTagId, onTagOpened, on
                   className="accent-coral w-4 h-4 cursor-pointer align-middle"
                 />
               </th>
-              {["Tag ID", "Species", "Grade", "Dimensions", "Qty", "FBM", "Location", "Status", "Entry Date", "Updated"].map((h) => (
+              {(isLog
+                ? [`${pack.terms.tag} ID`, "Species", "Grade", "Scale Ref", "Logs", profile.measure.short, "Location", "Status", "Scaled", "Updated"]
+                : ["Tag ID", "Species", "Grade", "Dimensions", "Qty", "FBM", "Location", "Status", "Entry Date", "Updated"]
+              ).map((h) => (
                 <th key={h} className="px-3.5 py-2.5 text-left text-text-sec font-medium whitespace-nowrap text-xs">{h}</th>
               ))}
             </tr>
@@ -487,12 +509,25 @@ export function StockLocator({ tags, floorView, role, openTagId, onTagOpened, on
                   <td className="px-3.5 py-[11px] font-mono text-ink font-semibold whitespace-nowrap">{t.id}</td>
                   <td className="px-3.5 py-[11px]">{t.species}</td>
                   <td className="px-3.5 py-[11px]">{t.grade}</td>
-                  <td className="px-3.5 py-[11px] font-mono whitespace-nowrap">{t.thick}×{t.width} × {t.length}'</td>
-                  <td className={`px-3.5 py-[11px] ${isLowStock(t) ? "text-coral font-semibold" : "text-text"}`}>{t.qty}</td>
-                  <td className="px-3.5 py-[11px] text-text-sec">{t.fbm.toLocaleString()}</td>
-                  <td className="px-3.5 py-[11px]">
-                    <span className="bg-sage/40 text-ink font-mono text-[11px] px-2 py-[3px] rounded-[5px]">{t.yard} · {t.section} · {t.rack}</span>
-                  </td>
+                  {isLog ? (
+                    <>
+                      <td className="px-3.5 py-[11px] font-mono whitespace-nowrap">{t.scaleRef ?? "—"}</td>
+                      <td className="px-3.5 py-[11px] text-text-sec">{t.pieces ?? "—"}</td>
+                      <td className={`px-3.5 py-[11px] ${isLowStock(t) ? "text-coral font-semibold" : "text-text"}`}>{fmtVol(t.volume)}</td>
+                      <td className="px-3.5 py-[11px]">
+                        <span className="bg-sage/40 text-ink text-[11px] px-2 py-[3px] rounded-[5px] whitespace-nowrap">{siteName(t.yard)} · {t.section}</span>
+                      </td>
+                    </>
+                  ) : (
+                    <>
+                      <td className="px-3.5 py-[11px] font-mono whitespace-nowrap">{t.thick}×{t.width} × {t.length}'</td>
+                      <td className={`px-3.5 py-[11px] ${isLowStock(t) ? "text-coral font-semibold" : "text-text"}`}>{t.qty}</td>
+                      <td className="px-3.5 py-[11px] text-text-sec">{t.volume.toLocaleString()}</td>
+                      <td className="px-3.5 py-[11px]">
+                        <span className="bg-sage/40 text-ink font-mono text-[11px] px-2 py-[3px] rounded-[5px]">{t.yard} · {t.section} · {t.rack}</span>
+                      </td>
+                    </>
+                  )}
                   <td className="px-3.5 py-[11px]"><StatusBadge status={t.status} /></td>
                   <td className="px-3.5 py-[11px] text-text-sec text-xs whitespace-nowrap">{formatEntryDate(t.date)}</td>
                   <td className="px-3.5 py-[11px] text-text-ter text-xs">{t.updated}</td>
@@ -511,7 +546,7 @@ export function StockLocator({ tags, floorView, role, openTagId, onTagOpened, on
           total={filtered.length}
           onPageChange={setPage}
           onPageSizeChange={setPageSize}
-          label="tags"
+          label={pack.terms.tags.toLowerCase()}
         />
       </div>
       </div>
@@ -767,9 +802,14 @@ function DetailDrawer({
   const showLinkedTransactions = role !== "floor";
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState<Tag>(tag);
-  const canEdit = !!onSave;
+  // The edit form is lumber-specific (dimensions, state, milling); log lots are read-only here.
+  const canEdit = !!onSave && profileOf(tag).dimensioned;
   const lookups = useLookups();
   const { getClientName } = useClients();
+  const { pack } = usePack();
+  const tagProfile = profileOf(tag);
+  const isLogLot = !tagProfile.dimensioned;
+  const siteName = (code: string) => pack.sites.find((st) => st.code === code)?.name ?? code;
   const linkedSOs = useMemo(
     () => salesOrders.flatMap((so) => so.lineItems.filter((li) => li.tagId === tag.id).map((li) => ({ so, li }))),
     [salesOrders, tag.id],
@@ -786,10 +826,9 @@ function DetailDrawer({
   const startEdit = () => { setDraft(tag); setPendingSOLink(null); setEditing(true); };
   const cancelEdit = () => { setPendingSOLink(null); setEditing(false); };
   const saveEdit = () => {
-    const fbm = calcFbm(draft.thick, draft.width, draft.length, draft.qty);
     const updated: Tag = {
       ...draft,
-      fbm,
+      volume: volumeOfTag(draft, draft.qty),
       updated: "just now",
       history: [
         ...draft.history,
@@ -806,13 +845,21 @@ function DetailDrawer({
     setEditing(false);
   };
 
-  const crumbs: string[] = ["Mill", "→", tag.yard, "→", tag.section, "→", tag.rack, "→", tag.bin];
-  const specs: [string, string][] = [
-    ["Species", tag.species], ["Grade", tag.grade],
-    ["Dimensions", `${tag.thick}×${tag.width} × ${tag.length}'`], ["State", tag.state],
-    ["Milling", tag.milling], ["FBM", tag.fbm.toLocaleString()],
-    ["Qty", `${tag.qty} pcs`], ["Yard", tag.yard],
-  ];
+  const crumbs: string[] = isLogLot
+    ? [siteName(tag.yard), "→", tag.section]
+    : ["Mill", "→", tag.yard, "→", tag.section, "→", tag.rack, "→", tag.bin];
+  const specs: [string, string][] = isLogLot
+    ? [
+        ["Species", tag.species], ["Grade", tag.grade],
+        ["Scale ref", tag.scaleRef ?? "—"], ["Logs", tag.pieces !== undefined ? String(tag.pieces) : "—"],
+        ["Scaled volume", `${tag.volume.toLocaleString(undefined, { maximumFractionDigits: 1 })} m³`], ["Seller", tag.supplier ?? "—"],
+      ]
+    : [
+        ["Species", tag.species], ["Grade", tag.grade],
+        ["Dimensions", `${tag.thick}×${tag.width} × ${tag.length}'`], ["State", tag.state],
+        ["Milling", tag.milling], ["FBM", tag.volume.toLocaleString()],
+        ["Qty", `${tag.qty} pcs`], ["Yard", tag.yard],
+      ];
 
   // Edit-form styling + a small label-wrapper helper (a plain function, not a component,
   // so inputs keep focus across keystrokes).
@@ -1024,8 +1071,8 @@ function DetailDrawer({
           ))}
         </div>
 
-        <div className="text-xs text-text-sec mb-2">Units</div>
-        <div className="bg-[#F9FAFB] rounded-md px-4 py-3 mb-5 flex items-end justify-between">
+        {!isLogLot && <div className="text-xs text-text-sec mb-2">Units</div>}
+        {!isLogLot && <div className="bg-[#F9FAFB] rounded-md px-4 py-3 mb-5 flex items-end justify-between">
           <div>
             <div className="text-2xl font-display font-bold text-ink leading-none">{calcBoardFeet(tag.thick, tag.width, tag.length, tag.qty).toLocaleString()}</div>
             <div className="text-[10px] text-text-ter mt-1">BF</div>
@@ -1038,7 +1085,7 @@ function DetailDrawer({
             <div className="text-base font-semibold text-text leading-none">{calcLineal(tag.length, tag.qty).toLocaleString()}</div>
             <div className="text-[10px] text-text-ter mt-1">lf</div>
           </div>
-        </div>
+        </div>}
 
         {isManager && (
           <>
@@ -1046,11 +1093,11 @@ function DetailDrawer({
             <div className="bg-[#F9FAFB] rounded-md px-4 py-3 mb-5 flex items-end justify-between">
               <div>
                 <div className="text-base font-semibold text-text leading-none">{formatUSD(tag.cost)}</div>
-                <div className="text-[10px] text-text-ter mt-1">cost / unit</div>
+                <div className="text-[10px] text-text-ter mt-1">cost / {tagProfile.pricing.short}</div>
               </div>
               <div className="text-right">
                 <div className="text-base font-semibold text-text leading-none">{formatUSD(tag.marketValue)}</div>
-                <div className="text-[10px] text-text-ter mt-1">value / unit</div>
+                <div className="text-[10px] text-text-ter mt-1">value / {tagProfile.pricing.short}</div>
               </div>
               <div className="text-right">
                 <div className="text-2xl font-display font-bold text-ink leading-none">{formatMargin(tag.cost, tag.marketValue)}</div>

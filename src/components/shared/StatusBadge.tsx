@@ -1,4 +1,5 @@
 import type { TagStatus } from "@/lib/types";
+import { usePack } from "@/hooks/usePack";
 
 // Color per lifecycle state — tints of the unified status scheme (matches the dashboard
 // pie): Available = sage, Reserved = lime, Discrepancy = coral (alert), rest neutral grays.
@@ -23,9 +24,11 @@ interface StatusBadgeProps {
 }
 
 export function StatusBadge({ status, size = "sm", className }: StatusBadgeProps) {
+  // Wording follows the industry pack (log trading: Reserved → "Allocated", Shipped → "Delivered").
+  const { pack } = usePack();
   return (
     <span className={["whitespace-nowrap inline-block", SIZES[size], STYLES[status], className].filter(Boolean).join(" ")}>
-      {status}
+      {pack.tagStatusLabel[status]}
     </span>
   );
 }

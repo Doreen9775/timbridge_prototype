@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { volumeForQty } from "@/lib/products";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 import { AlertTriangle, ChevronRight, CircleCheck, Clock, Hourglass, PackageX, ShieldAlert, type LucideIcon } from "lucide-react";
 import type { ApprovalRequest, EntryFilter, Role, SalesOrder, SalesOrderFilter, Tag, TagStatus } from "@/lib/types";
@@ -50,7 +51,7 @@ export function OverviewTab({ tags, salesOrders, approvalRequests, role, range, 
   const net = sum(booked, (m) => m.net);
   const prevNet = sum(prevBooked, (m) => m.net);
   const shippedFbm = (pred: (ms: number) => boolean) =>
-    sum(metrics.filter((m) => m.so.status === "Shipped" && pred(m.shippedMs ?? m.orderMs)), (m) => m.fbm);
+    sum(metrics.filter((m) => m.so.status === "Shipped" && pred(m.shippedMs ?? m.orderMs)), (m) => m.volume);
   const fbmShipped = shippedFbm((ms) => inRange(ms, range));
   const prevFbmShipped = shippedFbm((ms) => inPrevRange(ms, range));
 
@@ -59,7 +60,7 @@ export function OverviewTab({ tags, salesOrders, approvalRequests, role, range, 
     const available = tags.filter((t) => t.status === "Available");
     const active = metrics.filter((m) => ACTIVE_STATUSES.includes(m.so.status));
     return {
-      availableFbm: available.reduce((s, t) => s + t.fbm, 0),
+      availableFbm: available.reduce((s, t) => s + t.volume, 0),
       availableCount: available.length,
       activeNet: sum(active, (m) => m.net),
       activeIds: active.map((m) => m.so.id),
@@ -103,7 +104,7 @@ export function OverviewTab({ tags, salesOrders, approvalRequests, role, range, 
       Icon: Hourglass,
       count: attention.aging.length,
       label: `Tag${attention.aging.length === 1 ? "" : "s"} ${AGING_THRESHOLD_DAYS}+ days in yard`,
-      detail: attention.aging.length ? `${attention.aging.reduce((s, t) => s + t.fbm, 0).toLocaleString()} FBM still Available` : "No slow-moving stock",
+      detail: attention.aging.length ? `${attention.aging.reduce((s, t) => s + t.volume, 0).toLocaleString()} FBM still Available` : "No slow-moving stock",
       action: "View tags",
       onClick: () =>
         onNavigateToLocator?.({
@@ -143,7 +144,7 @@ export function OverviewTab({ tags, salesOrders, approvalRequests, role, range, 
   const onHand = useMemo(() => {
     const rows = ON_HAND.map((s) => {
       const group = tags.filter((t) => t.status === s.status);
-      return { ...s, count: group.length, fbm: group.reduce((a, t) => a + t.fbm, 0) };
+      return { ...s, count: group.length, fbm: group.reduce((a, t) => a + t.volume, 0) };
     });
     return { rows, max: Math.max(...rows.map((r) => r.fbm), 1), total: rows.reduce((a, r) => a + r.fbm, 0) };
   }, [tags]);
@@ -157,7 +158,7 @@ export function OverviewTab({ tags, salesOrders, approvalRequests, role, range, 
         const t = tagById.get(li.tagId);
         if (!t) continue;
         const g = groups.get(t.species) ?? { fbm: 0, net: 0 };
-        g.fbm += ((t.thick * t.width * t.length) / 12) * li.qty;
+        g.fbm += volumeForQty(t, li.qty);
         g.net += li.qty * li.unitPrice * (1 - (li.discountPct ?? 0) / 100);
         groups.set(t.species, g);
       }

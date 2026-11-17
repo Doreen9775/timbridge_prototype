@@ -6,6 +6,7 @@
 // (Settings → Custom Values, src/lib/lookups.ts) can flow into these fields. The
 // hardcoded literal sets used to live here as the unions; they now live as
 // SYSTEM_DEFAULTS in src/lib/lookups.ts instead.
+import type { ProductTypeId } from "./products";
 export type Species = string;
 export type Grade = string;
 export type MoistureState = string;
@@ -33,13 +34,16 @@ export interface MovementEvent {
 
 export interface Tag {
   id: string; // e.g. "T-2026-0101"
+  // Which product profile describes this tag (lib/products.ts) — decides the unit of
+  // `volume` and what `cost` / `marketValue` / order `unitPrice` are quoted per.
+  productType: ProductTypeId;
   species: Species;
   grade: Grade;
   thick: number; // inches
   width: number; // inches
   length: number; // feet
   qty: number; // piece count
-  fbm: number; // board feet — thick × width × length × qty ÷ 12
+  volume: number; // size of the whole tag in its profile's measure unit (lumber: board feet = thick × width × length × qty ÷ 12)
   state: MoistureState;
   milling: Milling;
   yard: string;
@@ -51,9 +55,11 @@ export interface Tag {
   updated: string; // relative display string, e.g. "2h ago"
   parentLog: string | null; // display-only traceability (out of scope this semester)
   supplier?: string; // origin supplier (from a delivery slip; "In-house production" or absent otherwise)
-  cost?: number; // per unit, USD — Manager-curated/seeded tags only; absent from Tag Entry / Delivery Slips
-  marketValue?: number; // per unit, USD — same availability as cost
+  cost?: number; // per pricing unit of the tag's profile (lumber: per piece) — Manager-curated/seeded tags only; absent from Tag Entry / Delivery Slips
+  marketValue?: number; // per pricing unit, same availability as cost
   history: MovementEvent[];
+  pieces?: number; // log lots: number of logs in the lot (the lot's qty is its m³)
+  scaleRef?: string; // log lots: scale ticket / scaling reference the volume came from
   parentTagId?: string; // set on a tag created by splitting a quantity off another tag (Available-to-Sell partial reserve)
   splitTagIds?: string[]; // ids of tags split off this one, if any
 }
@@ -81,6 +87,25 @@ export interface SalesOrder {
   lineItems: SalesOrderLineItem[];
   notes?: string; // Free-text order notes. Editable on Draft (whole order) and on Open/Picked (meta-only).
   expectedShipDate?: string; // ISO date (YYYY-MM-DD). Editable on Draft and Open/Picked.
+  // Log-trading pack: the order is a customer boom — a physical raft of allocated logs
+  // that sits at a storage site, can be moved, and is delivered. Status mapping:
+  // Open = in storage, Picked = in transit, Shipped = delivered.
+  boom?: BoomInfo;
+}
+
+export interface BoomMove {
+  at: string; // display stamp "Nov 17 2026 10:00"
+  from: string; // storage site code
+  to: string;
+  by: string;
+}
+
+export interface BoomInfo {
+  id: string; // e.g. "BM-0012" — the name crews and customers use
+  location: string; // current storage site code
+  moves: BoomMove[];
+  deliveredVolume?: number; // m³ confirmed delivered (may differ from allocated)
+  deliveredDate?: string; // ISO date the delivery was confirmed for
 }
 
 // ─── Clients (CRM MVP — replaces the pre-migration free-string customer field) ────

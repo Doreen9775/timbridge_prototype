@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef } from "react";
+import { usePack } from "@/hooks/usePack";
 import mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
 import type { Tag, EntryFilter } from "@/lib/types";
@@ -10,13 +11,8 @@ import type { Tag, EntryFilter } from "@/lib/types";
 const TOKEN = import.meta.env.VITE_MAPBOX_TOKEN;
 const MARKER_BG = "#F0542B"; // brand coral circle, white letter
 
-// Mock yard coordinates — clustered around a Fraser River mill site near Langley, BC, so the
-// default zoomed-in detail view shows all three (confirmed with the user; adjust freely).
-const YARDS: { code: string; letter: string; name: string; lng: number; lat: number }[] = [
-  { code: "YD-A", letter: "A", name: "Yard A", lng: -122.6620, lat: 49.1908 },
-  { code: "YD-B", letter: "B", name: "Yard B", lng: -122.6548, lat: 49.1885 },
-  { code: "YD-C", letter: "C", name: "Yard C", lng: -122.6482, lat: 49.1924 },
-];
+// Storage sites (and their mock coordinates near Langley, BC) come from the active
+// industry pack — lumber yards A–C, or a log sort yard and water lots.
 const CENTER: [number, number] = [-122.6550, 49.1906];
 const DEFAULT_ZOOM = 13.4;
 
@@ -52,6 +48,9 @@ interface YardMapProps {
 }
 
 export function YardMap({ tags, onNavigateToLocator }: YardMapProps) {
+  const { pack, profile } = usePack();
+  const YARDS = pack.sites;
+  const unitRef = useRef({ unit: profile.measure.short, decimals: profile.measure.decimals, noun: pack.terms.tag.toLowerCase() });
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
 
@@ -60,8 +59,8 @@ export function YardMap({ tags, onNavigateToLocator }: YardMapProps) {
     const m: Record<string, { count: number; fbm: number }> = {};
     for (const t of tags) {
       const s = (m[t.yard] ??= { count: 0, fbm: 0 });
-      s.count += 1;
-      s.fbm += t.fbm;
+      if (t.status !== "Shipped") s.count += 1;
+      if (t.status !== "Shipped") s.fbm += t.volume; // on hand only
     }
     return m;
   }, [tags]);
@@ -109,7 +108,7 @@ export function YardMap({ tags, onNavigateToLocator }: YardMapProps) {
           .setHTML(
             `<div style="font-family:Inter,sans-serif;padding:1px 2px;">
                <div style="font-weight:600;font-size:12px;color:#1F1F1F;">${y.name} · ${y.code}</div>
-               <div style="font-size:11px;color:#1F1F1F;opacity:0.75;margin-top:2px;">${s.count} tag${s.count === 1 ? "" : "s"} · ${s.fbm.toLocaleString()} FBM</div>
+               <div style="font-size:11px;color:#1F1F1F;opacity:0.75;margin-top:2px;">${s.count} ${unitRef.current.noun}${s.count === 1 ? "" : "s"} · ${s.fbm.toLocaleString(undefined, { maximumFractionDigits: unitRef.current.decimals })} ${unitRef.current.unit}</div>
              </div>`,
           )
           .addTo(map);

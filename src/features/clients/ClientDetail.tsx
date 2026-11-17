@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { usePack } from "@/hooks/usePack";
 import { X, Maximize2, Minimize2, Pencil, Mail, Phone, MapPin, Map, CreditCard, FilePlus } from "lucide-react";
 import type { Client, Role, SalesOrder, Tag } from "@/lib/types";
 import { Button } from "@/components/shared/Button";
@@ -52,7 +53,10 @@ export function ClientDetail({
   const [draft, setDraft] = useState<Client>(client);
   // Starting a new order for this client is Sales-only (same rule as Available-to-Sell;
   // Prompt 3). Inline role gate + teardown effect mirrors that pattern.
-  const isSalesUser = role === "sales";
+  // The inline order panel is the lumber sales flow; packs without it (log trading
+  // allocates from Booms instead) don't offer it here.
+  const { pack } = usePack();
+  const isSalesUser = role === "sales" && !pack.hiddenNav.includes("avail");
   const [creatingOrder, setCreatingOrder] = useState(false);
 
   // Defense-in-depth: if the role leaves Sales mid-session, tear the create panel down.
@@ -239,10 +243,10 @@ export function ClientDetail({
 
       <div>
         <div className="flex items-center justify-between gap-2 mb-2">
-          <div className="text-xs text-text-sec">Linked Sales Orders</div>
+          <div className="text-xs text-text-sec">Linked {pack.terms.orders}</div>
           <div className="flex items-center gap-2.5">
             <div className="text-[11px] text-text-ter">
-              {orderCount} {orderCount === 1 ? "order" : "orders"}
+              {orderCount} {(orderCount === 1 ? pack.terms.order : pack.terms.orders).toLowerCase()}
               {orderCount > 0 && ` · ${formatUSD(totalRevenue)} total`}
             </div>
             {isSalesUser && (

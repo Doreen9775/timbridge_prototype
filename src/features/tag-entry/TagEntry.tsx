@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { DEFAULT_PRODUCT_TYPE } from "@/lib/products";
 import { Scan, CheckCircle, Plus, ArrowRight } from "lucide-react";
 import type { Tag, Species, Grade, MoistureState, Milling, EntryFilter } from "@/lib/types";
 import { parentLogs } from "@/lib/mock-data";
@@ -76,7 +77,7 @@ export function TagEntry({ tags, setTags, floorView, onViewInInventory }: TagEnt
     const todayIso = `${now.getFullYear()}-${p2(now.getMonth() + 1)}-${p2(now.getDate())}`;
     const nowStamp = `${MONTHS[now.getMonth()]} ${p2(now.getDate())} ${now.getFullYear()} ${p2(now.getHours())}:${p2(now.getMinutes())}`;
     const newTag: Tag = {
-      id: newId, species, grade, thick, width, length, qty, fbm, state: state_, milling,
+      id: newId, productType: DEFAULT_PRODUCT_TYPE, species, grade, thick, width, length, qty, volume: fbm, state: state_, milling,
       yard, section, rack, bin, status: "Available", date: todayIso, updated: "just now",
       parentLog: parentLog || null,
       history: [{ e: "Tag created via Tag Entry", t: nowStamp, w: "DW" }],

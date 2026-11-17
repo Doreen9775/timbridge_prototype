@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { volumeForQty } from "@/lib/products";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, Legend } from "recharts";
 import { AlertTriangle, ArrowDown, ArrowUp, Minus } from "lucide-react";
 import type { ApprovalRequest, EntryFilter, Role, SalesOrder, SalesOrderFilter, Tag } from "@/lib/types";
@@ -305,7 +306,7 @@ function AnalyticsTab({
     for (const t of tags) {
       if (!inRange(isoToMs(t.date), range)) continue; // global period picker
       const key = period === "week" ? isoWeekStart(t.date) : t.date.slice(0, 7);
-      buckets.set(key, (buckets.get(key) ?? 0) + t.fbm);
+      buckets.set(key, (buckets.get(key) ?? 0) + t.volume);
     }
     return Array.from(buckets.entries())
       .sort(([a], [b]) => a.localeCompare(b))
@@ -342,7 +343,7 @@ function AnalyticsTab({
         const t = tagById.get(li.tagId);
         if (!t) continue;
         const g = bySpecies.get(t.species) ?? { reserved: 0, shipped: 0, reservedIds: new Set<string>(), shippedIds: new Set<string>() };
-        const fbm = ((t.thick * t.width * t.length) / 12) * li.qty;
+        const fbm = volumeForQty(t, li.qty);
         if (active) {
           g.reserved += fbm;
           g.reservedIds.add(m.so.id);

@@ -1,5 +1,6 @@
 // Inventory-tab cards added alongside the original three charts: stock cover (turnover),
 // valuation (Manager only), slow movers and receiving quality by supplier.
+import { volumeForQty } from "@/lib/products";
 import { useMemo } from "react";
 import { AlertTriangle } from "lucide-react";
 import type { EntryFilter, Role, SalesOrder, Tag } from "@/lib/types";
@@ -45,11 +46,11 @@ export function InventoryExtras({ tags, salesOrders, role, range, todayMs, onNav
       }
       return g;
     };
-    for (const t of tags) if (t.status === "Available") group(t.species).availableFbm += t.fbm;
+    for (const t of tags) if (t.status === "Available") group(t.species).availableFbm += t.volume;
     for (const m of shipped) {
       for (const li of m.so.lineItems) {
         const t = tagById.get(li.tagId);
-        if (t) group(t.species).shippedFbm += ((t.thick * t.width * t.length) / 12) * li.qty;
+        if (t) group(t.species).shippedFbm += volumeForQty(t, li.qty);
       }
     }
     return [...groups.entries()]
@@ -76,7 +77,7 @@ export function InventoryExtras({ tags, salesOrders, role, range, todayMs, onNav
       if (t.status === "Shipped") continue;
       const g = groups.get(t.species) ?? { fbm: 0, cost: 0, market: 0, tags: 0, uncosted: 0 };
       g.tags += 1;
-      g.fbm += t.fbm;
+      g.fbm += t.volume;
       if (t.cost === undefined) g.uncosted += 1;
       else {
         g.cost += t.cost * t.qty;
@@ -108,7 +109,7 @@ export function InventoryExtras({ tags, salesOrders, role, range, todayMs, onNav
       const name = t.supplier ?? "Unspecified";
       const g = groups.get(name) ?? { ids: [], fbm: 0, flaggedIds: [] };
       g.ids.push(t.id);
-      g.fbm += t.fbm;
+      g.fbm += t.volume;
       // A tag counts as flagged if it is in Discrepancy now or was ever flagged on arrival.
       if (t.status === "Discrepancy" || t.history.some((h) => h.e.startsWith("Flagged"))) g.flaggedIds.push(t.id);
       groups.set(name, g);
@@ -239,7 +240,7 @@ export function InventoryExtras({ tags, salesOrders, role, range, todayMs, onNav
                   <tr key={t.id} className={rowCls} onClick={() => openTags([t.id], `${t.id} · ${days} days in yard`)} title={`Open ${t.id} in Stock Locator`}>
                     <td className={`${td} font-mono font-semibold text-ink`}>{t.id}</td>
                     <td className={`${td} text-text-sec`}>{t.species} · {t.grade} · {t.thick}×{t.width}×{t.length}'</td>
-                    <td className={`${td} text-right tabular-nums`}>{t.fbm.toLocaleString()}</td>
+                    <td className={`${td} text-right tabular-nums`}>{t.volume.toLocaleString()}</td>
                     {isManager && <td className={`${td} text-right tabular-nums text-text-sec`}>{t.cost === undefined ? "—" : fmtMoney(t.cost * t.qty)}</td>}
                     <td className={`${td} text-right tabular-nums font-semibold ${days >= AGING_THRESHOLD_DAYS ? "text-coral" : "text-ink"}`}>{days}d</td>
                   </tr>

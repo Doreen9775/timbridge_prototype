@@ -328,7 +328,7 @@ export function AvailableToSell({ tags, role, salesOrders, onCreateSalesOrder, o
                       <td className="px-3 py-3 whitespace-nowrap">{t.grade}</td>
                       <td className="px-3 py-3 whitespace-nowrap">{t.thick}″ × {t.width}″ × {t.length}′</td>
                       <td className="px-3 py-3 text-right tabular-nums">{t.qty}</td>
-                      <td className="px-3 py-3 text-right tabular-nums">{t.fbm}</td>
+                      <td className="px-3 py-3 text-right tabular-nums">{t.volume}</td>
                       <td className="px-3 py-3 whitespace-nowrap">{t.yard} · {t.section} · {t.rack}</td>
                       <td className="px-3 py-3 text-right tabular-nums">{formatUSD(t.marketValue)}</td>
                       <td className="px-3 py-3 text-right tabular-nums">{daysInYard(t, todayMs)}</td>

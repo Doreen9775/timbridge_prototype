@@ -2,8 +2,9 @@ import type { ReactNode } from "react";
 import {
   Home, MapPin, Tag, Truck, ShoppingCart, Factory,
   FileText, TrendingUp, Settings, LogOut,
-  DollarSign, Users, ClipboardCheck, Route, Receipt,
+  DollarSign, Users, ClipboardCheck, Route, Receipt, BarChart3,
 } from "lucide-react";
+import { usePack } from "@/hooks/usePack";
 import { TimbridgeLogo } from "@/components/shared/TimbridgeLogo";
 import type { Role } from "@/lib/types";
 
@@ -11,7 +12,7 @@ export type NavKey =
   | "dashboard" | "locator" | "tagentry"
   | "delivery" | "po" | "prod" | "sales" | "shipping" | "invoicing"
   | "avail" | "clientprofile" | "approvals"
-  | "pulse" | "settings";
+  | "pulse" | "volume" | "settings";
 
 interface NavItem { key: NavKey; icon: ReactNode; label: string; allowedRoles?: Role[]; }
 interface NavSection { label: string; items: NavItem[]; }
@@ -44,6 +45,7 @@ const sections: NavSection[] = [
   ] },
   { label: "INSIGHTS", items: [
     { key: "pulse", icon: <TrendingUp size={16} />, label: "Pulse", allowedRoles: ["manager", "sales"] },
+    { key: "volume", icon: <BarChart3 size={16} />, label: "Volume Report", allowedRoles: ["manager", "sales"] },
   ] },
   { label: "SETUP", items: [
     { key: "settings", icon: <Settings size={16} />, label: "Settings", allowedRoles: ["manager"] },
@@ -59,6 +61,9 @@ interface SidebarProps {
 }
 
 export function Sidebar({ nav, setNav, floorView, role, onLogout }: SidebarProps) {
+  // The industry pack hides modules it doesn't use and renames others (e.g. Tag Entry →
+  // Scale Intake for log trading).
+  const { pack } = usePack();
   return (
     <div className="w-[210px] min-w-[210px] bg-ink flex flex-col h-screen sticky top-0">
       <div className="px-4 pt-5 pb-4">
@@ -67,7 +72,9 @@ export function Sidebar({ nav, setNav, floorView, role, onLogout }: SidebarProps
 
       <div className="flex-1 overflow-y-auto px-2 sidebar-scroll">
         {sections.map((sec) => {
-          const visibleItems = sec.items.filter((item) => !item.allowedRoles || item.allowedRoles.includes(role));
+          const visibleItems = sec.items
+            .filter((item) => (!item.allowedRoles || item.allowedRoles.includes(role)) && !pack.hiddenNav.includes(item.key))
+            .map((item) => ({ ...item, label: pack.navLabels[item.key] ?? item.label }));
           return (
             <div key={sec.label} className="mb-2">
               {visibleItems.length > 0 && (
@@ -115,7 +122,7 @@ export function Sidebar({ nav, setNav, floorView, role, onLogout }: SidebarProps
         <div className="w-8 h-8 rounded-full bg-coral flex items-center justify-center text-white text-[12px] font-semibold">DW</div>
         <div>
           <div className="text-white text-[12px] font-medium">Doreen W.</div>
-          <div className="text-white/45 text-[10px]">Westcoast Lumber Co.</div>
+          <div className="text-white/45 text-[10px]">{pack.company}</div>
         </div>
       </div>
     </div>

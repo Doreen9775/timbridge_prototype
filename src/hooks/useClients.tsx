@@ -1,5 +1,4 @@
 import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from "react";
-import { INITIAL_CLIENTS } from "@/lib/mock-data";
 import type { Client } from "@/lib/types";
 
 const MONTHS_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -18,26 +17,27 @@ function nowStamp(): string {
 // stuck with stale records (e.g. missing territory/contact). Bump this suffix whenever the
 // seed shape changes so every device re-seeds from the current INITIAL_CLIENTS. Prototype
 // tradeoff: bumping drops clients created via "New Client" on that device.
-const STORAGE_KEY = "timbridge_clients_v3";
+// The key and seed now come from the active industry pack (lib/packs.ts
+// `clientsStorageKey`, e.g. "timbridge_clients_v3"), so each demo company keeps its own CRM.
 
-function load(): Client[] {
+function load(key: string, seed: Client[]): Client[] {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(key);
     if (!raw) {
       // One-time migration: seed and persist so future sessions read from storage.
-      save(INITIAL_CLIENTS);
-      return INITIAL_CLIENTS;
+      save(key, seed);
+      return seed;
     }
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : INITIAL_CLIENTS;
+    return Array.isArray(parsed) ? parsed : seed;
   } catch {
-    return INITIAL_CLIENTS;
+    return seed;
   }
 }
 
-function save(clients: Client[]) {
+function save(key: string, clients: Client[]) {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(clients));
+    localStorage.setItem(key, JSON.stringify(clients));
   } catch {
     // ignore storage errors (private mode / quota)
   }
@@ -56,16 +56,16 @@ interface ClientsContextValue {
 
 const ClientsContext = createContext<ClientsContextValue | null>(null);
 
-export function ClientsProvider({ children }: { children: ReactNode }) {
-  const [clients, setClients] = useState<Client[]>(load);
+export function ClientsProvider({ children, seed, storageKey }: { children: ReactNode; seed: Client[]; storageKey: string }) {
+  const [clients, setClients] = useState<Client[]>(() => load(storageKey, seed));
 
   const updateClient = useCallback((id: string, patch: Partial<Omit<Client, "id" | "createdAt">>) => {
     setClients((prev) => {
       const next = prev.map((c) => (c.id === id ? { ...c, ...patch } : c));
-      save(next);
+      save(storageKey, next);
       return next;
     });
-  }, []);
+  }, [storageKey]);
 
   const createClient = useCallback((draft: Omit<Client, "id" | "createdAt">): string => {
     let newId = "";
@@ -78,11 +78,11 @@ export function ClientsProvider({ children }: { children: ReactNode }) {
       }, 0);
       newId = `C-${String(maxN + 1).padStart(4, "0")}`;
       const next = [...prev, { ...draft, id: newId, createdAt: nowStamp() }];
-      save(next);
+      save(storageKey, next);
       return next;
     });
     return newId;
-  }, []);
+  }, [storageKey]);
 
   const value = useMemo<ClientsContextValue>(() => {
     const map = new Map(clients.map((c) => [c.id, c]));

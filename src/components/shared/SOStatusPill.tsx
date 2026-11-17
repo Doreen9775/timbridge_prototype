@@ -1,4 +1,5 @@
 import type { SalesOrderStatus } from "@/lib/types";
+import { usePack } from "@/hooks/usePack";
 
 // SO status pill — mirrors the Tag StatusBadge color scheme, remapped onto the
 // SalesOrderStatus union. Shared across Stock Locator's Linked Transactions and
@@ -14,10 +15,12 @@ const SO_STATUS_STYLES: Record<SalesOrderStatus, string> = {
 };
 
 export function SOStatusPill({ status, size = "sm" }: { status: SalesOrderStatus; size?: "sm" | "md" }) {
+  // Wording follows the industry pack (log trading: Open → "In storage", Shipped → "Delivered").
+  const { pack } = usePack();
   const px = size === "md" ? "px-3 py-1 text-[13px]" : "px-2.5 py-[3px] text-[11px]";
   return (
     <span className={`whitespace-nowrap inline-block rounded-xl font-medium ${px} ${SO_STATUS_STYLES[status]}`}>
-      {status}
+      {pack.orderStatusLabel[status]}
     </span>
   );
 }

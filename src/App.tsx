@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Sidebar, type NavKey } from "@/components/layout/Sidebar";
 import { TopBar } from "@/components/layout/TopBar";
 import { FloorBanner } from "@/components/layout/FloorBanner";
@@ -18,7 +18,7 @@ import { Pulse } from "@/features/pulse/Pulse";
 import { RecentRecordsProvider } from "@/hooks/useRecentRecords";
 import { LookupsProvider } from "@/hooks/useLookups";
 import { ClientsProvider } from "@/hooks/useClients";
-import type { ApprovalRequest, ApprovalRequestType, EntryFilter, RecentRecord, Role, SalesOrder, SalesOrderFilter, SalesOrderStatus, Tag } from "@/lib/types";
+import type { ApprovalRequest, ApprovalRequestType, BoomInfo, EntryFilter, RecentRecord, Role, SalesOrder, SalesOrderFilter, SalesOrderStatus, Tag } from "@/lib/types";
 import { useRole } from "@/hooks/useRole";
 import { useTags } from "@/hooks/useTags";
 import { useSalesOrders } from "@/hooks/useSalesOrders";
@@ -27,6 +27,10 @@ import { reserveLineItems } from "@/lib/reserveSplit";
 import { useOnboarding } from "@/hooks/useOnboarding";
 import { OnboardingTour } from "@/components/shared/OnboardingTour";
 import { tourStepsForRole } from "@/lib/onboardingSteps";
+import { PackProvider, usePack } from "@/hooks/usePack";
+import { ScaleIntake } from "@/features/log-trading/ScaleIntake";
+import { Booms } from "@/features/log-trading/Booms";
+import { VolumeReport } from "@/features/log-trading/VolumeReport";
 
 const MONTHS_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 function nowStamp(): string {
@@ -38,7 +42,35 @@ function identityFor(role: "manager" | "sales" | "floor"): string {
   return role === "sales" ? "Sales" : role === "manager" ? "Manager" : "Floor";
 }
 
+// The industry pack (Settings) decides which demo company the workspace shows. Switching
+// pack remounts the whole workspace (key = pack id) so every store starts from that
+// pack's seed; the signed-in state lives above it so a switch doesn't sign you out.
 export default function App() {
+  return (
+    <PackProvider>
+      <PackWorkspace />
+    </PackProvider>
+  );
+}
+
+function PackWorkspace() {
+  const { pack } = usePack();
+  const [authed, setAuthed] = useState(false);
+  return <Workspace key={pack.id} authed={authed} setAuthed={setAuthed} />;
+}
+
+// "Nov 17 2026 14:05" for a chosen ISO date, at the current time of day.
+function stampForDate(iso: string): string {
+  const [y, m, d] = iso.split("-").map(Number);
+  const now = new Date();
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${MONTHS_SHORT[m - 1]} ${p(d)} ${y} ${p(now.getHours())}:${p(now.getMinutes())}`;
+}
+
+function Workspace({ authed, setAuthed }: { authed: boolean; setAuthed: (v: boolean) => void }) {
+  const { pack } = usePack();
+  const isLogPack = pack.id === "logTrading";
+  const seed = useMemo(() => pack.seed(), [pack]);
   const [nav, setNav] = useState<NavKey>("dashboard");
   // Bumped when the user re-clicks the sidebar item they're already on — used as
   // the feature container's React key, so a same-page click remounts the feature
@@ -49,12 +81,11 @@ export default function App() {
   const [pendingClientId, setPendingClientId] = useState<string | null>(null);
   const [entryFilter, setEntryFilter] = useState<EntryFilter | null>(null);
   const [salesFilter, setSalesFilter] = useState<SalesOrderFilter | null>(null);
-  const [authed, setAuthed] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
   const { role, isFloor, setRole } = useRole();
-  const { tags, setTags } = useTags();
-  const { salesOrders, setSalesOrders } = useSalesOrders();
-  const { approvalRequests, setApprovalRequests } = useApprovalRequests();
+  const { tags, setTags } = useTags(seed.tags);
+  const { salesOrders, setSalesOrders } = useSalesOrders(seed.salesOrders);
+  const { approvalRequests, setApprovalRequests } = useApprovalRequests(seed.approvals);
   // Submitter-side "already seen this resolution" tracker — parallel to the
   // request store so the ApprovalRequest type stays exactly as spec'd.
   const [acknowledgedApprovalIds, setAcknowledgedApprovalIds] = useState<Set<string>>(() => new Set());
@@ -97,8 +128,14 @@ export default function App() {
   // Manager + Sales only; bounce Floor to Stock Locator (sidebar hides them for
   // Floor; this is defense-in-depth).
   useEffect(() => {
-    if ((nav === "avail" || nav === "sales" || nav === "approvals" || nav === "clientprofile" || nav === "pulse") && role === "floor") setNav("locator");
+    if ((nav === "avail" || nav === "sales" || nav === "approvals" || nav === "clientprofile" || nav === "pulse" || nav === "volume") && role === "floor") setNav("locator");
   }, [nav, role]);
+
+  // Modules the active industry pack doesn't use (e.g. Delivery Slips for log trading)
+  // are hidden in the sidebar; bounce any other route to them (tour, deep link) home.
+  useEffect(() => {
+    if (pack.hiddenNav.includes(nav)) setNav("dashboard");
+  }, [nav, pack]);
 
   // Sidebar click: navigate, or — already on that item — reset the feature to its
   // initial screen by bumping the remount epoch.
@@ -116,7 +153,7 @@ export default function App() {
     resetOnboarding();
     setNav("dashboard");
     setAuthed(true);
-  }, [resetOnboarding]);
+  }, [resetOnboarding, setAuthed]);
 
   // Fade the app out before returning to the login page (mirrors the sign-in transition).
   const handleLogout = useCallback(() => {
@@ -125,7 +162,7 @@ export default function App() {
       setAuthed(false);
       setLoggingOut(false);
     }, 500);
-  }, []);
+  }, [setAuthed]);
 
   // Open a record from the Recent dropdown: tags open in Stock Locator's detail drawer.
   const handleOpenRecord = useCallback((r: RecentRecord) => {
@@ -166,7 +203,9 @@ export default function App() {
       clientId: string,
       lineItems: { tagId: string; qty: number; unitPrice: number; discountPct?: number }[],
       confirm: boolean,
-      meta?: { notes?: string; expectedShipDate?: string },
+      // `boom` makes the order a log-trading customer boom; `via` / `verb` set the
+      // tag-history wording ("Reserved for SO-… via Available-to-Sell" by default).
+      meta?: { notes?: string; expectedShipDate?: string; boom?: BoomInfo; via?: string; verb?: string },
     ): { ok: true; soId: string } | { ok: false; unavailableIds: string[] } => {
       if (confirm) {
         // Defensive check: every referenced tag must still be Available at commit time.
@@ -191,10 +230,14 @@ export default function App() {
           soId: newId,
           worker: identityFor(role),
           stamp: nowStamp(),
-          via: "Available-to-Sell",
+          via: meta?.via ?? "Available-to-Sell",
+          verb: meta?.verb,
         });
         soLineItems = reservedLines;
-        setTags(nextTags);
+        // A boom physically gathers its lots: they now sit where the boom is formed.
+        const boom = meta?.boom;
+        const lotIds = new Set(reservedLines.map((li) => li.tagId));
+        setTags(boom ? nextTags.map((t) => (lotIds.has(t.id) ? { ...t, yard: boom.location, section: boom.id } : t)) : nextTags);
       }
 
       const newSo: SalesOrder = {
@@ -205,6 +248,7 @@ export default function App() {
         lineItems: soLineItems,
         notes: meta?.notes,
         expectedShipDate: meta?.expectedShipDate,
+        ...(meta?.boom ? { boom: meta.boom } : {}),
       };
       setSalesOrders((prev) => [...prev, newSo]);
 
@@ -301,6 +345,73 @@ export default function App() {
 
   // Forward-only SO status transition (Open→Picked→Shipped). Shipped cascades every
   // linked Reserved tag to Shipped in the same commit so the two stores can't diverge.
+  // ── Log-trading booms ───────────────────────────────────────────────────────
+  // A boom is a SalesOrder with `boom` details. Moving it re-locates its lots; marking
+  // it in transit is Open → Picked (lots stay allocated and on hand); confirming
+  // delivery records the delivered volume and date and moves the boom and its lots to
+  // Shipped ("Delivered" in this pack's wording).
+  const appendLotHistory = useCallback(
+    (ids: Set<string>, event: string, stamp: string, patch: Partial<Tag> = {}) => {
+      setTags((prev) =>
+        prev.map((t) =>
+          ids.has(t.id)
+            ? { ...t, ...patch, updated: "just now", history: [...t.history, { e: event, t: stamp, w: identityFor(role) }] }
+            : t,
+        ),
+      );
+    },
+    [setTags, role],
+  );
+
+  const handleMoveBoom = useCallback(
+    (soId: string, to: string) => {
+      const so = salesOrders.find((o) => o.id === soId);
+      if (!so?.boom || so.boom.location === to) return;
+      const stamp = nowStamp();
+      const boom = so.boom;
+      setSalesOrders((prev) =>
+        prev.map((o) =>
+          o.id === soId && o.boom
+            ? { ...o, boom: { ...o.boom, location: to, moves: [...o.boom.moves, { at: stamp, from: o.boom.location, to, by: identityFor(role) }] } }
+            : o,
+        ),
+      );
+      appendLotHistory(new Set(so.lineItems.map((li) => li.tagId)), `Moved with boom ${boom.id} from ${boom.location} to ${to}`, stamp, { yard: to });
+    },
+    [salesOrders, setSalesOrders, appendLotHistory, role],
+  );
+
+  const handleBoomInTransit = useCallback(
+    (soId: string) => {
+      const so = salesOrders.find((o) => o.id === soId);
+      if (!so?.boom || so.status !== "Open") return;
+      setSalesOrders((prev) => prev.map((o) => (o.id === soId ? { ...o, status: "Picked" } : o)));
+      appendLotHistory(new Set(so.lineItems.map((li) => li.tagId)), `In transit with boom ${so.boom.id}`, nowStamp());
+    },
+    [salesOrders, setSalesOrders, appendLotHistory],
+  );
+
+  const handleConfirmDelivery = useCallback(
+    (soId: string, delivery: { date: string; volume: number }) => {
+      const so = salesOrders.find((o) => o.id === soId);
+      if (!so?.boom || (so.status !== "Open" && so.status !== "Picked")) return;
+      setSalesOrders((prev) =>
+        prev.map((o) =>
+          o.id === soId && o.boom
+            ? { ...o, status: "Shipped", boom: { ...o.boom, deliveredVolume: delivery.volume, deliveredDate: delivery.date } }
+            : o,
+        ),
+      );
+      appendLotHistory(
+        new Set(so.lineItems.map((li) => li.tagId)),
+        `Delivered via ${soId} (boom ${so.boom.id}) — ${delivery.volume} m³ confirmed`,
+        stampForDate(delivery.date),
+        { status: "Shipped" },
+      );
+    },
+    [salesOrders, setSalesOrders, appendLotHistory],
+  );
+
   const handleAdvanceSoStatus = useCallback((soId: string, next: SalesOrderStatus) => {
     let cascadeTagIds: string[] = [];
     setSalesOrders((prev) =>
@@ -457,7 +568,7 @@ export default function App() {
   return (
     <RecentRecordsProvider>
       <LookupsProvider>
-        <ClientsProvider>
+        <ClientsProvider seed={seed.clients} storageKey={pack.clientsStorageKey}>
         <div className={`flex h-screen bg-cream text-text overflow-hidden animate-fade-in transition-opacity duration-500 ${loggingOut ? "opacity-0" : "opacity-100"}`}>
           <Sidebar nav={nav} setNav={handleNav} floorView={isFloor} role={role} onLogout={handleLogout} />
           <div className="flex-1 flex flex-col overflow-hidden">
@@ -466,7 +577,28 @@ export default function App() {
             <div key={`${nav}:${navEpoch}`} className="flex-1 overflow-y-auto">
               {nav === "dashboard" && <Dashboard tags={tags} floorView={isFloor} onNavigateToLocator={handleNavigateToLocator} onOpenTag={handleOpenTagFromDashboard} />}
               {nav === "locator" && <StockLocator tags={tags} floorView={isFloor} role={role} openTagId={pendingTagId} onTagOpened={handleTagOpened} onUpdateTag={handleUpdateTag} onDeleteTags={handleDeleteTags} entryFilter={entryFilter} onClearEntryFilter={() => setEntryFilter(null)} salesOrders={salesOrders} onLinkSalesOrder={handleLinkSalesOrder} onOpenSo={handleOpenSoFromLocator} />}
-              {nav === "tagentry" && <TagEntry tags={tags} setTags={setTags} floorView={isFloor} onViewInInventory={handleViewInInventory} />}
+              {nav === "tagentry" && !isLogPack && <TagEntry tags={tags} setTags={setTags} floorView={isFloor} onViewInInventory={handleViewInInventory} />}
+              {nav === "tagentry" && isLogPack && <ScaleIntake tags={tags} setTags={setTags} floorView={isFloor} role={role} onViewInInventory={handleViewInInventory} />}
+              {nav === "sales" && isLogPack && role !== "floor" && (
+                <Booms
+                  tags={tags}
+                  salesOrders={salesOrders}
+                  role={role}
+                  openSoId={pendingSoId}
+                  onSoOpened={handleSoOpened}
+                  onCreateBoom={(clientId, lines, boom, notes, expected) =>
+                    handleCreateSalesOrder(clientId, lines, true, { boom, notes, expectedShipDate: expected, via: `boom ${boom.id}`, verb: "Allocated" })
+                  }
+                  onMoveBoom={handleMoveBoom}
+                  onMarkInTransit={handleBoomInTransit}
+                  onConfirmDelivery={handleConfirmDelivery}
+                  onOpenTag={handleOpenTagFromSo}
+                  onOpenClient={handleOpenClient}
+                />
+              )}
+              {nav === "volume" && isLogPack && role !== "floor" && (
+                <VolumeReport tags={tags} salesOrders={salesOrders} onNavigateToLocator={handleNavigateToLocator} onOpenSo={handleOpenSoFromLocator} onOpenClient={handleOpenClient} />
+              )}
               {nav === "delivery" && <DeliverySlips tags={tags} setTags={setTags} onNavigateToLocator={handleNavigateToLocator} />}
               {nav === "settings" && role === "manager" && <CustomValuesSettings onStartTour={() => handleStartTour(role)} />}
               {nav === "avail" && role !== "floor" && (
@@ -479,7 +611,7 @@ export default function App() {
                   onViewOrders={handleViewOrders}
                 />
               )}
-              {nav === "sales" && role !== "floor" && (
+              {nav === "sales" && !isLogPack && role !== "floor" && (
                 <SalesOrders
                   salesOrders={salesOrders}
                   tags={tags}
@@ -548,13 +680,13 @@ export default function App() {
                   requesterIdentity={identityFor(role)}
                 />
               )}
-              {!["dashboard", "locator", "tagentry", "delivery", "settings", "avail", "sales", "approvals", "clientprofile", "pulse"].includes(nav) && <ComingSoon name={nav} />}
+              {!["dashboard", "locator", "tagentry", "delivery", "settings", "avail", "sales", "approvals", "clientprofile", "pulse", "volume"].includes(nav) && <ComingSoon name={nav} />}
             </div>
           </div>
         </div>
         {activeRole && (
           <OnboardingTour
-            steps={tourStepsForRole(activeRole)}
+            steps={tourStepsForRole(activeRole).filter((st) => !st.nav || !pack.hiddenNav.includes(st.nav))}
             isFloor={activeRole === "floor"}
             onNavigate={setNav}
             onClose={handleTourClose}

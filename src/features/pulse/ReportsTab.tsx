@@ -81,7 +81,7 @@ export function ReportsTab({ tags, salesOrders, approvalRequests, role, range, t
       const key = `${t.species}|${t.grade}`;
       const g = valGroups.get(key) ?? { species: t.species, grade: t.grade, tags: 0, fbm: 0, cost: 0, market: 0, uncosted: 0 };
       g.tags += 1;
-      g.fbm += t.fbm;
+      g.fbm += t.volume;
       if (t.cost === undefined) g.uncosted += 1;
       else {
         g.cost += t.cost * t.qty;
@@ -100,7 +100,7 @@ export function ReportsTab({ tags, salesOrders, approvalRequests, role, range, t
     for (const m of booked) {
       const g = byClient.get(m.so.clientId) ?? { orders: 0, fbm: 0, net: 0, lastMs: 0 };
       g.orders += 1;
-      g.fbm += m.fbm;
+      g.fbm += m.volume;
       g.net += m.net;
       g.lastMs = Math.max(g.lastMs, m.orderMs);
       byClient.set(m.so.clientId, g);
@@ -135,7 +135,7 @@ export function ReportsTab({ tags, salesOrders, approvalRequests, role, range, t
       const g = sellGroups.get(key) ?? { species: t.species, grade: t.grade, tags: 0, pieces: 0, fbm: 0, low: Infinity, high: 0, value: 0, oldest: 0 };
       g.tags += 1;
       g.pieces += t.qty;
-      g.fbm += t.fbm;
+      g.fbm += t.volume;
       if (t.marketValue !== undefined) {
         g.low = Math.min(g.low, t.marketValue);
         g.high = Math.max(g.high, t.marketValue);
@@ -209,7 +209,7 @@ export function ReportsTab({ tags, salesOrders, approvalRequests, role, range, t
         ],
         rows: register.map((m) => [
           m.so.id, m.so.date, getClientName(m.so.clientId), clientById.get(m.so.clientId)?.territory ?? "—", m.so.status,
-          m.so.lineItems.length, m.fbm, Math.round(m.gross), Math.round(m.discount), Math.round(m.net),
+          m.so.lineItems.length, m.volume, Math.round(m.gross), Math.round(m.discount), Math.round(m.net),
           ...(isManager ? [m.costKnown && m.net > 0 ? pct(m.net - m.cost, m.net) : "—"] : []),
         ]),
         flagged: register.map((m) => m.so.status === "Cancelled"),
@@ -247,7 +247,7 @@ export function ReportsTab({ tags, salesOrders, approvalRequests, role, range, t
         ],
         rows: aging.map(({ t, days }) => [
           t.id, t.species, t.grade, `${t.thick}×${t.width}×${t.length}'`, `${t.section}/${t.rack}/${t.bin}`,
-          t.qty, t.fbm, days, t.cost === undefined ? "—" : Math.round(t.cost * t.qty),
+          t.qty, t.volume, days, t.cost === undefined ? "—" : Math.round(t.cost * t.qty),
         ]),
         flagged: agingFlags,
         flagCount: agingFlags.filter(Boolean).length,
@@ -266,7 +266,7 @@ export function ReportsTab({ tags, salesOrders, approvalRequests, role, range, t
         rows: open.map(({ m, daysToShip }) => [
           m.so.id, getClientName(m.so.clientId), m.so.status, m.so.date, m.so.expectedShipDate ?? "—",
           daysToShip === null ? "—" : daysToShip < 0 ? `${-daysToShip}d overdue` : daysToShip === 0 ? "Today" : `In ${daysToShip}d`,
-          m.so.lineItems.length, m.fbm, Math.round(m.net),
+          m.so.lineItems.length, m.volume, Math.round(m.net),
         ]),
         flagged: openFlags,
         flagCount: openFlags.filter(Boolean).length,

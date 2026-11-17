@@ -11,6 +11,7 @@
 //   Days in yard   days since the tag's first history event (its receipt).
 import type { SalesOrder, SalesOrderStatus, Tag } from "./types";
 import { calcExtendedPrice } from "./pricing";
+import { profileOf, volumeForQty } from "./products";
 
 export const DAY_MS = 86_400_000;
 export const MONTHS_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -158,7 +159,7 @@ export interface OrderMetrics {
   gross: number; // list value before discounts
   net: number; // after discounts
   discount: number; // gross − net
-  fbm: number; // board feet on the order
+  volume: number; // volume on the order, in the line tags' measure unit
   cost: number; // summed over lines whose tag has a cost
   costKnown: boolean; // false if any line's tag has no cost (margin would be overstated)
   dueMs: number | null; // expected ship date
@@ -171,12 +172,14 @@ export function buildOrderMetrics(salesOrders: SalesOrder[], tags: Tag[]): Order
   return salesOrders.map((so) => {
     let gross = 0;
     let net = 0;
-    let fbm = 0;
+    let volume = 0;
     let cost = 0;
     let costKnown = so.lineItems.length > 0;
     let shippedMs: number | null = null;
     const species = new Set<string>();
-    const shipMarker = `Shipped via ${so.id}`;
+    // Written by App when the order ships ("Shipped via SO-…") or a boom is delivered
+    // ("Delivered via SO-…").
+    const shipMarkers = [`Shipped via ${so.id}`, `Delivered via ${so.id}`];
     for (const li of so.lineItems) {
       gross += li.qty * li.unitPrice;
       net += calcExtendedPrice(li.qty, li.unitPrice, li.discountPct);
@@ -186,11 +189,11 @@ export function buildOrderMetrics(salesOrders: SalesOrder[], tags: Tag[]): Order
         continue;
       }
       species.add(tag.species);
-      fbm += ((tag.thick * tag.width * tag.length) / 12) * li.qty;
+      volume += volumeForQty(tag, li.qty);
       if (tag.cost === undefined) costKnown = false;
       else cost += tag.cost * li.qty;
       for (const ev of tag.history) {
-        if (!ev.e.startsWith(shipMarker)) continue;
+        if (!shipMarkers.some((mk) => ev.e.startsWith(mk))) continue;
         const ms = parseStampMs(ev.t);
         if (ms !== null && (shippedMs === null || ms > shippedMs)) shippedMs = ms;
       }
@@ -202,7 +205,7 @@ export function buildOrderMetrics(salesOrders: SalesOrder[], tags: Tag[]): Order
       gross,
       net,
       discount: gross - net,
-      fbm: Math.round(fbm),
+      volume: Math.round(volume),
       cost,
       costKnown,
       dueMs: so.expectedShipDate ? isoToMs(so.expectedShipDate) : null,
@@ -259,12 +262,12 @@ export function daysInYard(tag: Tag, todayMs: number): number {
 }
 
 export const AGING_THRESHOLD_DAYS = 91;
-export const LOW_STOCK_QTY = 50;
 export const ON_HAND_STATUSES: Tag["status"][] = ["Pending", "Received", "Available", "Reserved", "Discrepancy"];
 
-// Low stock is about what is still in the yard — a tag that has shipped is gone, not low.
+// Low stock is about what is still in the yard — a tag that has shipped is gone, not
+// low. The threshold comes from the tag's product profile (lumber: 50 pcs, logs: 20 m³).
 export function isLowStock(tag: Tag): boolean {
-  return tag.status !== "Shipped" && tag.qty < LOW_STOCK_QTY;
+  return tag.status !== "Shipped" && tag.qty < profileOf(tag).lowStockQty;
 }
 
 // Shortage & asset rows by species + grade. A group is in shortage when a confirmed
@@ -287,10 +290,10 @@ export function buildShortageRows(tags: Tag[], salesOrders: SalesOrder[]): Short
   for (const t of tags) {
     const key = `${t.species}|${t.grade}`;
     const g = groups.get(key) ?? { species: t.species, grade: t.grade, physicalFbm: 0, reservedFbm: 0, availableFbm: 0, availableCount: 0, hasOpenDemand: false, shortage: false };
-    if (t.status !== "Shipped") g.physicalFbm += t.fbm;
-    if (t.status === "Reserved") g.reservedFbm += t.fbm;
+    if (t.status !== "Shipped") g.physicalFbm += t.volume;
+    if (t.status === "Reserved") g.reservedFbm += t.volume;
     if (t.status === "Available") {
-      g.availableFbm += t.fbm;
+      g.availableFbm += t.volume;
       g.availableCount += 1;
     }
     groups.set(key, g);
@@ -316,15 +319,15 @@ export function buildShortageRows(tags: Tag[], salesOrders: SalesOrder[]): Short
 // On-hand inventory value (everything not yet Shipped). Cost and market value are
 // per piece and only present on some tags, so `uncosted` reports how many on-hand tags
 // were left out — the totals are a floor, not an estimate of the missing ones.
-export function inventoryValue(tags: Tag[]): { cost: number; market: number; fbm: number; counted: number; uncosted: number } {
+export function inventoryValue(tags: Tag[]): { cost: number; market: number; volume: number; counted: number; uncosted: number } {
   let cost = 0;
   let market = 0;
-  let fbm = 0;
+  let volume = 0;
   let counted = 0;
   let uncosted = 0;
   for (const t of tags) {
     if (t.status === "Shipped") continue;
-    fbm += t.fbm;
+    volume += t.volume;
     if (t.cost === undefined) {
       uncosted += 1;
       continue;
@@ -333,7 +336,7 @@ export function inventoryValue(tags: Tag[]): { cost: number; market: number; fbm
     cost += t.cost * t.qty;
     market += (t.marketValue ?? t.cost) * t.qty;
   }
-  return { cost, market, fbm, counted, uncosted };
+  return { cost, market, volume, counted, uncosted };
 }
 
 // Was this tag Available at `ms`? Replays the tag's movement history: release / creation
@@ -345,29 +348,29 @@ function wasAvailableAt(tag: Tag, ms: number): boolean {
     if (at === null || at > ms) continue;
     const e = ev.e;
     if (e.startsWith("Released") || e.startsWith("Tag created via Tag Entry") || e.startsWith("Status changed to Available")) available = true;
-    else if (e.startsWith("Split from") || e.startsWith("Reserved") || e.startsWith("Shipped") || e.startsWith("Picked") || e.startsWith("Flagged") || e.startsWith("Status changed to")) available = false;
+    else if (["Split from", "Reserved", "Allocated", "Shipped", "Delivered", "Picked", "Flagged", "Status changed to"].some((p) => e.startsWith(p))) available = false;
     // "Split N pcs into …" leaves the parent Available — no change.
   }
   return available;
 }
 
-// Available tag count + FBM at `points` weekly checkpoints ending today (oldest first).
+// Available tag count + volume at `points` weekly checkpoints ending today (oldest first).
 // Past checkpoints are reconstructed from tag history; the final point is the live
 // status, so the series always ends on the number shown beside it.
-export function availabilityHistory(tags: Tag[], todayMs: number, points = 7, stepDays = 7): { ms: number; count: number; fbm: number }[] {
-  const out: { ms: number; count: number; fbm: number }[] = [];
+export function availabilityHistory(tags: Tag[], todayMs: number, points = 7, stepDays = 7): { ms: number; count: number; volume: number }[] {
+  const out: { ms: number; count: number; volume: number }[] = [];
   for (let i = points - 1; i >= 0; i--) {
     const dayEnd = addDays(todayMs, 1 - i * stepDays) - 1;
     const live = i === 0;
     let count = 0;
-    let fbm = 0;
+    let volume = 0;
     for (const t of tags) {
       if (live ? t.status === "Available" : wasAvailableAt(t, dayEnd)) {
         count += 1;
-        fbm += t.fbm;
+        volume += t.volume;
       }
     }
-    out.push({ ms: dayEnd, count, fbm });
+    out.push({ ms: dayEnd, count, volume });
   }
   return out;
 }

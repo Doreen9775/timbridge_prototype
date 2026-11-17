@@ -61,7 +61,7 @@ export function SalesTab({ tags, salesOrders, approvalRequests, role, range, tod
     // Shipped FBM is attributed to the ship date, falling back to the order date when a
     // shipped order carries no ship stamp.
     const shippedIn = (pred: (ms: number) => boolean) =>
-      sum(metrics.filter((m) => m.so.status === "Shipped" && pred(m.shippedMs ?? m.orderMs)), (m) => m.fbm);
+      sum(metrics.filter((m) => m.so.status === "Shipped" && pred(m.shippedMs ?? m.orderMs)), (m) => m.volume);
     const withCost = booked.filter((m) => m.costKnown && m.net > 0);
     const prevWithCost = prevBooked.filter((m) => m.costKnown && m.net > 0);
     const margin = (rows: OrderMetrics[]) => {
@@ -120,7 +120,7 @@ export function SalesTab({ tags, salesOrders, approvalRequests, role, range, tod
       const g = byClient.get(m.so.clientId) ?? { net: 0, orders: 0, fbm: 0 };
       g.net += m.net;
       g.orders += 1;
-      g.fbm += m.fbm;
+      g.fbm += m.volume;
       byClient.set(m.so.clientId, g);
     }
     return [...byClient.entries()]

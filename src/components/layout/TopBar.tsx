@@ -2,6 +2,7 @@ import { Search, Bell, ChevronRight, HelpCircle } from "lucide-react";
 import type { NavKey } from "./Sidebar";
 import type { RecentRecord, Role } from "@/lib/types";
 import { RecentMenu } from "./RecentMenu";
+import { usePack } from "@/hooks/usePack";
 
 const ROLE_VIEWS: [Role, string][] = [
   ["manager", "Manager View"],
@@ -14,14 +15,14 @@ const titles: Record<NavKey, string> = {
   delivery: "Delivery Slips", po: "Purchase Orders", prod: "Production", sales: "Sales Orders",
   shipping: "Shipping / Trucking", invoicing: "Invoicing",
   avail: "Available to Sell", clientprofile: "Client Profile", approvals: "Approvals",
-  pulse: "Pulse", settings: "Settings",
+  pulse: "Pulse", volume: "Volume Report", settings: "Settings",
 };
 
 const parents: Partial<Record<NavKey, string>> = {
   locator: "Inventory", tagentry: "Inventory", avail: "Inventory",
   delivery: "Operations", po: "Operations", prod: "Operations", sales: "Operations",
   shipping: "Operations", invoicing: "Operations", clientprofile: "Operations", approvals: "Operations",
-  settings: "Setup",
+  settings: "Setup", volume: "Insights",
 };
 
 interface TopBarProps {
@@ -33,6 +34,7 @@ interface TopBarProps {
 }
 
 export function TopBar({ nav, role, setRole, onOpenRecord, onStartTour }: TopBarProps) {
+  const { pack } = usePack();
   return (
     <div className="bg-white h-14 flex items-center px-6 border-b border-sage sticky top-0 z-10 gap-4">
       <div className="flex-1">
@@ -43,7 +45,7 @@ export function TopBar({ nav, role, setRole, onOpenRecord, onStartTour }: TopBar
               <ChevronRight size={12} />
             </>
           )}
-          <span className="text-text font-medium">{titles[nav] || "Dashboard"}</span>
+          <span className="text-text font-medium">{pack.navLabels[nav] ?? (titles[nav] || "Dashboard")}</span>
         </div>
       </div>
 
