@@ -1215,6 +1215,68 @@ Lumber behaviour and figures are unchanged, except the yard-map hover now counts
 **Files / 改动:** new `src/lib/products.ts`, `src/lib/packs.ts`, `src/lib/mock-data-logs.ts`, `src/hooks/usePack.tsx`, `src/features/log-trading/{ScaleIntake,Booms,VolumeReport}.tsx`; modified `src/App.tsx`, `src/lib/{types,analytics,reserveSplit,mock-data}.ts`, `src/hooks/{useTags,useSalesOrders,useApprovalRequests}.ts`, `src/hooks/useClients.tsx`, `src/components/layout/{Sidebar,TopBar}.tsx`, `src/components/shared/{StatusBadge,SOStatusPill}.tsx`, `src/features/dashboard/{Dashboard,YardMap}.tsx`, `src/features/stock-locator/StockLocator.tsx`, `src/features/clients/ClientDetail.tsx`, `src/features/settings/CustomValuesSettings.tsx`, `src/features/tag-entry/TagEntry.tsx`, `src/features/delivery-slips/DeliverySlips.tsx`, `src/features/available-to-sell/AvailableToSell.tsx`, `src/features/pulse/*`, `CLAUDE.md`
 
 ---
+
+### `7b49b8e` · 18:00 · 财务层：业务事件生成发票和账单，模拟 QuickBooks 连接，Sales 只读查看应收
+
+**🇨🇳 中文**
+
+**原则**：Timbridge 不记账。交付和收货在 Timbridge 产生，变成发票和账单交给会计软件，付款再读回来。每条信息只录入一次。
+
+**财务层（`src/lib/finance.ts`）**
+- **订单发货 / boom 确认交付 → 发票**：按实际交付量开票（原木按实际交付 m³），单价为约定价格。
+- **从外部卖方收货 → 账单**：每个卖方每天一张；自产的货不生成账单。
+- 金额均为**税前**，只带税码，税由会计软件计算。
+- 单据状态：草稿 → 未付 / 部分付款 / 逾期 / 已付；到期日按客户付款条件计算（Net 30 即 30 天，COD 即当天）。
+- **连接器**：QuickBooks Online（模拟）、Xero（列出但暂不可用）、"无会计系统"（导出 QuickBooks 风格的 CSV）。只有连接器知道具体的会计系统，以后加 Xero 或 Sage 不需要改单据、事件或界面。
+- 两个演示公司都按各自的发货和收货生成了历史发票、账单和付款记录，审计无矛盾。
+
+**界面**
+- **Invoicing**：
+  - 顶部指标：已发货未开票、应收余额、逾期、待付账单。
+  - 待开票和待记账队列，可逐个或全部创建。
+  - 单据列表可按状态筛选，可批量发送或导出。
+  - 单据详情里有明细行、同步状态和付款记录。原型专用的 "Simulate payment in QuickBooks" 用来演示付款读回。
+  - Sync activity 记录每一次发送和收款。
+- **Settings → Accounting**：会计系统选择与连接；开票规则（交付时自动起草，或手动）；是否自动发送；币种（默认 CAD）和税码；客户与 QuickBooks 的对应情况。
+- **Pulse Overview** 的 Needs attention 新增"已发货未开票"和"发票逾期"两行。
+- **Client Profile** 新增客户账户信息：未结余额、逾期金额、最近付款日期。
+
+**权限**
+- **Manager**：负责开票、账单和会计设置。
+- **Sales**：只读查看客户发票、余额和应收提醒，方便回答客户"发票开了吗"和跟进逾期款；看不到应付账单、会计连接、成本和毛利。
+
+**🇬🇧 English**
+
+**Principle**: Timbridge keeps no ledger. Deliveries and receipts happen in Timbridge, become invoices and bills owned by the accounting system, and payments come back — each fact entered once.
+
+**Finance layer (`src/lib/finance.ts`)**
+- **Order shipped / boom delivered → invoice**, billed on what actually shipped (a boom on its delivered m³) at the agreed price.
+- **Stock received from an outside seller → bill**, one per seller per day; in-house production is never billed.
+- Amounts are **before tax** with a tax code; the accounting system calculates the tax.
+- Status: Draft → Open / Partially paid / Overdue / Paid; due dates follow client payment terms (Net 30 → 30 days, COD → same day).
+- **Connectors**: QuickBooks Online (mocked), Xero (listed, not yet available) and "No accounting system" (QuickBooks-style CSV export). Only the connector knows the specific system, so adding Xero or Sage won't touch documents, events or screens.
+- Both demo companies have invoice, bill and payment history derived from their own shipments and receipts, audited for consistency.
+
+**Screens**
+- **Invoicing**:
+  - Top figures: shipped not invoiced, open receivables, overdue, bills to pay.
+  - Ready-to-invoice and ready-to-bill queues, one at a time or all at once.
+  - Document lists with status filters, bulk send or export.
+  - Document drawer with lines, sync status and payments. A prototype-only "Simulate payment in QuickBooks" demonstrates payments flowing back.
+  - Sync activity log of every send and payment.
+- **Settings → Accounting**: accounting system and connection, billing rule (draft on delivery or by hand), auto-send, currency (CAD default) and tax codes, customer matching with QuickBooks.
+- **Pulse Overview** gains "shipped, not invoiced" and "invoices overdue" in Needs attention.
+- **Client Profile** gains an account block: open balance, overdue, last payment.
+
+**Roles**
+- **Manager** runs invoicing, bills and accounting settings.
+- **Sales** sees customer invoices, balances and the receivables rows read-only — to answer "has it been invoiced?" and follow up overdue accounts — but never bills, the accounting connection, cost or margin.
+
+**Not included**: the temporary Figma capture script in `index.html` is still uncommitted.
+
+**Files / 改动:** new `src/lib/finance.ts`, `src/lib/finance-seed.ts`, `src/hooks/useFinance.tsx`, `src/features/invoicing/Invoicing.tsx`, `src/features/settings/AccountingSettings.tsx`; modified `src/App.tsx`, `src/components/layout/Sidebar.tsx`, `src/features/clients/ClientDetail.tsx`, `src/features/pulse/{OverviewTab,Pulse}.tsx`, `src/features/settings/CustomValuesSettings.tsx`, `CLAUDE.md`
+
+---
 ## Pending / 未来 (not yet built — 尚未开始)
 
 - **Approvals 里 Sales 视图看到的历史范围**（当前 MyApprovals 显示所有状态，Manager 只看 Pending；如果 Manager 需要审批历史查阅，加个 History tab）
@@ -1225,6 +1287,9 @@ Lumber behaviour and figures are unchanged, except the yard-map hover now counts
 - **`daysInYard` 在 AvailableToSell 里还有一份副本**（Pulse 已改用 `lib/analytics.ts` 的共享版本；AvailableToSell 待迁移）
 - **Dashboard 顶部 Today / This Week / This Month 切换**（目前仍是装饰性的，未接入数据）
 - **按销售员区分数据**（原型里 Sales 是统一身份，报表里的"我的订单/申请"实际是全部 Sales 的数据）
-- **财务层（第三步）**：计价单位与财务事件、Invoicing 开票队列、模拟 QBO 连接器和 CSV 导出
+- **真实的 QuickBooks 对接**（需要 Intuit 开发者账号、OAuth 和服务端保存 token，超出当前无后端的原型范围）
+- **Delivery Slips 导入的货写入成本**（送货单已解析出单价，但目前没写进标签成本，所以不会生成账单）
+- **Booms / Sales Order 详情里显示对应发票状态**，以及 Volume Report 的金额列
+- **财务 / 内勤角色**，以及"Sales 能否起草发票"的公司级开关
 - **Pulse 按单位和用词显示**（目前原木包隐藏了 Pulse；Dashboard 动态筛选、Stock Locator 状态筛选仍是锯材用词）
 - **原木批次在 Log Inventory 里编辑**（锯材的编辑表单不适用，原木批次目前只读）
