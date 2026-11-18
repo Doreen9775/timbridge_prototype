@@ -48,6 +48,7 @@ There are **no tests** — verify changes with `npx tsc -b --noEmit` plus a visu
 | Tag Entry | ✓ | — | ✓ |
 | Available to Sell, Sales Order, Client Profile, Pulse | ✓ | ✓ | — |
 | Approvals | ✓ review queue (`ApprovalQueue`) | ✓ own requests (`MyApprovals`) | — |
+| Invoicing | ✓ runs it | ✓ read-only (customer invoices) | — |
 | Delivery Slips, Settings | ✓ | — | — |
 
 Finer gates inside features: **creating orders is Sales-only** (the selection checkboxes and order panel in Available to Sell and Client Profile render only for Sales; Manager browses read-only), editing and deleting tags in Stock Locator is Manager-only, and Pulse's Reports tab is role-aware — Sales gets its own library with list prices only; anything built on cost is Manager-only.
@@ -82,6 +83,12 @@ Because clients persist while tags and orders reset, a reload can leave a locall
 - Every discounted order line has an approval request behind it; `updated` labels and the Dashboard activity feed are derived from tag history, not typed in.
 - Each 30-day window carries a similar, gently growing volume, and the history is long enough that a 90-day period has a complete previous period. Deltas are hidden (`hasFullPrevPeriod`) when it does not.
 
+**Finance: events in, accounting documents out.** Timbridge keeps no ledger. `src/lib/finance.ts` turns business events into documents the accounting system owns: an order shipped / boom delivered → **invoice** (billed on what actually shipped — a boom on its delivered m³ — at the agreed price), stock received from an outside seller → **bill** (one per seller per receipt day; in-house production is never billed). Documents carry amounts *before tax* plus a tax code — tax is always calculated by the accounting system, never here. A document is a Draft until sent; after that its status (Open / Partially paid / Overdue / Paid) comes from payments read back and the due date (client payment terms, "Net 30" → 30 days).
+- `useFinanceStore` / `useFinance` (`src/hooks/useFinance.tsx`) hold documents and the sync log in memory, seeded per pack by `src/lib/finance-seed.ts` from that pack's shipped orders and receipts; accounting settings persist per pack in `localStorage` (`timbridge_accounting_<pack id>`).
+- `App` drafts the invoice on the event itself (`draftInvoiceOnDelivery`, called from the ship and boom-delivery handlers) when Settings → Accounting says "draft on delivery"; otherwise shipped orders wait in Invoicing → Ready to invoice. `ClientsProvider` sits above `Workspace` so those handlers can read payment terms.
+- Connectors (`CONNECTORS`): QuickBooks Online (mocked — sending assigns a QuickBooks id, payments are seeded or simulated from the invoice drawer), Xero (listed, not available), and "No accounting system" (CSV export, QuickBooks-style columns). Only the connector knows about a specific system; adding one must not touch documents, events or screens.
+- Who sees what: Manager runs Invoicing (drafts, sending, bills, sync log) and Settings → Accounting. Sales sees *receivables* read-only — customer invoices with status, due dates, payments and balances, the Client Profile account block, and the Pulse "shipped, not invoiced" / "invoices overdue" rows — because in practice Sales answers "has it been invoiced?" and follows up on overdue accounts. Sales never sees payables (bills), the accounting connection, cost or margin.
+
 **Onboarding tour.** `src/components/shared/OnboardingTour.tsx` spotlights elements by their `data-onboarding` attribute; per-role step lists live in `src/lib/onboardingSteps.ts`. Renaming or removing an element that carries `data-onboarding` silently drops that step, so update the step config with it.
 
 **Shared UI primitives** in `src/components/shared` — reuse these rather than hand-rolling: `Button`, `Pagination`, `FilterBar` (filters apply on click, no Apply button), `StatusBadge`, `SOStatusPill`, `ConfirmationBanner`, `ComingSoon`.
@@ -107,4 +114,4 @@ The official logo is `src/assets/timbridge-logo.svg`, rendered as an `<img>` by 
 ## Conventions
 
 - After each push, append **one** bilingual (中文 / English) entry to `docs/CHANGELOG.md` summarizing that push (grouping its commits), and summarize it in chat. Do not edit the changelog on individual commits.
-- Floor view = tablet-optimized layouts only; Sales view never shows finance/margin data (per the kickoff architecture).
+- Floor view = tablet-optimized layouts only; Sales view never shows cost, margin or payables (per the kickoff architecture). Customer invoices and balances are the exception: Sales sees them read-only.

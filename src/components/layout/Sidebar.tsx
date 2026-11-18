@@ -39,6 +39,7 @@ const sections: NavSection[] = [
     { key: "prod", icon: <Factory size={16} />, label: "Production", allowedRoles: ["manager"] },
     { key: "sales", icon: <FileText size={16} />, label: "Sales Order", allowedRoles: ["manager", "sales"] },
     { key: "shipping", icon: <Route size={16} />, label: "Shipping / Trucking", allowedRoles: ["manager", "sales"] },
+    // Manager runs invoicing; Sales sees customer invoices read-only (see Invoicing.tsx).
     { key: "invoicing", icon: <Receipt size={16} />, label: "Invoicing", allowedRoles: ["manager", "sales"] },
     { key: "clientprofile", icon: <Users size={16} />, label: "Client Profile", allowedRoles: ["manager", "sales"] },
     { key: "approvals", icon: <ClipboardCheck size={16} />, label: "Approvals", allowedRoles: ["manager", "sales"] },

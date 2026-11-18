@@ -17,7 +17,9 @@ import { Clients } from "@/features/clients/Clients";
 import { Pulse } from "@/features/pulse/Pulse";
 import { RecentRecordsProvider } from "@/hooks/useRecentRecords";
 import { LookupsProvider } from "@/hooks/useLookups";
-import { ClientsProvider } from "@/hooks/useClients";
+import { ClientsProvider, useClients } from "@/hooks/useClients";
+import { FinanceProvider, useFinanceStore } from "@/hooks/useFinance";
+import { Invoicing } from "@/features/invoicing/Invoicing";
 import type { ApprovalRequest, ApprovalRequestType, BoomInfo, EntryFilter, RecentRecord, Role, SalesOrder, SalesOrderFilter, SalesOrderStatus, Tag } from "@/lib/types";
 import { useRole } from "@/hooks/useRole";
 import { useTags } from "@/hooks/useTags";
@@ -56,7 +58,14 @@ export default function App() {
 function PackWorkspace() {
   const { pack } = usePack();
   const [authed, setAuthed] = useState(false);
-  return <Workspace key={pack.id} authed={authed} setAuthed={setAuthed} />;
+  // Clients sit above the workspace so its handlers (e.g. drafting an invoice on
+  // delivery) can read payment terms.
+  const clientSeed = useMemo(() => pack.seed().clients, [pack]);
+  return (
+    <ClientsProvider key={pack.id} seed={clientSeed} storageKey={pack.clientsStorageKey}>
+      <Workspace key={pack.id} authed={authed} setAuthed={setAuthed} />
+    </ClientsProvider>
+  );
 }
 
 // "Nov 17 2026 14:05" for a chosen ISO date, at the current time of day.
@@ -86,6 +95,18 @@ function Workspace({ authed, setAuthed }: { authed: boolean; setAuthed: (v: bool
   const { tags, setTags } = useTags(seed.tags);
   const { salesOrders, setSalesOrders } = useSalesOrders(seed.salesOrders);
   const { approvalRequests, setApprovalRequests } = useApprovalRequests(seed.approvals);
+  const { clientById } = useClients();
+  // Invoices, bills and the accounting connection (seeded from this pack's history).
+  const finance = useFinanceStore(pack, seed);
+  // Financial event: an order shipped / a boom delivered → draft its invoice, when the
+  // company's billing rule says to (Settings → Accounting).
+  const draftInvoiceOnDelivery = useCallback(
+    (so: SalesOrder) => {
+      if (finance.settings.invoiceTrigger !== "onDelivery") return;
+      finance.createInvoices([{ so, client: clientById.get(so.clientId) }], tags);
+    },
+    [finance, clientById, tags],
+  );
   // Submitter-side "already seen this resolution" tracker — parallel to the
   // request store so the ApprovalRequest type stays exactly as spec'd.
   const [acknowledgedApprovalIds, setAcknowledgedApprovalIds] = useState<Set<string>>(() => new Set());
@@ -121,7 +142,7 @@ function Workspace({ authed, setAuthed }: { authed: boolean; setAuthed: (v: bool
   // Settings (Custom Values) is Manager-only — redirect away if role changes while on it
   // (e.g. switching to Floor View) or if it's somehow reached otherwise.
   useEffect(() => {
-    if (nav === "settings" && role !== "manager") setNav("dashboard");
+    if ((nav === "settings" && role !== "manager") || (nav === "invoicing" && role === "floor")) setNav("dashboard");
   }, [nav, role]);
 
   // Available to Sell, Sales Orders, Approvals, Client Profile and Pulse are
@@ -408,11 +429,14 @@ function Workspace({ authed, setAuthed }: { authed: boolean; setAuthed: (v: bool
         stampForDate(delivery.date),
         { status: "Shipped" },
       );
+      draftInvoiceOnDelivery({ ...so, status: "Shipped", boom: { ...so.boom, deliveredVolume: delivery.volume, deliveredDate: delivery.date } });
     },
-    [salesOrders, setSalesOrders, appendLotHistory],
+    [salesOrders, setSalesOrders, appendLotHistory, draftInvoiceOnDelivery],
   );
 
   const handleAdvanceSoStatus = useCallback((soId: string, next: SalesOrderStatus) => {
+    const shippedSo = next === "Shipped" ? salesOrders.find((o) => o.id === soId) : undefined;
+    if (shippedSo) draftInvoiceOnDelivery({ ...shippedSo, status: "Shipped" });
     let cascadeTagIds: string[] = [];
     setSalesOrders((prev) =>
       prev.map((so) => {
@@ -440,7 +464,7 @@ function Workspace({ authed, setAuthed }: { authed: boolean; setAuthed: (v: bool
         ),
       );
     }
-  }, [setSalesOrders, setTags]);
+  }, [setSalesOrders, setTags, salesOrders, draftInvoiceOnDelivery]);
 
   // Deep-link: Stock Locator's Linked Transactions SO chip → Sales Orders + open drawer.
   const handleOpenSoFromLocator = useCallback((soId: string) => {
@@ -568,7 +592,7 @@ function Workspace({ authed, setAuthed }: { authed: boolean; setAuthed: (v: bool
   return (
     <RecentRecordsProvider>
       <LookupsProvider>
-        <ClientsProvider seed={seed.clients} storageKey={pack.clientsStorageKey}>
+        <FinanceProvider value={finance}>
         <div className={`flex h-screen bg-cream text-text overflow-hidden animate-fade-in transition-opacity duration-500 ${loggingOut ? "opacity-0" : "opacity-100"}`}>
           <Sidebar nav={nav} setNav={handleNav} floorView={isFloor} role={role} onLogout={handleLogout} />
           <div className="flex-1 flex flex-col overflow-hidden">
@@ -595,6 +619,9 @@ function Workspace({ authed, setAuthed }: { authed: boolean; setAuthed: (v: bool
                   onOpenTag={handleOpenTagFromSo}
                   onOpenClient={handleOpenClient}
                 />
+              )}
+              {nav === "invoicing" && role !== "floor" && (
+                <Invoicing tags={tags} salesOrders={salesOrders} role={role} onOpenSo={handleOpenSoFromLocator} onOpenClient={handleOpenClient} onOpenSettings={() => setNav("settings")} />
               )}
               {nav === "volume" && isLogPack && role !== "floor" && (
                 <VolumeReport tags={tags} salesOrders={salesOrders} onNavigateToLocator={handleNavigateToLocator} onOpenSo={handleOpenSoFromLocator} onOpenClient={handleOpenClient} />
@@ -651,6 +678,7 @@ function Workspace({ authed, setAuthed }: { authed: boolean; setAuthed: (v: bool
                   onOpenClient={handleOpenClient}
                   onOpenSo={handleOpenSoFromLocator}
                   onOpenApprovals={() => setNav("approvals")}
+                  onOpenInvoicing={() => setNav("invoicing")}
                 />
               )}
               {nav === "approvals" && role === "sales" && (
@@ -680,7 +708,7 @@ function Workspace({ authed, setAuthed }: { authed: boolean; setAuthed: (v: bool
                   requesterIdentity={identityFor(role)}
                 />
               )}
-              {!["dashboard", "locator", "tagentry", "delivery", "settings", "avail", "sales", "approvals", "clientprofile", "pulse", "volume"].includes(nav) && <ComingSoon name={nav} />}
+              {!["dashboard", "locator", "tagentry", "delivery", "settings", "avail", "sales", "approvals", "clientprofile", "pulse", "volume", "invoicing"].includes(nav) && <ComingSoon name={nav} />}
             </div>
           </div>
         </div>
@@ -692,7 +720,7 @@ function Workspace({ authed, setAuthed }: { authed: boolean; setAuthed: (v: bool
             onClose={handleTourClose}
           />
         )}
-        </ClientsProvider>
+        </FinanceProvider>
       </LookupsProvider>
     </RecentRecordsProvider>
   );

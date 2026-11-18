@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Trash2, Plus, Compass, Check } from "lucide-react";
 import { usePack } from "@/hooks/usePack";
+import { AccountingSettings } from "./AccountingSettings";
 import { PACKS, type PackId } from "@/lib/packs";
 import { LOOKUP_TABLE_LABELS, type LookupTable } from "@/lib/lookups";
 import { useLookups } from "@/hooks/useLookups";
@@ -48,6 +49,8 @@ export function CustomValuesSettings({ onStartTour }: { onStartTour: () => void 
             );
           })}
         </div>
+
+        <AccountingSettings />
 
         <div className="mb-1 text-xl font-display font-bold text-ink">Custom Values</div>
         <div className="text-[13px] text-text-sec mb-6">

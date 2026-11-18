@@ -113,6 +113,7 @@ interface PulseProps {
   onOpenClient?: (clientId: string) => void;
   onOpenSo?: (soId: string) => void;
   onOpenApprovals?: () => void;
+  onOpenInvoicing?: () => void;
 }
 
 // Tabs are organised by the question being asked, not by chart-vs-table.
@@ -125,7 +126,7 @@ const TAB_BLURB: Record<TabKey, string> = {
   reports: "Exportable reports for your role — orders, clients, stock and approvals.",
 };
 
-export function Pulse({ tags, salesOrders, approvalRequests, role, onNavigateToLocator, onNavigateToSales, onOpenClient, onOpenSo, onOpenApprovals }: PulseProps) {
+export function Pulse({ tags, salesOrders, approvalRequests, role, onNavigateToLocator, onNavigateToSales, onOpenClient, onOpenSo, onOpenApprovals, onOpenInvoicing }: PulseProps) {
   // Reports are role-aware (see ReportsTab): Manager and Sales each get their own library.
   const canSeeReports = role !== "floor";
   const [tab, setTab] = useState<TabKey>("overview");
@@ -207,6 +208,7 @@ export function Pulse({ tags, salesOrders, approvalRequests, role, onNavigateToL
             onNavigateToLocator={onNavigateToLocator}
             onNavigateToSales={onNavigateToSales}
             onOpenApprovals={onOpenApprovals}
+            onOpenInvoicing={onOpenInvoicing}
             onOpenTab={setTab}
           />
         )}

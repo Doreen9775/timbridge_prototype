@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
+import { useFinance } from "@/hooks/useFinance";
+import { balanceOf, statusOf, todayIso } from "@/lib/finance";
 import { usePack } from "@/hooks/usePack";
 import { X, Maximize2, Minimize2, Pencil, Mail, Phone, MapPin, Map, CreditCard, FilePlus } from "lucide-react";
 import type { Client, Role, SalesOrder, Tag } from "@/lib/types";
@@ -56,6 +58,17 @@ export function ClientDetail({
   // The inline order panel is the lumber sales flow; packs without it (log trading
   // allocates from Booms instead) don't offer it here.
   const { pack } = usePack();
+  const finance = useFinance();
+  // Open and overdue balance on invoices already sent to the accounting system.
+  const account = useMemo(() => {
+    const iso = todayIso();
+    const mine = finance.docs.filter((d) => d.kind === "invoice" && d.partyId === client.id && d.sync.state !== "not_sent");
+    return {
+      open: mine.reduce((sum, d) => sum + balanceOf(d), 0),
+      overdue: mine.filter((d) => statusOf(d, iso) === "Overdue").reduce((sum, d) => sum + balanceOf(d), 0),
+      lastPay: mine.flatMap((d) => d.payments.map((p) => p.date)).sort().pop(),
+    };
+  }, [finance.docs, client.id]);
   const isSalesUser = role === "sales" && !pack.hiddenNav.includes("avail");
   const [creatingOrder, setCreatingOrder] = useState(false);
 
@@ -238,6 +251,19 @@ export function ClientDetail({
         <div>
           <div className="text-xs text-text-sec mb-2">Notes</div>
           <div className="bg-[#F9FAFB] rounded-md p-3 text-[13px] text-text whitespace-pre-wrap">{client.notes}</div>
+        </div>
+      )}
+
+      {/* Account standing, read from the accounting system. Manager and Sales (credit
+          checks and collections); never cost or margin. */}
+      {(role === "manager" || role === "sales") && (
+        <div>
+          <div className="text-xs text-text-sec mb-2">Account{finance.canSync ? " (from QuickBooks)" : ""}</div>
+          <div className="grid grid-cols-3 gap-2">
+            <div className="bg-[#F9FAFB] rounded-md px-3 py-2"><div className="text-[10px] text-text-ter mb-0.5">Open balance</div><div className="text-[13px] font-semibold text-ink">${Math.round(account.open).toLocaleString()}</div></div>
+            <div className="bg-[#F9FAFB] rounded-md px-3 py-2"><div className="text-[10px] text-text-ter mb-0.5">Overdue</div><div className={`text-[13px] font-semibold ${account.overdue > 0 ? "text-coral" : "text-ink"}`}>${Math.round(account.overdue).toLocaleString()}</div></div>
+            <div className="bg-[#F9FAFB] rounded-md px-3 py-2"><div className="text-[10px] text-text-ter mb-0.5">Last payment</div><div className="text-[13px] font-semibold text-ink">{account.lastPay ?? "—"}</div></div>
+          </div>
         </div>
       )}
 

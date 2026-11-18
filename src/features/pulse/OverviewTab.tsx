@@ -1,7 +1,9 @@
 import { useMemo } from "react";
 import { volumeForQty } from "@/lib/products";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
-import { AlertTriangle, ChevronRight, CircleCheck, Clock, Hourglass, PackageX, ShieldAlert, type LucideIcon } from "lucide-react";
+import { AlertTriangle, ChevronRight, CircleCheck, CircleDollarSign, Clock, Hourglass, PackageX, Receipt, ShieldAlert, type LucideIcon } from "lucide-react";
+import { useFinance } from "@/hooks/useFinance";
+import { balanceOf, invoiceLines, readyToInvoice, statusOf, todayIso } from "@/lib/finance";
 import type { ApprovalRequest, EntryFilter, Role, SalesOrder, SalesOrderFilter, Tag, TagStatus } from "@/lib/types";
 import {
   ACTIVE_STATUSES, AGING_THRESHOLD_DAYS, buildOrderMetrics, buildSalesTrend, hasFullPrevPeriod, buildShortageRows, daysInYard, fmtMoney, fmtMoneyCompact,
@@ -22,6 +24,7 @@ interface OverviewTabProps {
   onNavigateToLocator?: (filter: EntryFilter) => void;
   onNavigateToSales?: (filter: SalesOrderFilter) => void;
   onOpenApprovals?: () => void;
+  onOpenInvoicing?: () => void;
   onOpenTab: (tab: "inventory" | "sales" | "reports") => void;
 }
 
@@ -37,8 +40,10 @@ const ON_HAND: { status: TagStatus; color: string }[] = [
   { status: "Discrepancy", color: C.coral },
 ];
 
-export function OverviewTab({ tags, salesOrders, approvalRequests, role, range, todayMs, onNavigateToLocator, onNavigateToSales, onOpenApprovals, onOpenTab }: OverviewTabProps) {
+export function OverviewTab({ tags, salesOrders, approvalRequests, role, range, todayMs, onNavigateToLocator, onNavigateToSales, onOpenApprovals, onOpenInvoicing, onOpenTab }: OverviewTabProps) {
+  const finance = useFinance();
   const isManager = role === "manager";
+  const finIso = todayIso();
   const d = (cur: number, prev: number) => (hasPrev ? pctDelta(cur, prev) : null);
 
   const metrics = useMemo(() => buildOrderMetrics(salesOrders, tags), [salesOrders, tags]);
@@ -77,6 +82,31 @@ export function OverviewTab({ tags, salesOrders, approvalRequests, role, range, 
     const pending = approvalRequests.filter((r) => r.status === "Pending");
     return { shortages, overdue, aging, discrepancies, pending };
   }, [tags, salesOrders, metrics, approvalRequests, todayMs]);
+
+  const unbilled = readyToInvoice(salesOrders, finance.docs);
+  const unbilledAmount = unbilled.reduce((sum, so) => sum + invoiceLines(so, tags).reduce((a, l) => a + l.amount, 0), 0);
+  const overdueInvoices = finance.docs.filter((d) => d.kind === "invoice" && statusOf(d, finIso) === "Overdue");
+  const overdueAmount = overdueInvoices.reduce((sum, d) => sum + balanceOf(d), 0);
+  const financeRows = [
+    {
+      key: "unbilled",
+      Icon: Receipt,
+      count: unbilled.length,
+      label: "Shipped, not invoiced",
+      detail: unbilled.length ? `$${Math.round(unbilledAmount).toLocaleString()} waiting to be billed` : "Everything shipped has been invoiced",
+      action: isManager ? "Invoice" : "View",
+      onClick: () => onOpenInvoicing?.(),
+    },
+    {
+      key: "overdueInv",
+      Icon: CircleDollarSign,
+      count: overdueInvoices.length,
+      label: "Invoices overdue",
+      detail: overdueInvoices.length ? `$${Math.round(overdueAmount).toLocaleString()} past due` : "No customer is past due",
+      action: "View",
+      onClick: () => onOpenInvoicing?.(),
+    },
+  ];
 
   const attentionRows: { key: string; Icon: LucideIcon; count: number; label: string; detail: string; action: string; onClick: () => void }[] = [
     {
@@ -131,6 +161,9 @@ export function OverviewTab({ tags, salesOrders, approvalRequests, role, range, 
       action: isManager ? "Review" : "My requests",
       onClick: () => onOpenApprovals?.(),
     },
+    // Receivables: what has shipped but isn't billed yet, and what customers owe past due.
+    // Sales sees these too (read-only) — they follow up with the customer.
+    ...financeRows,
   ];
   const openIssues = attentionRows.filter((r) => r.count > 0).length;
 
