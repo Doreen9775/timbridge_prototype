@@ -1277,6 +1277,24 @@ Lumber behaviour and figures are unchanged, except the yard-map hover now counts
 **Files / 改动:** new `src/lib/finance.ts`, `src/lib/finance-seed.ts`, `src/hooks/useFinance.tsx`, `src/features/invoicing/Invoicing.tsx`, `src/features/settings/AccountingSettings.tsx`; modified `src/App.tsx`, `src/components/layout/Sidebar.tsx`, `src/features/clients/ClientDetail.tsx`, `src/features/pulse/{OverviewTab,Pulse}.tsx`, `src/features/settings/CustomValuesSettings.tsx`, `CLAUDE.md`
 
 ---
+
+### `8b05c4b` · 18:11 · Pulse Overview：Needs attention 收起 / 展开
+
+**🇨🇳 中文**
+- 之前 Needs attention 列出全部条目，把右边的 Booked sales 图表一起拉长，留下大块空白。
+- 现在默认只显示前 4 项（需要处理的排在前面，已清零的排在后面），高度与右边图表一致；底部 "View all" 展开全部，"Show less" 收起。
+- 展开时只有左边卡片变高，右边图表保持原有高度。
+- 每行标题限制为一行，避免长标题折行把这一行撑高。
+
+**🇬🇧 English**
+- Needs attention used to list every row and stretch the Booked sales chart beside it, leaving a large blank area.
+- It now shows the first four rows by default (items needing action first, all-clear rows last) at the chart's height; "View all" expands the rest and "Show less" collapses them.
+- When expanded, only the attention card grows; the chart keeps its natural height.
+- Row titles stay on one line so a long label no longer makes its row taller.
+
+**Files / 改动:** `src/features/pulse/OverviewTab.tsx`
+
+---
 ## Pending / 未来 (not yet built — 尚未开始)
 
 - **Approvals 里 Sales 视图看到的历史范围**（当前 MyApprovals 显示所有状态，Manager 只看 Pending；如果 Manager 需要审批历史查阅，加个 History tab）
