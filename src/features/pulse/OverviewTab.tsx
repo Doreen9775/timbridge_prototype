@@ -1,7 +1,7 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { volumeForQty } from "@/lib/products";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
-import { AlertTriangle, ChevronRight, CircleCheck, CircleDollarSign, Clock, Hourglass, PackageX, Receipt, ShieldAlert, type LucideIcon } from "lucide-react";
+import { AlertTriangle, ChevronDown, ChevronRight, ChevronUp, CircleCheck, CircleDollarSign, Clock, Hourglass, PackageX, Receipt, ShieldAlert, type LucideIcon } from "lucide-react";
 import { useFinance } from "@/hooks/useFinance";
 import { balanceOf, invoiceLines, readyToInvoice, statusOf, todayIso } from "@/lib/finance";
 import type { ApprovalRequest, EntryFilter, Role, SalesOrder, SalesOrderFilter, Tag, TagStatus } from "@/lib/types";
@@ -167,6 +167,14 @@ export function OverviewTab({ tags, salesOrders, approvalRequests, role, range, 
   ];
   const openIssues = attentionRows.filter((r) => r.count > 0).length;
 
+  // The card shows the first few rows — items needing action first, then the all-clear
+  // ones — so it sits level with the sales chart beside it; "View all" expands the rest.
+  const ATTENTION_COLLAPSED = 4;
+  const [showAllAttention, setShowAllAttention] = useState(false);
+  const sortedAttention = [...attentionRows.filter((r) => r.count > 0), ...attentionRows.filter((r) => r.count === 0)];
+  const visibleAttention = showAllAttention ? sortedAttention : sortedAttention.slice(0, ATTENTION_COLLAPSED);
+  const hiddenAttention = sortedAttention.length - ATTENTION_COLLAPSED;
+
   // ── Sales trend (compact) ───────────────────────────────────────────────────
   const trend = useMemo(() => {
     const first = range.start ?? (metrics.length ? Math.min(...metrics.map((m) => m.orderMs)) : todayMs);
@@ -241,15 +249,18 @@ export function OverviewTab({ tags, salesOrders, approvalRequests, role, range, 
         )}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+      {/* Collapsed, both cards stretch to the chart's height; expanded, the attention card
+          grows on its own and the chart keeps its natural height. */}
+      <div className={`grid grid-cols-1 lg:grid-cols-3 gap-5 ${showAllAttention ? "lg:items-start" : ""}`}>
         {/* Needs attention */}
         <Card
+          className="flex flex-col"
           title="Needs attention"
           hint={openIssues === 0 ? "Nothing needs action right now" : `${plural(openIssues, "item")} to look at`}
           actions={<SnapshotTag />}
         >
-          <div className="flex flex-col" data-onboarding="pulse-attention">
-            {attentionRows.map((r) => {
+          <div className="flex flex-col flex-1" data-onboarding="pulse-attention">
+            {visibleAttention.map((r) => {
               const clear = r.count === 0;
               return (
                 <div key={r.key} className="flex items-center gap-3 py-2.5 border-b border-[#F3F4F6] last:border-0">
@@ -257,7 +268,7 @@ export function OverviewTab({ tags, salesOrders, approvalRequests, role, range, 
                     {clear ? <CircleCheck size={15} /> : <r.Icon size={15} />}
                   </span>
                   <div className="min-w-0 flex-1">
-                    <div className={`text-[13px] font-semibold ${clear ? "text-text-sec" : "text-ink"}`}>
+                    <div className={`text-[13px] font-semibold truncate ${clear ? "text-text-sec" : "text-ink"}`}>
                       {clear ? `No ${r.label.toLowerCase()}` : `${r.count} ${r.label.toLowerCase()}`}
                     </div>
                     <div className="text-[11px] text-text-ter truncate">{r.detail}</div>
@@ -270,6 +281,20 @@ export function OverviewTab({ tags, salesOrders, approvalRequests, role, range, 
                 </div>
               );
             })}
+            {hiddenAttention > 0 && (
+              <button
+                type="button"
+                onClick={() => setShowAllAttention((v) => !v)}
+                aria-expanded={showAllAttention}
+                className="mt-auto pt-3 flex items-center justify-center gap-1 text-[12px] font-medium text-text-sec hover:text-coral bg-transparent border-0 cursor-pointer"
+              >
+                {showAllAttention ? (
+                  <>Show less<ChevronUp size={13} /></>
+                ) : (
+                  <>View all {sortedAttention.length}<ChevronDown size={13} /></>
+                )}
+              </button>
+            )}
           </div>
         </Card>
 
