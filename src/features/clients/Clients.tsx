@@ -44,9 +44,10 @@ interface ClientsProps {
     meta?: { notes?: string; expectedShipDate?: string },
   ) => { ok: true; soId: string } | { ok: false; unavailableIds: string[] };
   onViewOrders: (soId?: string) => void;
+  onOpenDoc?: (docId: string) => void;
 }
 
-export function Clients({ tags, role, salesOrders, openClientId, onClientOpened, onOpenSo, onCreateSalesOrder, onViewOrders }: ClientsProps) {
+export function Clients({ tags, role, salesOrders, openClientId, onClientOpened, onOpenSo, onCreateSalesOrder, onViewOrders, onOpenDoc }: ClientsProps) {
   const { clients, updateClient, createClient } = useClients();
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<string | null>(null);
@@ -256,6 +257,7 @@ export function Clients({ tags, role, salesOrders, openClientId, onClientOpened,
           onOpenSo={handleOpenSo}
           onCreateSalesOrder={onCreateSalesOrder}
           onViewOrders={onViewOrders}
+          onOpenDoc={onOpenDoc}
         />
       )}
 

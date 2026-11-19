@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { parseStampMs } from "@/lib/analytics";
 import { CheckCircle2, ChevronDown, ExternalLink } from "lucide-react";
-import type { ApprovalRequest, SalesOrder, SalesOrderStatus, Tag } from "@/lib/types";
+import type { Role, ApprovalRequest, SalesOrder, SalesOrderStatus, Tag } from "@/lib/types";
 import { Button } from "@/components/shared/Button";
 import { FilterBar } from "@/components/shared/FilterBar";
 import { useClients } from "@/hooks/useClients";
@@ -33,6 +33,8 @@ interface ApprovalQueueProps {
   onOpenClient: (id: string) => void;
   onCreateApproval: (draft: ApprovalDraft) => void;
   requesterIdentity: string;
+  role?: Role;
+  onOpenInvoice?: (docId: string) => void;
 }
 
 export function ApprovalQueue({
@@ -47,6 +49,8 @@ export function ApprovalQueue({
   onOpenClient,
   onCreateApproval,
   requesterIdentity,
+  role,
+  onOpenInvoice,
 }: ApprovalQueueProps) {
   const { getClientName, clientById } = useClients();
 
@@ -268,6 +272,8 @@ export function ApprovalQueue({
           onOpenClient={onOpenClient}
           onCreateApproval={onCreateApproval}
           requesterIdentity={requesterIdentity}
+          role={role}
+          onOpenInvoice={onOpenInvoice}
         />
       )}
 

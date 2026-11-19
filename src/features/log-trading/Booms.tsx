@@ -6,6 +6,8 @@ import { useClients } from "@/hooks/useClients";
 import { SOStatusPill } from "@/components/shared/SOStatusPill";
 import { Button } from "@/components/shared/Button";
 import { calcExtendedPrice } from "@/lib/pricing";
+import { useFinance } from "@/hooks/useFinance";
+import { invoiceForOrder, statusOf } from "@/lib/finance";
 
 // Booms (log-trading pack). A boom is a customer order for scaled lots that also lives
 // physically: it is formed at a storage site, can be moved between sites, goes into
@@ -51,9 +53,10 @@ interface BoomsProps {
   onConfirmDelivery: (soId: string, delivery: { date: string; volume: number }) => void;
   onOpenTag: (tagId: string) => void;
   onOpenClient: (clientId: string) => void;
+  onOpenDoc?: (docId: string) => void;
 }
 
-export function Booms({ tags, salesOrders, openSoId, onSoOpened, onCreateBoom, onMoveBoom, onMarkInTransit, onConfirmDelivery, onOpenTag, onOpenClient }: BoomsProps) {
+export function Booms({ tags, salesOrders, openSoId, onSoOpened, onCreateBoom, onMoveBoom, onMarkInTransit, onConfirmDelivery, onOpenTag, onOpenClient, onOpenDoc }: BoomsProps) {
   const { pack } = usePack();
   const { getClientName } = useClients();
   const [filter, setFilter] = useState<Filter>("all");
@@ -197,6 +200,7 @@ export function Booms({ tags, salesOrders, openSoId, onSoOpened, onCreateBoom, o
           onDeliver={(d) => onConfirmDelivery(selectedSo.id, d)}
           onOpenTag={onOpenTag}
           onOpenClient={onOpenClient}
+          onOpenDoc={onOpenDoc}
         />
       )}
 
@@ -231,7 +235,8 @@ function SummaryCard({ icon, label, count, volume }: { icon: React.ReactNode; la
 
 // ── Boom detail ─────────────────────────────────────────────────────────────────
 
-function BoomDrawer({ so, tags, onClose, onMove, onTransit, onDeliver, onOpenTag, onOpenClient }: {
+function BoomDrawer({ so, tags, onClose, onMove, onTransit, onDeliver, onOpenTag, onOpenClient, onOpenDoc }: {
+  onOpenDoc?: (docId: string) => void;
   so: SalesOrder;
   tags: Tag[];
   onClose: () => void;
@@ -243,6 +248,8 @@ function BoomDrawer({ so, tags, onClose, onMove, onTransit, onDeliver, onOpenTag
 }) {
   const { pack } = usePack();
   const { getClientName } = useClients();
+  const finance = useFinance();
+  const invoice = invoiceForOrder(finance.docs, so.id);
   const boom = so.boom!;
   const tagById = new Map(tags.map((t) => [t.id, t]));
   const allocated = allocatedOf(so);
@@ -292,6 +299,21 @@ function BoomDrawer({ so, tags, onClose, onMove, onTransit, onDeliver, onOpenTag
             <Tile label={so.status === "Shipped" ? "Delivered" : "Location"} value={so.status === "Shipped" ? m3(boom.deliveredVolume ?? allocated) : siteName(boom.location)} />
             <Tile label="Value (list)" value={money(valueOf(so))} />
           </div>
+          {so.status === "Shipped" && (
+            <div className="rounded-md border border-sage/70 px-3 py-2 flex items-center justify-between gap-3 text-[13px]">
+              {invoice ? (
+                <>
+                  <span>
+                    Invoice <span className="font-mono font-semibold text-ink">{invoice.id}</span>
+                    <span className="text-text-sec"> · {statusOf(invoice, todayIso())} · {money(invoice.subtotal)} on {m3(invoice.lines.reduce((s2, l) => s2 + l.qty, 0))} delivered</span>
+                  </span>
+                  {onOpenDoc && <Button size="sm" onClick={() => onOpenDoc(invoice.id)}>Open</Button>}
+                </>
+              ) : (
+                <span className="text-text-sec">Not invoiced yet — waiting in Invoicing → Ready to invoice.</span>
+              )}
+            </div>
+          )}
           {variance !== null && variance !== 0 && (
             <div className="text-[12px] text-text-sec bg-[#F9FAFB] rounded-md px-3 py-2">
               Delivered volume differs from allocated by <span className="font-semibold text-ink">{variance > 0 ? "+" : ""}{variance} m³</span>.

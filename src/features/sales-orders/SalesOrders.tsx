@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Download, Search } from "lucide-react";
-import type { SalesOrder, SalesOrderFilter, SalesOrderStatus, Tag } from "@/lib/types";
+import type { Role, SalesOrder, SalesOrderFilter, SalesOrderStatus, Tag } from "@/lib/types";
 import { PillFilter } from "@/features/stock-locator/filters";
 import { Pagination, DEFAULT_PAGE_SIZE, usePagedSlice } from "@/components/shared/Pagination";
 import { SOStatusPill } from "@/components/shared/SOStatusPill";
@@ -46,9 +46,11 @@ interface SalesOrdersProps {
   onOpenClient: (id: string) => void;
   onCreateApproval: (draft: ApprovalDraft) => void;
   requesterIdentity: string;
+  role?: Role;
+  onOpenInvoice?: (docId: string) => void;
 }
 
-export function SalesOrders({ salesOrders, tags, openSoId, onSoOpened, salesFilter, onClearSalesFilter, onAdvanceStatus, onUpdateSalesOrder, onConfirmDraft, onOpenTag, onOpenClient, onCreateApproval, requesterIdentity }: SalesOrdersProps) {
+export function SalesOrders({ salesOrders, tags, openSoId, onSoOpened, salesFilter, onClearSalesFilter, onAdvanceStatus, onUpdateSalesOrder, onConfirmDraft, onOpenTag, onOpenClient, onCreateApproval, requesterIdentity, role, onOpenInvoice }: SalesOrdersProps) {
   const { clientById, getClientName } = useClients();
   const [search, setSearch] = useState("");
   const [statusF, setStatusF] = useState<string[]>([]);
@@ -441,6 +443,8 @@ export function SalesOrders({ salesOrders, tags, openSoId, onSoOpened, salesFilt
           onOpenClient={(id) => { onOpenClient(id); closeDrawer(); }}
           onCreateApproval={onCreateApproval}
           requesterIdentity={requesterIdentity}
+          role={role}
+          onOpenInvoice={onOpenInvoice}
         />
       )}
     </div>

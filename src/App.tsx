@@ -88,6 +88,7 @@ function Workspace({ authed, setAuthed }: { authed: boolean; setAuthed: (v: bool
   const [pendingTagId, setPendingTagId] = useState<string | null>(null);
   const [pendingSoId, setPendingSoId] = useState<string | null>(null);
   const [pendingClientId, setPendingClientId] = useState<string | null>(null);
+  const [pendingDocId, setPendingDocId] = useState<string | null>(null);
   const [entryFilter, setEntryFilter] = useState<EntryFilter | null>(null);
   const [salesFilter, setSalesFilter] = useState<SalesOrderFilter | null>(null);
   const [loggingOut, setLoggingOut] = useState(false);
@@ -96,8 +97,9 @@ function Workspace({ authed, setAuthed }: { authed: boolean; setAuthed: (v: bool
   const { salesOrders, setSalesOrders } = useSalesOrders(seed.salesOrders);
   const { approvalRequests, setApprovalRequests } = useApprovalRequests(seed.approvals);
   const { clientById } = useClients();
-  // Invoices, bills and the accounting connection (seeded from this pack's history).
-  const finance = useFinanceStore(pack, seed);
+  // Invoices, bills and the accounting connection (seeded from this pack's history);
+  // drafts follow the live tags, orders and clients.
+  const finance = useFinanceStore(pack, seed, { tags, salesOrders, clientById });
   // Financial event: an order shipped / a boom delivered → draft its invoice, when the
   // company's billing rule says to (Settings → Accounting).
   const draftInvoiceOnDelivery = useCallback(
@@ -434,37 +436,37 @@ function Workspace({ authed, setAuthed }: { authed: boolean; setAuthed: (v: bool
     [salesOrders, setSalesOrders, appendLotHistory, draftInvoiceOnDelivery],
   );
 
+  // Any allowed status move on an order (see sales-orders/permissions.ts). The order and
+  // its tags change together so they can never disagree:
+  //   → Shipped    reserved tags ship, and the invoice is drafted (billing rule permitting)
+  //   → Cancelled  reserved tags are released back to Available
+  //   Open ↔ Picked  tags stay reserved
   const handleAdvanceSoStatus = useCallback((soId: string, next: SalesOrderStatus) => {
-    const shippedSo = next === "Shipped" ? salesOrders.find((o) => o.id === soId) : undefined;
-    if (shippedSo) draftInvoiceOnDelivery({ ...shippedSo, status: "Shipped" });
-    let cascadeTagIds: string[] = [];
-    setSalesOrders((prev) =>
-      prev.map((so) => {
-        if (so.id !== soId) return so;
-        if (next === "Shipped") cascadeTagIds = so.lineItems.map((li) => li.tagId);
-        return { ...so, status: next };
-      }),
-    );
-    if (next === "Shipped" && cascadeTagIds.length > 0) {
-      const now = new Date();
-      const MONTHS_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-      const p = (n: number) => String(n).padStart(2, "0");
-      const stamp = `${MONTHS_SHORT[now.getMonth()]} ${p(now.getDate())} ${now.getFullYear()} ${p(now.getHours())}:${p(now.getMinutes())}`;
-      const idSet = new Set(cascadeTagIds);
+    const so = salesOrders.find((o) => o.id === soId);
+    if (!so || so.status === next) return;
+    setSalesOrders((prev) => prev.map((o) => (o.id === soId ? { ...o, status: next } : o)));
+    const ids = new Set(so.lineItems.map((li) => li.tagId));
+    const stamp = nowStamp();
+    if (next === "Shipped") {
       setTags((prev) =>
         prev.map((t) =>
-          idSet.has(t.id) && t.status === "Reserved"
-            ? {
-                ...t,
-                status: "Shipped",
-                updated: "just now",
-                history: [...t.history, { e: `Shipped via ${soId}`, t: stamp, w: "System" }],
-              }
+          ids.has(t.id) && t.status === "Reserved"
+            ? { ...t, status: "Shipped", updated: "just now", history: [...t.history, { e: `Shipped via ${soId}`, t: stamp, w: identityFor(role) }] }
+            : t,
+        ),
+      );
+      draftInvoiceOnDelivery({ ...so, status: "Shipped" });
+    }
+    if (next === "Cancelled") {
+      setTags((prev) =>
+        prev.map((t) =>
+          ids.has(t.id) && t.status === "Reserved"
+            ? { ...t, status: "Available", updated: "just now", history: [...t.history, { e: `Released — ${soId} cancelled`, t: stamp, w: identityFor(role) }] }
             : t,
         ),
       );
     }
-  }, [setSalesOrders, setTags, salesOrders, draftInvoiceOnDelivery]);
+  }, [setSalesOrders, setTags, salesOrders, draftInvoiceOnDelivery, role]);
 
   // Deep-link: Stock Locator's Linked Transactions SO chip → Sales Orders + open drawer.
   const handleOpenSoFromLocator = useCallback((soId: string) => {
@@ -493,6 +495,12 @@ function Workspace({ authed, setAuthed }: { authed: boolean; setAuthed: (v: bool
     setPendingClientId(clientId);
   }, []);
   const handleClientOpened = useCallback(() => setPendingClientId(null), []);
+
+  // Deep-link: an order, boom, tag or client's invoice / bill → Invoicing with it open.
+  const handleOpenDoc = useCallback((docId: string) => {
+    setNav("invoicing");
+    setPendingDocId(docId);
+  }, []);
 
   // Submit a new approval request from the SO detail panel / Request Discount
   // quick-entry form. Auto-assigns id + createdAt + Pending status; requester identity
@@ -600,7 +608,7 @@ function Workspace({ authed, setAuthed }: { authed: boolean; setAuthed: (v: bool
             {isFloor && <FloorBanner />}
             <div key={`${nav}:${navEpoch}`} className="flex-1 overflow-y-auto">
               {nav === "dashboard" && <Dashboard tags={tags} floorView={isFloor} onNavigateToLocator={handleNavigateToLocator} onOpenTag={handleOpenTagFromDashboard} />}
-              {nav === "locator" && <StockLocator tags={tags} floorView={isFloor} role={role} openTagId={pendingTagId} onTagOpened={handleTagOpened} onUpdateTag={handleUpdateTag} onDeleteTags={handleDeleteTags} entryFilter={entryFilter} onClearEntryFilter={() => setEntryFilter(null)} salesOrders={salesOrders} onLinkSalesOrder={handleLinkSalesOrder} onOpenSo={handleOpenSoFromLocator} />}
+              {nav === "locator" && <StockLocator tags={tags} floorView={isFloor} role={role} openTagId={pendingTagId} onTagOpened={handleTagOpened} onUpdateTag={handleUpdateTag} onDeleteTags={handleDeleteTags} entryFilter={entryFilter} onClearEntryFilter={() => setEntryFilter(null)} salesOrders={salesOrders} onLinkSalesOrder={handleLinkSalesOrder} onOpenSo={handleOpenSoFromLocator} onOpenDoc={handleOpenDoc} />}
               {nav === "tagentry" && !isLogPack && <TagEntry tags={tags} setTags={setTags} floorView={isFloor} onViewInInventory={handleViewInInventory} />}
               {nav === "tagentry" && isLogPack && <ScaleIntake tags={tags} setTags={setTags} floorView={isFloor} role={role} onViewInInventory={handleViewInInventory} />}
               {nav === "sales" && isLogPack && role !== "floor" && (
@@ -618,10 +626,11 @@ function Workspace({ authed, setAuthed }: { authed: boolean; setAuthed: (v: bool
                   onConfirmDelivery={handleConfirmDelivery}
                   onOpenTag={handleOpenTagFromSo}
                   onOpenClient={handleOpenClient}
+                  onOpenDoc={handleOpenDoc}
                 />
               )}
               {nav === "invoicing" && role !== "floor" && (
-                <Invoicing tags={tags} salesOrders={salesOrders} role={role} onOpenSo={handleOpenSoFromLocator} onOpenClient={handleOpenClient} onOpenSettings={() => setNav("settings")} />
+                <Invoicing tags={tags} salesOrders={salesOrders} role={role} openDocId={pendingDocId} onDocOpened={() => setPendingDocId(null)} onOpenSo={handleOpenSoFromLocator} onOpenClient={handleOpenClient} onOpenTag={handleOpenTagFromSo} onOpenSettings={() => setNav("settings")} />
               )}
               {nav === "volume" && isLogPack && role !== "floor" && (
                 <VolumeReport tags={tags} salesOrders={salesOrders} onNavigateToLocator={handleNavigateToLocator} onOpenSo={handleOpenSoFromLocator} onOpenClient={handleOpenClient} />
@@ -653,6 +662,8 @@ function Workspace({ authed, setAuthed }: { authed: boolean; setAuthed: (v: bool
                   onOpenClient={handleOpenClient}
                   onCreateApproval={handleCreateApproval}
                   requesterIdentity={identityFor(role)}
+                  role={role}
+                  onOpenInvoice={handleOpenDoc}
                 />
               )}
               {nav === "clientprofile" && role !== "floor" && (
@@ -665,6 +676,7 @@ function Workspace({ authed, setAuthed }: { authed: boolean; setAuthed: (v: bool
                   onOpenSo={handleOpenSoFromLocator}
                   onCreateSalesOrder={handleCreateSalesOrder}
                   onViewOrders={handleViewOrders}
+                  onOpenDoc={handleOpenDoc}
                 />
               )}
               {nav === "pulse" && role !== "floor" && (
@@ -706,6 +718,8 @@ function Workspace({ authed, setAuthed }: { authed: boolean; setAuthed: (v: bool
                   onOpenClient={handleOpenClient}
                   onCreateApproval={handleCreateApproval}
                   requesterIdentity={identityFor(role)}
+                  role={role}
+                  onOpenInvoice={handleOpenDoc}
                 />
               )}
               {!["dashboard", "locator", "tagentry", "delivery", "settings", "avail", "sales", "approvals", "clientprofile", "pulse", "volume", "invoicing"].includes(nav) && <ComingSoon name={nav} />}

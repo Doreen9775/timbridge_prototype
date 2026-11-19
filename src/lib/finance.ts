@@ -311,3 +311,63 @@ export interface SyncLogEntry {
   at: string; // display stamp
   text: string;
 }
+
+// ── Keeping documents in step with their sources ─────────────────────────────────
+// A draft has not left Timbridge yet, so it always mirrors its source: the shipped
+// order (or delivered boom) for an invoice, the receipt's lots for a bill. Its lines,
+// totals, terms, party and tax code are rebuilt from the live records every time.
+// Once sent, the accounting system owns the document and its lines are frozen — a
+// change after that is made there (credit memo / adjusted bill), not here.
+export interface SourceContext {
+  tags: Tag[];
+  salesOrders: SalesOrder[];
+  clientById: Map<string, Client>;
+  settings: AccountingSettings;
+}
+
+export function refreshDraft(doc: FinDoc, ctx: SourceContext): FinDoc {
+  if (doc.sync.state !== "not_sent") return doc;
+  if (doc.kind === "invoice") {
+    const so = ctx.salesOrders.find((o) => o.id === doc.sourceId);
+    if (!so) return doc;
+    const fresh = buildInvoice(so, ctx.tags, ctx.clientById.get(so.clientId), doc.id, ctx.settings, doc.date);
+    return { ...fresh, sync: doc.sync, payments: doc.payments };
+  }
+  const rc = receipts(ctx.tags).find((r) => r.key === doc.sourceId);
+  if (!rc) return doc;
+  const fresh = buildBill(rc, ctx.tags, doc.id, ctx.settings, doc.date);
+  return { ...fresh, sync: doc.sync, payments: doc.payments };
+}
+
+// ── Links between records ────────────────────────────────────────────────────────
+// Every document traces back to records in Timbridge, so any screen can show the chain:
+//   bill (what we owe the seller)  ← lots received  → order → invoice (what the customer owes us)
+// The same lot can sit on one bill (bought) and one invoice (sold); the difference is
+// the margin on that lot.
+
+export function invoiceForOrder(docs: FinDoc[], soId: string): FinDoc | undefined {
+  return docs.find((d) => d.kind === "invoice" && d.sourceId === soId);
+}
+
+// The bill a lot was bought on. A split-off child was bought as part of its parent.
+export function billForTag(docs: FinDoc[], tag: Tag): FinDoc | undefined {
+  const id = tag.parentTagId ?? tag.id;
+  return docs.find((d) => d.kind === "bill" && d.lines.some((l) => l.tagIds.includes(id) || l.tagIds.includes(tag.id)));
+}
+
+export function invoiceForTag(docs: FinDoc[], tagId: string): FinDoc | undefined {
+  return docs.find((d) => d.kind === "invoice" && d.lines.some((l) => l.tagIds.includes(tagId)));
+}
+
+// Cost of what an invoice sold, from each lot's purchase cost (lumber per piece, logs
+// per m³). Null when any lot has no cost on file, so a margin is never overstated.
+export function invoiceCost(doc: FinDoc, tags: Tag[]): number | null {
+  const tagById = new Map(tags.map((t) => [t.id, t]));
+  let cost = 0;
+  for (const l of doc.lines) {
+    const t = tagById.get(l.tagIds[0]);
+    if (!t || t.cost === undefined) return null;
+    cost += t.cost * l.qty;
+  }
+  return r2(cost);
+}

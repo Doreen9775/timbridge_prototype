@@ -1,12 +1,14 @@
 import { useMemo, useState } from "react";
-import { X, Maximize2, Minimize2, ArrowRight, ShieldCheck, Plus, Trash2, AlertTriangle, Lock, ExternalLink, CheckCircle2 } from "lucide-react";
-import type { SalesOrder, SalesOrderLineItem, SalesOrderStatus, Tag } from "@/lib/types";
+import { X, Maximize2, Minimize2, ArrowRight, ShieldCheck, Plus, Trash2, AlertTriangle, Lock, ExternalLink, CheckCircle2, Receipt, Undo2, Ban } from "lucide-react";
+import type { Role, SalesOrder, SalesOrderLineItem, SalesOrderStatus, Tag } from "@/lib/types";
 import { Button } from "@/components/shared/Button";
 import { SOStatusPill } from "@/components/shared/SOStatusPill";
 import { RequestApprovalForm, type ApprovalDraft } from "@/features/approvals/RequestApprovalForm";
 import { ClientSelector } from "@/features/available-to-sell/ClientSelector";
 import { useClients } from "@/hooks/useClients";
-import { getSalesOrderEditMode, LOCK_TOOLTIP, type SOEditMode } from "./permissions";
+import { getSalesOrderEditMode, LOCK_TOOLTIP, statusTargets, type SOEditMode } from "./permissions";
+import { useFinance } from "@/hooks/useFinance";
+import { balanceOf, invoiceForOrder, statusOf, todayIso } from "@/lib/finance";
 import { calcExtendedPrice } from "@/lib/pricing";
 
 // Unified Sales Order panel — replaces the earlier CreateSalesOrderPanel + SalesOrderDetail.
@@ -26,11 +28,6 @@ export interface DraftLineItem {
   unitPrice: number;
   discountPct?: number;
 }
-
-const NEXT_STATUS: Partial<Record<SalesOrderStatus, SalesOrderStatus>> = {
-  Open: "Picked",
-  Picked: "Shipped",
-};
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
@@ -87,6 +84,10 @@ interface ViewModeProps {
   onOpenClient?: (id: string) => void;
   onCreateApproval?: (draft: ApprovalDraft) => void;
   requesterIdentity?: string;
+  // Who is looking: decides the status moves offered and whether "Request approval"
+  // shows (it is Sales asking a Manager, so a Manager never sees it).
+  role?: Role;
+  onOpenInvoice?: (docId: string) => void;
 }
 
 type SalesOrderPanelProps = CreateModeProps | ViewModeProps;
@@ -242,8 +243,10 @@ function CreatePanel({ initialTags, allTags, lockedClientId, onCancel, onSaveDra
 function ViewPanel({
   so, allTags, fullscreen, readOnly, onToggleFullscreen, onClose,
   onUpdateSalesOrder, onConfirmDraft, onAdvanceStatus,
-  onOpenTag, onOpenClient, onCreateApproval, requesterIdentity,
+  onOpenTag, onOpenClient, onCreateApproval, requesterIdentity, role = "sales", onOpenInvoice,
 }: ViewModeProps) {
+  const finance = useFinance();
+  const invoice = invoiceForOrder(finance.docs, so.id);
   // readOnly (Sales' informational view) collapses every mode to readonly. statusReadonly
   // tracks whether the order is *actually* terminal (Shipped/Cancelled) so the status
   // banner only shows in that case, not for a forced read-only view of an Open order.
@@ -286,7 +289,7 @@ function ViewPanel({
   }, [canEditCustomer, canEditMeta, canEditLineItems, clientId, notes, expectedShipDate, lines, so]);
 
   const canSave = dirty && (!canEditCustomer || clientId !== null) && lines.length > 0;
-  const next = NEXT_STATUS[so.status];
+  const targets = readOnly ? [] : statusTargets(so.status, role);
 
   const handleSave = () => {
     if (!canSave) return;
@@ -335,19 +338,29 @@ function ViewPanel({
       </div>
       {hasActions && (
         <div className="flex items-center gap-1.5 mt-3 flex-wrap">
-          <Button size="sm" onClick={() => setShowApproval(true)} leftIcon={<ShieldCheck size={13} />}>
-            Request approval
-          </Button>
+          {role === "sales" && (
+            <Button size="sm" onClick={() => setShowApproval(true)} leftIcon={<ShieldCheck size={13} />}>
+              Request approval
+            </Button>
+          )}
           {editMode === "edit-all" && (
             <Button size="sm" variant="primary" onClick={handleConfirmDraft} disabled={!clientId || lines.length === 0} rightIcon={<ArrowRight size={13} />}>
               Confirm Order
             </Button>
           )}
-          {editMode === "meta-only" && next && (
-            <Button size="sm" variant="primary" onClick={() => setPendingAdvance(next)} rightIcon={<ArrowRight size={13} />}>
-              Mark {next}
+          {/* Every allowed move is offered at once — no need to step through Picked. */}
+          {targets.map((t) => (
+            <Button
+              key={t}
+              size="sm"
+              variant={t === "Cancelled" ? "destructive" : t === "Shipped" ? "primary" : "secondary"}
+              onClick={() => setPendingAdvance(t)}
+              leftIcon={t === "Open" ? <Undo2 size={13} /> : t === "Cancelled" ? <Ban size={13} /> : undefined}
+              rightIcon={t === "Picked" || t === "Shipped" ? <ArrowRight size={13} /> : undefined}
+            >
+              {t === "Open" ? "Back to Open" : t === "Cancelled" ? "Cancel order" : `Mark ${t}`}
             </Button>
-          )}
+          ))}
           <Button size="sm" variant="primary" onClick={handleSave} disabled={!canSave}>
             Save changes
           </Button>
@@ -356,8 +369,39 @@ function ViewPanel({
     </div>
   );
 
+  // Billing: the invoice this order produced (drafted when it shipped), so the order,
+  // its invoice and the payments stay visibly connected.
+  const today = todayIso();
+  const billing = (so.status === "Shipped" || invoice) && (
+    <div className="rounded-md border border-sage/70 px-3 py-2.5 flex items-center gap-3 text-[13px]">
+      <Receipt size={15} className="text-text-sec shrink-0" />
+      {invoice ? (
+        <>
+          <div className="min-w-0 flex-1">
+            <div className="text-text">
+              Invoice <span className="font-mono font-semibold text-ink">{invoice.id}</span>
+              <span className="text-text-sec"> · {statusOf(invoice, today)}</span>
+              {invoice.sync.state === "synced" && <span className="text-text-ter"> · in QuickBooks as {invoice.sync.externalId}</span>}
+            </div>
+            <div className="text-[11px] text-text-ter">
+              {formatUSD(invoice.subtotal)} before tax · balance {formatUSD(balanceOf(invoice))}
+              {invoice.sync.state === "not_sent" ? " · drafted when the order shipped, not sent yet" : ""}
+            </div>
+          </div>
+          {onOpenInvoice && <Button size="sm" onClick={() => onOpenInvoice(invoice.id)} rightIcon={<ArrowRight size={13} />}>Open</Button>}
+        </>
+      ) : (
+        <div className="min-w-0 flex-1">
+          <div className="text-text">Not invoiced yet</div>
+          <div className="text-[11px] text-text-ter">Billing rule is "create by hand" — it waits in Invoicing → Ready to invoice.</div>
+        </div>
+      )}
+    </div>
+  );
+
   const body = (
     <div className="p-5 space-y-5">
+      {billing}
       {editMode === "meta-only" && (
         <div className="flex items-center gap-2 bg-sage/15 border border-sage/60 rounded-md px-3 py-2 text-[12px] text-text-sec">
           <Lock size={13} className="text-text-sec shrink-0" />
@@ -407,17 +451,33 @@ function ViewPanel({
   const advanceDialog = pendingAdvance && (
     <div className="fixed inset-0 z-[110] bg-ink/40 flex items-center justify-center p-6" onClick={() => setPendingAdvance(null)}>
       <div className="bg-white w-full max-w-sm rounded-xl p-5 shadow-[0_10px_40px_rgba(0,0,0,0.25)]" onClick={(e) => e.stopPropagation()}>
-        <div className="text-sm font-semibold text-ink mb-1">Advance status?</div>
+        <div className="text-sm font-semibold text-ink mb-1">Change status?</div>
         <div className="text-[13px] text-text-sec mb-4">
           {so.status} → <span className="font-semibold text-text">{pendingAdvance}</span>
         </div>
-        {pendingAdvance === "Shipped" && so.lineItems.length > 0 && (
-          <div className="bg-sage/15 rounded-md px-3 py-2 mb-4 text-[12px] text-text">
-            {so.lineItems.length} linked tag{so.lineItems.length === 1 ? "" : "s"} will also transition from Reserved to Shipped.
-          </div>
-        )}
+        <div className="bg-sage/15 rounded-md px-3 py-2 mb-4 text-[12px] text-text space-y-1">
+          {pendingAdvance === "Shipped" && (
+            <>
+              <div>{so.lineItems.length} linked tag{so.lineItems.length === 1 ? " moves" : "s move"} from Reserved to Shipped.</div>
+              <div>
+                {finance.settings.invoiceTrigger === "onDelivery"
+                  ? "A draft invoice is created in Invoicing for review."
+                  : "The order then waits in Invoicing → Ready to invoice."}
+              </div>
+              <div className="text-text-sec">Shipped is final — the order can't be edited afterwards.</div>
+            </>
+          )}
+          {pendingAdvance === "Picked" && <div>Tags stay reserved for this order.</div>}
+          {pendingAdvance === "Open" && <div>Back to Open. Tags stay reserved for this order.</div>}
+          {pendingAdvance === "Cancelled" && (
+            <>
+              <div>{so.status === "Draft" ? "Nothing is reserved yet; the draft is closed." : `${so.lineItems.length} reserved tag${so.lineItems.length === 1 ? " goes" : "s go"} back to Available.`}</div>
+              <div className="text-text-sec">Cancelled is final.</div>
+            </>
+          )}
+        </div>
         <div className="flex gap-2 justify-end">
-          <Button onClick={() => setPendingAdvance(null)}>Cancel</Button>
+          <Button onClick={() => setPendingAdvance(null)}>Back</Button>
           <Button
             variant="primary"
             onClick={() => {
@@ -425,7 +485,7 @@ function ViewPanel({
               setPendingAdvance(null);
             }}
           >
-            Confirm
+            {pendingAdvance === "Cancelled" ? "Cancel order" : "Confirm"}
           </Button>
         </div>
       </div>

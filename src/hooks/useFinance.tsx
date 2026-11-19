@@ -2,7 +2,7 @@ import { createContext, useCallback, useContext, useMemo, useState, type ReactNo
 import type { Client, SalesOrder, Tag } from "@/lib/types";
 import type { IndustryPack } from "@/lib/packs";
 import {
-  CONNECTORS, DEFAULT_ACCOUNTING, buildBill, buildInvoice, nextDocId, todayIso,
+  CONNECTORS, DEFAULT_ACCOUNTING, buildBill, buildInvoice, nextDocId, refreshDraft, todayIso,
   type AccountingSettings, type FinDoc, type Receipt, type SyncLogEntry,
 } from "@/lib/finance";
 import { buildFinanceSeed } from "@/lib/finance-seed";
@@ -48,13 +48,25 @@ export interface FinanceStore {
   updateSettings: (patch: Partial<AccountingSettings>) => void;
 }
 
-export function useFinanceStore(pack: IndustryPack, seed: { tags: Tag[]; salesOrders: SalesOrder[]; clients: Client[] }): FinanceStore {
+// `live` is the workspace's current tags, orders and clients: drafts are rebuilt from
+// them on every change so a draft invoice or bill never disagrees with its source.
+export function useFinanceStore(
+  pack: IndustryPack,
+  seed: { tags: Tag[]; salesOrders: SalesOrder[]; clients: Client[] },
+  live: { tags: Tag[]; salesOrders: SalesOrder[]; clientById: Map<string, Client> },
+): FinanceStore {
   const settingsKey = `timbridge_accounting_${pack.id}`;
   const [settings, setSettings] = useState<AccountingSettings>(() => loadSettings(settingsKey, pack.company));
   const [initial] = useState(() => buildFinanceSeed(seed.tags, seed.salesOrders, seed.clients, loadSettings(settingsKey, pack.company)));
-  const [docs, setDocs] = useState<FinDoc[]>(initial.docs);
+  const [storedDocs, setDocs] = useState<FinDoc[]>(initial.docs);
   const [log, setLog] = useState<SyncLogEntry[]>(initial.log);
   const [knownCustomers, setKnownCustomers] = useState<Set<string>>(() => new Set(seed.clients.map((c) => c.id)));
+
+  // Drafts mirror their source; sent documents are frozen (see refreshDraft).
+  const docs = useMemo(
+    () => storedDocs.map((d) => refreshDraft(d, { tags: live.tags, salesOrders: live.salesOrders, clientById: live.clientById, settings })),
+    [storedDocs, live.tags, live.salesOrders, live.clientById, settings],
+  );
 
   const connector = CONNECTORS.find((c) => c.id === settings.connector);
   const canSync = !!connector?.syncs && settings.connected;
@@ -71,14 +83,17 @@ export function useFinanceStore(pack: IndustryPack, seed: { tags: Tag[]; salesOr
       const ids = new Set(targets.filter((d) => d.sync.state === "not_sent").map((d) => d.id));
       if (ids.size === 0) return;
       const at = nowStamp();
+      // Freeze exactly what was sent: the target is the refreshed draft the user saw.
+      const snapshot = new Map(targets.map((d) => [d.id, d]));
       setDocs((prev) => {
         let n = prev.reduce((m, d) => Math.max(m, Number(d.sync.externalId?.match(/(\d+)$/)?.[1] ?? 0)), 4100);
         return prev.map((d) => {
           if (!ids.has(d.id)) return d;
           n += 1;
+          const base = snapshot.get(d.id) ?? d;
           return syncing
-            ? { ...d, sync: { state: "synced", externalId: `QB-${d.kind === "bill" ? "B" : ""}${n}`, at } }
-            : { ...d, sync: { state: "exported", at } };
+            ? { ...base, sync: { state: "synced", externalId: `QB-${d.kind === "bill" ? "B" : ""}${n}`, at } }
+            : { ...base, sync: { state: "exported", at } };
         });
       });
       if (syncing) {

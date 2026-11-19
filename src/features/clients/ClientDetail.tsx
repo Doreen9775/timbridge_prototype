@@ -36,6 +36,7 @@ interface ClientDetailProps {
     meta?: { notes?: string; expectedShipDate?: string },
   ) => { ok: true; soId: string } | { ok: false; unavailableIds: string[] };
   onViewOrders: (soId?: string) => void;
+  onOpenDoc?: (docId: string) => void;
 }
 
 export function ClientDetail({
@@ -50,6 +51,7 @@ export function ClientDetail({
   onOpenSo,
   onCreateSalesOrder,
   onViewOrders,
+  onOpenDoc,
 }: ClientDetailProps) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState<Client>(client);
@@ -67,6 +69,10 @@ export function ClientDetail({
       open: mine.reduce((sum, d) => sum + balanceOf(d), 0),
       overdue: mine.filter((d) => statusOf(d, iso) === "Overdue").reduce((sum, d) => sum + balanceOf(d), 0),
       lastPay: mine.flatMap((d) => d.payments.map((p) => p.date)).sort().pop(),
+      // Every invoice for this client, drafts included, newest first.
+      invoices: finance.docs
+        .filter((d) => d.kind === "invoice" && d.partyId === client.id)
+        .sort((a, b) => b.date.localeCompare(a.date) || b.id.localeCompare(a.id)),
     };
   }, [finance.docs, client.id]);
   const isSalesUser = role === "sales" && !pack.hiddenNav.includes("avail");
@@ -264,6 +270,20 @@ export function ClientDetail({
             <div className="bg-[#F9FAFB] rounded-md px-3 py-2"><div className="text-[10px] text-text-ter mb-0.5">Overdue</div><div className={`text-[13px] font-semibold ${account.overdue > 0 ? "text-coral" : "text-ink"}`}>${Math.round(account.overdue).toLocaleString()}</div></div>
             <div className="bg-[#F9FAFB] rounded-md px-3 py-2"><div className="text-[10px] text-text-ter mb-0.5">Last payment</div><div className="text-[13px] font-semibold text-ink">{account.lastPay ?? "—"}</div></div>
           </div>
+          {account.invoices.length > 0 && (
+            <div className="mt-2 border border-sage/60 rounded-md divide-y divide-[#F3F4F6]">
+              {account.invoices.slice(0, 5).map((d) => (
+                <div key={d.id} className="flex items-center gap-2 px-3 py-1.5 text-[12px]">
+                  <button type="button" onClick={() => onOpenDoc?.(d.id)} className="font-mono font-semibold text-coral hover:underline bg-transparent border-0 p-0 cursor-pointer">{d.id}</button>
+                  <span className="text-text-sec">{d.sourceId}</span>
+                  <span className="flex-1" />
+                  <span className="text-text-sec">{statusOf(d, todayIso())}</span>
+                  <span className="tabular-nums font-semibold text-ink w-[84px] text-right">${Math.round(balanceOf(d)).toLocaleString()}</span>
+                </div>
+              ))}
+              {account.invoices.length > 5 && <div className="px-3 py-1.5 text-[11px] text-text-ter">+ {account.invoices.length - 5} older invoice{account.invoices.length - 5 === 1 ? "" : "s"} in Invoicing</div>}
+            </div>
+          )}
         </div>
       )}
 

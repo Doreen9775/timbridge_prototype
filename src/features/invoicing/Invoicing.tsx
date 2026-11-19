@@ -1,12 +1,12 @@
-import { useMemo, useState } from "react";
-import { AlertTriangle, CheckCircle2, Download, FileText, Link2, Plug, Send, Trash2, X } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { AlertTriangle, ArrowRight, CheckCircle2, Download, FileText, Link2, Plug, Send, Trash2, X } from "lucide-react";
 import type { Role, SalesOrder, Tag } from "@/lib/types";
 import { useFinance } from "@/hooks/useFinance";
 import { useClients } from "@/hooks/useClients";
 import { usePack } from "@/hooks/usePack";
 import { Button } from "@/components/shared/Button";
 import {
-  CONNECTORS, balanceOf, docsToCsv, invoiceLines, paidOf, readyToBill, readyToInvoice, shipDateOf, statusOf, todayIso,
+  CONNECTORS, balanceOf, billForTag, docsToCsv, invoiceCost, invoiceForTag, invoiceLines, paidOf, readyToBill, readyToInvoice, shipDateOf, statusOf, todayIso,
   type DocStatus, type FinDoc, type FinDocKind,
 } from "@/lib/finance";
 
@@ -62,9 +62,12 @@ interface InvoicingProps {
   onOpenClient: (clientId: string) => void;
   onOpenSettings: () => void;
   role: Role;
+  openDocId?: string | null; // deep link from an order, boom, lot or client
+  onDocOpened?: () => void;
+  onOpenTag?: (tagId: string) => void;
 }
 
-export function Invoicing({ tags, salesOrders, onOpenSo, onOpenClient, onOpenSettings, role }: InvoicingProps) {
+export function Invoicing({ tags, salesOrders, onOpenSo, onOpenClient, onOpenSettings, role, openDocId, onDocOpened, onOpenTag }: InvoicingProps) {
   const readOnly = role !== "manager";
   const finance = useFinance();
   const { clientById, getClientName } = useClients();
@@ -73,6 +76,18 @@ export function Invoicing({ tags, salesOrders, onOpenSo, onOpenClient, onOpenSet
   const [statusF, setStatusF] = useState<StatusFilter>("all");
   const [checked, setChecked] = useState<Set<string>>(() => new Set());
   const [openDoc, setOpenDoc] = useState<string | null>(null);
+
+  // Arriving from an order / boom / lot / client: open that document on its tab.
+  useEffect(() => {
+    if (!openDocId) return;
+    const doc = finance.docs.find((d) => d.id === openDocId);
+    if (doc && (doc.kind === "invoice" || !readOnly)) {
+      setTab(doc.kind);
+      setStatusF("all");
+      setOpenDoc(doc.id);
+    }
+    onDocOpened?.();
+  }, [openDocId, finance.docs, onDocOpened, readOnly]);
   const today = todayIso();
   const connector = CONNECTORS.find((c) => c.id === finance.settings.connector)!;
   const sendLabel = finance.canSync ? "Send to QuickBooks" : "Export CSV";
@@ -199,6 +214,24 @@ export function Invoicing({ tags, salesOrders, onOpenSo, onOpenClient, onOpenSet
           </div>
         ) : (
           <>
+            {/* Where each document is in the flow — the same four steps every time. */}
+            <FlowStrip
+              kind={tab}
+              counts={(() => {
+                const mine = finance.docs.filter((d) => d.kind === tab);
+                return [
+                  tab === "invoice" ? toInvoice.length : toBill.length,
+                  mine.filter((d) => d.sync.state === "not_sent").length,
+                  mine.filter((d) => d.sync.state !== "not_sent" && balanceOf(d) > 0.005).length,
+                  mine.filter((d) => d.sync.state !== "not_sent" && balanceOf(d) <= 0.005).length,
+                ];
+              })()}
+              shippedWord={pack.terms.shipped}
+              auto={finance.settings.invoiceTrigger === "onDelivery"}
+              system={connector.syncs ? connector.label : "CSV export"}
+              onPick={(i) => setStatusF(i === 1 ? "Draft" : i === 3 ? "Paid" : "all")}
+            />
+
             {/* Ready queue */}
             {tab === "invoice" ? (
               <ReadyCard
@@ -345,6 +378,18 @@ export function Invoicing({ tags, salesOrders, onOpenSo, onOpenClient, onOpenSet
             setOpenDoc(null);
           }}
           onRecordPayment={(amt) => finance.recordPayment(selected.id, amt)}
+          links={
+            <DocLinks
+              doc={selected}
+              docs={finance.docs}
+              tags={tags}
+              showCost={!readOnly}
+              onOpenDoc={(id) => setOpenDoc(id)}
+              onOpenTag={onOpenTag}
+              orderName={orderName}
+              onOpenSo={onOpenSo}
+            />
+          }
           onOpenSource={selected.kind === "invoice" ? () => onOpenSo(selected.sourceId) : undefined}
           onOpenParty={selected.partyId ? () => onOpenClient(selected.partyId!) : undefined}
           sourceLabel={selected.kind === "invoice" ? `${pack.terms.order} ${orderName(selected.sourceId)}` : `Receipt of ${fmtDate(selected.sourceId.split("|")[1])}`}
@@ -414,7 +459,8 @@ function ReadyCard({ title, hint, empty, count, head, rows, actionLabel, onCreat
   );
 }
 
-function DocDrawer({ doc, sendLabel, canSync, readOnly, sourceLabel, onClose, onSend, onDelete, onRecordPayment, onOpenSource, onOpenParty }: {
+function DocDrawer({ doc, sendLabel, canSync, readOnly, sourceLabel, onClose, onSend, onDelete, onRecordPayment, onOpenSource, onOpenParty, links }: {
+  links?: React.ReactNode;
   doc: FinDoc;
   sendLabel: string;
   canSync: boolean;
@@ -494,6 +540,8 @@ function DocDrawer({ doc, sendLabel, canSync, readOnly, sourceLabel, onClose, on
             </table>
           </div>
 
+          {links}
+
           <div>
             <div className="text-xs text-text-sec mb-2">Accounting system</div>
             <div className="bg-[#F9FAFB] rounded-md px-3 py-2.5 text-[13px]">
@@ -547,6 +595,119 @@ function Info({ label, value, alert }: { label: string; value: string; alert?: b
     <div className="bg-[#F9FAFB] rounded-md px-3 py-2">
       <div className="text-[10px] text-text-ter mb-0.5">{label}</div>
       <div className={`font-medium ${alert ? "text-coral" : "text-text"}`}>{value}</div>
+    </div>
+  );
+}
+
+// The four steps every invoice (or bill) goes through, with how many sit at each.
+function FlowStrip({ kind, counts, shippedWord, auto, system, onPick }: {
+  kind: "invoice" | "bill" | "sync";
+  counts: number[];
+  shippedWord: string;
+  auto: boolean;
+  system: string;
+  onPick: (step: number) => void;
+}) {
+  const steps =
+    kind === "bill"
+      ? ["Stock received", "Bill drafted", `Sent to ${system}`, "Paid"]
+      : [`Order ${shippedWord.toLowerCase()}`, "Invoice drafted", `Sent to ${system}`, "Paid"];
+  const note =
+    kind === "bill"
+      ? "A bill is due when stock from an outside seller is received. Drafts follow the lots' cost until they are sent."
+      : auto
+        ? `An invoice is drafted automatically the moment an order is marked ${shippedWord}. Drafts follow the order until they are sent; after that ${system} owns them.`
+        : `${shippedWord} orders wait in Ready to invoice until someone creates the invoice. Drafts follow the order until they are sent.`;
+  return (
+    <div className="bg-white rounded-[10px] shadow-[0_1px_4px_rgba(0,0,0,0.07)] px-5 py-4 mb-4">
+      <div className="flex flex-wrap items-center gap-2">
+        {steps.map((label, i) => (
+          <div key={label} className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => onPick(i)}
+              className="flex items-center gap-2 bg-[#F9FAFB] hover:bg-sage/20 border border-sage/60 rounded-full pl-1.5 pr-3 py-1 cursor-pointer"
+            >
+              <span className={`min-w-[22px] h-[22px] px-1 rounded-full text-[11px] font-semibold flex items-center justify-center ${counts[i] > 0 && i < 2 ? "bg-coral text-white" : "bg-white text-text-sec border border-sage"}`}>{counts[i]}</span>
+              <span className="text-[12px] text-ink font-medium">{label}</span>
+            </button>
+            {i < steps.length - 1 && <ArrowRight size={13} className="text-text-ter" />}
+          </div>
+        ))}
+      </div>
+      <div className="text-[11px] text-text-ter mt-2">{note}</div>
+    </div>
+  );
+}
+
+// Everything a document is connected to: its lots, and across the AR/AP line —
+// an invoice's lots were bought on bills (their cost gives the margin); a bill's lots
+// were sold on invoices or are still in stock.
+function DocLinks({ doc, docs, tags, showCost, onOpenDoc, onOpenTag, orderName, onOpenSo }: {
+  doc: FinDoc;
+  docs: FinDoc[];
+  tags: Tag[];
+  showCost: boolean;
+  onOpenDoc: (id: string) => void;
+  onOpenTag?: (id: string) => void;
+  orderName: (soId: string) => string;
+  onOpenSo: (soId: string) => void;
+}) {
+  const tagById = new Map(tags.map((t) => [t.id, t]));
+  const lotIds = Array.from(new Set(doc.lines.flatMap((l) => l.tagIds)));
+  const chip = (id: string, onClick?: () => void) => (
+    <button key={id} type="button" onClick={onClick} disabled={!onClick} className="font-mono text-[12px] font-semibold text-coral hover:underline bg-transparent border-0 p-0 cursor-pointer disabled:text-ink disabled:cursor-default">
+      {id}
+    </button>
+  );
+
+  if (doc.kind === "invoice") {
+    const bills = Array.from(new Set(lotIds.map((id) => tagById.get(id)).filter((t): t is Tag => !!t).map((t) => billForTag(docs, t)).filter((b): b is FinDoc => !!b)));
+    const cost = invoiceCost(doc, tags);
+    return (
+      <div>
+        <div className="text-xs text-text-sec mb-2">Linked records</div>
+        <div className="bg-[#F9FAFB] rounded-md px-3 py-2.5 text-[13px] space-y-1.5">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1"><span className="text-text-sec w-24 shrink-0">Order</span>{chip(orderName(doc.sourceId), () => onOpenSo(doc.sourceId))}</div>
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1"><span className="text-text-sec w-24 shrink-0">Lots shipped</span>{lotIds.map((id) => chip(id, onOpenTag ? () => onOpenTag(id) : undefined))}</div>
+          {showCost && (
+            <>
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                <span className="text-text-sec w-24 shrink-0">Bought on</span>
+                {bills.length ? bills.map((b) => chip(b.id, () => onOpenDoc(b.id))) : <span className="text-text-ter">no bill — in-house production or no cost on file</span>}
+              </div>
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                <span className="text-text-sec w-24 shrink-0">Margin</span>
+                {cost === null ? (
+                  <span className="text-text-ter">unknown — a lot has no cost on file</span>
+                ) : (
+                  <span className="text-ink">{money(doc.subtotal - cost)} <span className="text-text-sec">({doc.subtotal > 0 ? Math.round(((doc.subtotal - cost) / doc.subtotal) * 1000) / 10 : 0}%) · cost {money(cost)}</span></span>
+                )}
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <div className="text-xs text-text-sec mb-2">Where these lots are now</div>
+      <div className="bg-[#F9FAFB] rounded-md px-3 py-2 text-[13px] divide-y divide-[#ECEAE7]">
+        {lotIds.map((id) => {
+          const t = tagById.get(id);
+          const inv = invoiceForTag(docs, id);
+          return (
+            <div key={id} className="flex flex-wrap items-center gap-2 py-1.5">
+              {chip(id, onOpenTag ? () => onOpenTag(id) : undefined)}
+              <span className="text-text-sec">{t ? t.status : "—"}</span>
+              <span className="flex-1" />
+              {inv ? <span className="text-text-sec">sold on {chip(inv.id, () => onOpenDoc(inv.id))}</span> : <span className="text-text-ter">{t?.status === "Shipped" ? "shipped, not invoiced yet" : "not sold yet"}</span>}
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }

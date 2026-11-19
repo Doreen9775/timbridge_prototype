@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { isLowStock } from "@/lib/analytics";
 import { profileOf, volumeOfTag } from "@/lib/products";
 import { usePack } from "@/hooks/usePack";
+import { useFinance } from "@/hooks/useFinance";
+import { billForTag, invoiceForTag } from "@/lib/finance";
 import { Search, Scan, X, Download, Maximize2, Minimize2, Pencil, Trash2 } from "lucide-react";
 import type { Tag, Species, Grade, MoistureState, Milling, TagStatus, EntryFilter, Role, SalesOrder } from "@/lib/types";
 import { StatusBadge } from "@/components/shared/StatusBadge";
@@ -97,9 +99,10 @@ interface StockLocatorProps {
   salesOrders: SalesOrder[];
   onLinkSalesOrder?: (soId: string, tagId: string, qty: number, unitPrice: number) => void;
   onOpenSo?: (id: string) => void;
+  onOpenDoc?: (docId: string) => void;
 }
 
-export function StockLocator({ tags, floorView, role, openTagId, onTagOpened, onUpdateTag, onDeleteTags, entryFilter, onClearEntryFilter, salesOrders, onLinkSalesOrder, onOpenSo }: StockLocatorProps) {
+export function StockLocator({ tags, floorView, role, openTagId, onTagOpened, onUpdateTag, onDeleteTags, entryFilter, onClearEntryFilter, salesOrders, onLinkSalesOrder, onOpenSo, onOpenDoc }: StockLocatorProps) {
   const isManager = role === "manager";
   const canDelete = isManager && !!onDeleteTags;
   const [search, setSearch] = useState("");
@@ -563,6 +566,7 @@ export function StockLocator({ tags, floorView, role, openTagId, onTagOpened, on
           onDelete={canDelete ? () => setDeleteConfirm({ ids: [selTag.id] }) : undefined}
           onOpenTag={openTag}
           onOpenSo={onOpenSo}
+          onOpenDoc={onOpenDoc}
           salesOrders={salesOrders}
           onLinkSalesOrder={onLinkSalesOrder}
         />
@@ -783,6 +787,7 @@ function DetailDrawer({
   onDelete,
   onOpenTag,
   onOpenSo,
+  onOpenDoc,
   salesOrders,
   onLinkSalesOrder,
 }: {
@@ -795,6 +800,7 @@ function DetailDrawer({
   onDelete?: () => void;
   onOpenTag?: (id: string) => void;
   onOpenSo?: (id: string) => void;
+  onOpenDoc?: (docId: string) => void;
   salesOrders: SalesOrder[];
   onLinkSalesOrder?: (soId: string, tagId: string, qty: number, unitPrice: number) => void;
 }) {
@@ -807,6 +813,7 @@ function DetailDrawer({
   const lookups = useLookups();
   const { getClientName } = useClients();
   const { pack } = usePack();
+  const finance = useFinance();
   const tagProfile = profileOf(tag);
   const isLogLot = !tagProfile.dimensioned;
   const siteName = (code: string) => pack.sites.find((st) => st.code === code)?.name ?? code;
@@ -819,7 +826,12 @@ function DetailDrawer({
   // Available → Reserved is gated on at least one Open Sales Order to link; confirming "Reserved"
   // queues that link (created on Save, not immediately — so Cancel can't leave an orphaned link).
   const eligibleSOs = useMemo(() => salesOrders.filter((so) => so.status === "Open"), [salesOrders]);
-  const statusOptions = VALID_TRANSITIONS[draft.status].filter((s) => s !== "Reserved" || eligibleSOs.length > 0);
+  // A tag on an active order ships or is released through that order, never on its own —
+  // otherwise the tag and its order (and the order's invoice) would disagree.
+  const activeOrder = linkedSOs.find(({ so }) => so.status === "Open" || so.status === "Picked")?.so;
+  const statusOptions = VALID_TRANSITIONS[draft.status]
+    .filter((s) => s !== "Reserved" || eligibleSOs.length > 0)
+    .filter((s) => !(activeOrder && (s === "Shipped" || s === "Available")));
   const [statusConfirm, setStatusConfirm] = useState<{ next: TagStatus; soId: string } | null>(null);
   const [pendingSOLink, setPendingSOLink] = useState<{ soId: string; qty: number; unitPrice: number } | null>(null);
 
@@ -934,7 +946,11 @@ function DetailDrawer({
             <option value={draft.status}>{draft.status}</option>
             {statusOptions.map((o) => <option key={o} value={o}>{o}</option>)}
           </select>
-          {statusOptions.length === 0 && (
+          {activeOrder ? (
+            <div className="text-[10px] text-text-ter mt-1">
+              On {activeOrder.id}: ship or release it from the order, so the order and its invoice stay in step.
+            </div>
+          ) : statusOptions.length === 0 && (
             <div className="text-[10px] text-text-ter mt-1">Shipped is a final state — no further transitions.</div>
           )}
         </div>
@@ -1124,7 +1140,13 @@ function DetailDrawer({
                     </button>
                     <span className="flex-1 text-text truncate">{getClientName(so.clientId)}</span>
                     <SOStatusPill status={so.status} />
-                    <span className="text-text-sec whitespace-nowrap">{li.qty.toLocaleString()} pcs</span>
+                    {(() => {
+                      const inv = invoiceForTag(finance.docs, tag.id);
+                      return inv ? (
+                        <button onClick={() => onOpenDoc?.(inv.id)} className="font-mono text-[12px] font-semibold text-coral hover:underline bg-transparent border-0 p-0 cursor-pointer" title="Invoice for this tag">{inv.id}</button>
+                      ) : null;
+                    })()}
+                    <span className="text-text-sec whitespace-nowrap">{li.qty.toLocaleString()} {tagProfile.quantity.short}</span>
                     <span className="text-text-sec whitespace-nowrap">${(li.qty * li.unitPrice).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                   </div>
                 ))}
@@ -1132,6 +1154,21 @@ function DetailDrawer({
             )}
           </div>
         )}
+
+        {/* Purchase side — the bill this tag was bought on (finance data, Manager only). */}
+        {isManager && (() => {
+          const bill = billForTag(finance.docs, tag);
+          return bill ? (
+            <div className="mb-5">
+              <div className="text-xs text-text-sec mb-2">Bought on</div>
+              <div className="bg-[#F9FAFB] rounded-md px-3 py-2 flex items-center gap-2 text-[13px]">
+                <button onClick={() => onOpenDoc?.(bill.id)} className="font-mono font-semibold text-coral cursor-pointer hover:underline bg-transparent border-0 p-0">{bill.id}</button>
+                <span className="flex-1 text-text truncate">{bill.partyName}</span>
+                <span className="text-text-sec whitespace-nowrap">{bill.sync.state === "not_sent" ? "Draft" : bill.sync.externalId ?? "Exported"}</span>
+              </div>
+            </div>
+          ) : null;
+        })()}
 
         {tag.parentLog && (
           <div className="mb-5">

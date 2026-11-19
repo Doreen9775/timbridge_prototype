@@ -505,6 +505,9 @@ export function DeliverySlips({ tags, setTags, onNavigateToLocator }: DeliverySl
           updated: "just now",
           parentLog: null,
           supplier: supplier !== "—" ? supplier : undefined,
+          // The slip's unit price (per piece) is what we pay the seller — it becomes the
+          // tag's purchase cost, so the receipt is billed once the goods are received.
+          ...(g.unitPrice !== undefined ? { cost: g.unitPrice } : {}),
           history: [{
             e: `Created from delivery slip${poNumber !== "—" ? " PO " + poNumber : ""}${slipNote}`,
             t: stamp,

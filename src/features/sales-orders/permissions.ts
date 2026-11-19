@@ -1,4 +1,4 @@
-import type { SalesOrderStatus } from "@/lib/types";
+import type { Role, SalesOrderStatus } from "@/lib/types";
 
 // Single source of truth for what's editable on a Sales Order, gated by status.
 // The panel derives three booleans from getSalesOrderEditMode() ONCE at the top
@@ -19,3 +19,15 @@ export function getSalesOrderEditMode(status: SalesOrderStatus): SOEditMode {
 }
 
 export const LOCK_TOOLTIP = "Cancel the reservation to modify line items.";
+
+// Status moves offered on an order (Draft → Open is "Confirm Order", handled separately).
+// Any forward move is allowed — Open can go straight to Shipped — and Picked can step back
+// to Open. Cancelling releases reserved tags, so only a Manager does it directly; Sales asks
+// through an approval request (type "orderCancellation"). Shipped and Cancelled are final.
+export function statusTargets(status: SalesOrderStatus, role: Role): SalesOrderStatus[] {
+  const cancel: SalesOrderStatus[] = role === "manager" ? ["Cancelled"] : [];
+  if (status === "Draft") return ["Cancelled"];
+  if (status === "Open") return ["Picked", "Shipped", ...cancel];
+  if (status === "Picked") return ["Open", "Shipped", ...cancel];
+  return [];
+}
