@@ -1295,6 +1295,48 @@ Lumber behaviour and figures are unchanged, except the yard-map hover now counts
 **Files / 改动:** `src/features/pulse/OverviewTab.tsx`
 
 ---
+
+## 2026-11-18
+
+### `e7b0980` · 23:59 · 订单状态更灵活、发货即见发票、草稿实时同步、订单 / 发票 / 账单互相关联
+
+**🇨🇳 中文**
+
+**订单**
+- 订单详情一次列出所有可选状态：Open 可以直接 Mark Shipped，Picked 可以退回 Open。
+- **取消订单**：Manager 可直接取消已确认的订单，被预留的货退回 Available；Sales 通过审批申请取消。
+- **Request approval 只对 Sales 显示**，Manager 不再看到。
+- 改状态的确认框会说明后果：标签发货并起草发票、标签被释放、发货后不可修改等。
+- 挂在进行中订单上的标签，不能再在 Stock Locator 里单独改为发货或释放，只能通过订单操作，保证标签、订单和发票一致。此前 Manager 在 Stock Locator 直接把标签改成 Shipped 会绕过订单，导致不生成发票。
+
+**开票**
+- 订单和 boom 发货后，详情顶部直接显示自动起草的发票及其状态，可一键跳到 Invoicing。
+- Invoicing 顶部新增流程条："已发货 → 已起草 → 已发送 → 已付款"，显示每一步的数量，并说明发票在哪一步自动生成。
+- **未发送的发票和账单随来源实时更新**（订单、标签成本、客户条件）；发送后锁定，以后的修改在 QuickBooks 里做。
+- **发票与账单通过同一批货关联**：发票详情显示订单、发出的标签、这些货在哪张账单上买入，以及毛利（Manager）；账单详情显示每批货的去向（卖在哪张发票上，或尚未售出）。
+- Stock Locator 标签详情显示对应发票（Manager 还能看到账单）；Client Profile 列出该客户的发票，均可点击跳转。
+- Delivery Slips 解析出的单价写入标签成本，送货单收到的货也会生成账单。
+
+**🇬🇧 English**
+
+**Orders**
+- The order panel offers every allowed status at once: Open can go straight to Shipped, and Picked can step back to Open.
+- **Cancel order**: a Manager can cancel a confirmed order directly, releasing its reserved tags to Available; Sales asks through an approval request.
+- **Request approval now shows for Sales only.**
+- The status dialog spells out the effect: tags ship and the invoice is drafted, tags are released, shipping is final.
+- A tag on an active order can no longer be shipped or released from Stock Locator — only through its order — so tag, order and invoice stay consistent. Previously a Manager shipping a tag there bypassed the order, so no invoice was drafted.
+
+**Invoicing**
+- Shipped orders and delivered booms show their auto-drafted invoice and its status at the top of the panel, with a link into Invoicing.
+- A flow strip on Invoicing — shipped → drafted → sent → paid — shows counts at each step and when invoices are created.
+- **Unsent invoices and bills follow their source records live** (order, lot cost, client terms); sending freezes them, and later changes happen in QuickBooks.
+- **Invoices and bills are linked through the same lots**: the invoice drawer shows the order, the lots shipped, the bills they were bought on and the margin (Manager); the bill drawer shows where each lot went (the invoice it was sold on, or not sold yet).
+- The Stock Locator tag drawer shows the tag's invoice (and its bill for Manager); Client Profile lists the client's invoices — all clickable.
+- Delivery slip unit prices become tag cost, so goods received from a slip are billed like any other receipt.
+
+**Files / 改动:** `src/lib/finance.ts`, `src/hooks/useFinance.tsx`, `src/App.tsx`, `src/features/sales-orders/{SalesOrderPanel,SalesOrders}.tsx`, `src/features/sales-orders/permissions.ts`, `src/features/approvals/ApprovalQueue.tsx`, `src/features/invoicing/Invoicing.tsx`, `src/features/stock-locator/StockLocator.tsx`, `src/features/clients/{Clients,ClientDetail}.tsx`, `src/features/log-trading/Booms.tsx`, `src/features/delivery-slips/DeliverySlips.tsx`, `CLAUDE.md`
+
+---
 ## Pending / 未来 (not yet built — 尚未开始)
 
 - **Approvals 里 Sales 视图看到的历史范围**（当前 MyApprovals 显示所有状态，Manager 只看 Pending；如果 Manager 需要审批历史查阅，加个 History tab）
@@ -1306,8 +1348,7 @@ Lumber behaviour and figures are unchanged, except the yard-map hover now counts
 - **Dashboard 顶部 Today / This Week / This Month 切换**（目前仍是装饰性的，未接入数据）
 - **按销售员区分数据**（原型里 Sales 是统一身份，报表里的"我的订单/申请"实际是全部 Sales 的数据）
 - **真实的 QuickBooks 对接**（需要 Intuit 开发者账号、OAuth 和服务端保存 token，超出当前无后端的原型范围）
-- **Delivery Slips 导入的货写入成本**（送货单已解析出单价，但目前没写进标签成本，所以不会生成账单）
-- **Booms / Sales Order 详情里显示对应发票状态**，以及 Volume Report 的金额列
+- **Volume Report 的金额列**
 - **财务 / 内勤角色**，以及"Sales 能否起草发票"的公司级开关
 - **Pulse 按单位和用词显示**（目前原木包隐藏了 Pulse；Dashboard 动态筛选、Stock Locator 状态筛选仍是锯材用词）
 - **原木批次在 Log Inventory 里编辑**（锯材的编辑表单不适用，原木批次目前只读）
